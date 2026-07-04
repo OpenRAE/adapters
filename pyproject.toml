@@ -1,0 +1,37 @@
+# Root project for the aces-adapters monorepo.
+#
+# This is TOOLING ONLY. It locks the repo-level toolchain (ruff, the pre-commit
+# hooks, towncrier) in the root `uv.lock`. It deliberately does NOT declare or
+# resolve any adapter/simulator dependency: per ADR-069 §5 each adapter under
+# `packages/` owns an independent `pyproject.toml` + `uv.lock` so incompatible
+# simulator stacks cannot gate one another. There is no uv workspace here for
+# the same reason (a workspace shares one lock).
+[project]
+name = "aces-adapters-tooling"
+version = "0.0.0"
+description = "Repo-level toolchain for the aces-adapters monorepo (not published)."
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "ruff>=0.10",
+    "pre-commit>=4.0",
+    "pre-commit-hooks>=5.0",
+    "towncrier>=24.8",
+    "pyyaml>=6.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["**/.venv", "**/build", "**/dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]

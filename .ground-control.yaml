@@ -1,0 +1,30 @@
+schema_version: 1
+project: aces-adapters
+github_repo: Brad-Edwards/aces-adapters
+workflow:
+  test_command: uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s verify
+  completion_command: uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s verify
+  lint_command: uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s lint
+  format_command: uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s hygiene
+docs:
+  adr_dir: docs/decisions/adrs/
+example_paths:
+  source: packages/
+  test: packages/
+requirements:
+  uid_examples:
+    - REP-002
+    - REP-003
+    - REP-004
+routing:
+  enabled: false
+  default_provider: claude
+  default_fallback: parent
+  stages: {}
+sonarcloud:
+  project_key: Brad-Edwards_aces-adapters
+  organization: brad-edwards
+rules:
+  plan_rules: .gc/plan-rules.md
+telemetry:
+  enabled: false

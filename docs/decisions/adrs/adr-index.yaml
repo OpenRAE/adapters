@@ -1,0 +1,8 @@
+hash_algorithm: sha256
+adrs:
+- id: ADR-000
+  path: docs/decisions/adrs/adr-000-use-adrs.md
+  pin: 30baa3c14e6855b51b117b3c1df7b92c84ed36eaa2ece4a904548a7ea0ccd0f3
+- id: ADR-001
+  path: docs/decisions/adrs/adr-001-adapters-monorepo-standup.md
+  pin: ab2917e16addec9c4bd2f8d7ce85f3bde416e4104fefe5fb19532924c87ce590

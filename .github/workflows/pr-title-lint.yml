@@ -1,0 +1,38 @@
+name: PR Title Lint
+
+# Guard against agent-branded PR titles (e.g. `[codex] ...`) and enforce the
+# basic title shape Ground Control's /implement Step 9 documents. The PR title
+# is untrusted event data, so the checker reads it from $GITHUB_EVENT_PATH
+# (never shell-interpolated), the token is read-only, and this uses
+# `pull_request` (never `pull_request_target`).
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-title-lint-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  title-guard:
+    runs-on: ubuntu-latest
+    steps:
+      # Check out the BASE ref, not the PR head, so the policy executable is the
+      # trusted already-merged copy: a PR that edits tools/check_pr_title.py must
+      # not be able to weaken its own required check.
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.12"
+      - name: Validate PR title
+        run: |
+          if [ ! -f tools/check_pr_title.py ]; then
+            echo "::notice::tools/check_pr_title.py not on the base ref yet; skipping (bootstrap). Enforcement is active for every subsequent PR."
+            exit 0
+          fi
+          python tools/check_pr_title.py
