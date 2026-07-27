@@ -127,6 +127,7 @@ def validate_repository(repo_root: Path) -> list[str]:
     codeql = _read_required(repo_root, ".github/workflows/codeql-analysis.yml", errors)
     for expected in (
         "name: CodeQL",
+        "jobs:\n  analyze:\n    name: CodeQL",
         "branches: [main, dev]",
         "security-events: write",
         "languages: python",
