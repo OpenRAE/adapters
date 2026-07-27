@@ -15,6 +15,8 @@ Sessions:
 - ``lint``       ruff format --check + ruff check across the repo
 - ``typecheck``  mypy against each adapter's ``src`` in that adapter's env
 - ``tests``      pytest + coverage against each adapter in its isolated env
+- ``tool-tests`` stdlib unit tests for repository tooling and policy
+- ``docs``       strict MkDocs build used by CI and Read the Docs
 - ``policy``     requirement-governance, repo-policy, and ADR-immutability gates
 - ``verify``     the full graph (test_command / completion_command)
 - ``hook-pre-commit`` / ``hook-pre-push`` drive the git hooks
@@ -136,6 +138,24 @@ def _tests(session: nox.Session) -> None:
             )
 
 
+def _tool_tests(session: nox.Session) -> None:
+    _uv_run_root(session, "python", "-m", "unittest", "discover", "-s", "tools/tests")
+
+
+def _docs(session: nox.Session) -> None:
+    site_dir = Path(session.create_tmp()) / "site"
+    _uv_run_root(
+        session,
+        "--group",
+        "docs",
+        "mkdocs",
+        "build",
+        "--strict",
+        "--site-dir",
+        str(site_dir),
+    )
+
+
 def _policy(session: nox.Session, *args: str) -> None:
     # Each gate parses only the flags it recognizes (argparse.parse_known_args),
     # so the same posargs (--base-rev / --staged / --requirement-uid /
@@ -143,6 +163,7 @@ def _policy(session: nox.Session, *args: str) -> None:
     _uv_run_root(session, "python", "tools/check_repo_policy.py", *args)
     _uv_run_root(session, "python", "tools/check_requirement_governance.py", *args)
     _uv_run_root(session, "python", "tools/check_adr_immutability.py")
+    _uv_run_root(session, "python", "tools/check_project_services.py")
 
 
 # --------------------------------------------------------------------------- #
@@ -168,6 +189,16 @@ def tests(session: nox.Session) -> None:
     _tests(session)
 
 
+@nox.session(name="tool-tests")
+def tool_tests(session: nox.Session) -> None:
+    _tool_tests(session)
+
+
+@nox.session
+def docs(session: nox.Session) -> None:
+    _docs(session)
+
+
 @nox.session
 def policy(session: nox.Session) -> None:
     _policy(session, *session.posargs)
@@ -178,8 +209,10 @@ def verify(session: nox.Session) -> None:
     _hygiene(session, _tracked(session))
     _policy(session, *session.posargs)
     _lint(session)
+    _tool_tests(session)
     _typecheck(session)
     _tests(session)
+    _docs(session)
 
 
 @nox.session(name="ci-adapter")
@@ -218,13 +251,16 @@ def hook_pre_commit(session: nox.Session) -> None:
     changed = [a for a in session.posargs if not a.startswith("-")]
     _hygiene(session, changed or _tracked(session))
     _lint(session)
-    _policy(session, "--staged")
+    policy_args = ["--staged"]
+    if "--skip-requirement" in session.posargs:
+        policy_args.append("--skip-requirement")
+    _policy(session, *policy_args)
 
 
 @nox.session(name="hook-pre-push")
 def hook_pre_push(session: nox.Session) -> None:
     _hygiene(session, _tracked(session))
-    _policy(session)
+    _policy(session, *session.posargs)
     _lint(session)
     _typecheck(session)
     _tests(session)
