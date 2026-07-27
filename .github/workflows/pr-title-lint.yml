@@ -18,6 +18,7 @@ concurrency:
 
 jobs:
   title-guard:
+    name: Lint PR title
     runs-on: ubuntu-latest
     steps:
       # Check out the BASE ref, not the PR head, so the policy executable is the

@@ -92,6 +92,7 @@ jobs:
           if-no-files-found: ignore
 
   sonar:
+    name: SonarCloud
     runs-on: ubuntu-latest
     needs: [repo-checks, adapter]
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
@@ -118,3 +119,34 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@299e4b793aaa83bf2aba7c9c14bedbb485688ec4 # v7
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  pr-gate:
+    name: PR Gate
+    needs: [repo-checks, adapter, sonar]
+    if: ${{ always() && github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assert required PR jobs passed
+        env:
+          ADAPTER_RESULT: ${{ needs.adapter.result }}
+          REPO_CHECKS_RESULT: ${{ needs.repo-checks.result }}
+          SAME_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+          SONAR_RESULT: ${{ needs.sonar.result }}
+        run: |
+          if [ "$REPO_CHECKS_RESULT" != "success" ]; then
+            echo "::error::Repo checks did not succeed ($REPO_CHECKS_RESULT)"
+            exit 1
+          fi
+          if [ "$ADAPTER_RESULT" != "success" ]; then
+            echo "::error::Adapter matrix did not succeed ($ADAPTER_RESULT)"
+            exit 1
+          fi
+          if [ "$SAME_REPOSITORY" = "true" ] && [ "$SONAR_RESULT" != "success" ]; then
+            echo "::error::SonarCloud did not succeed for a same-repository PR ($SONAR_RESULT)"
+            exit 1
+          fi
+          if [ "$SAME_REPOSITORY" != "true" ] && [ "$SONAR_RESULT" != "skipped" ]; then
+            echo "::error::SonarCloud must be skipped for a fork PR ($SONAR_RESULT)"
+            exit 1
+          fi
+          echo "Required PR jobs passed"

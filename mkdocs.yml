@@ -1,0 +1,39 @@
+site_name: RAES Adapters
+site_description: Adapter implementations for reproducible agentic environments.
+site_url: !ENV [READTHEDOCS_CANONICAL_URL, "https://raes-adapters.readthedocs.io/"]
+repo_url: https://github.com/RAESystem/adapters
+repo_name: RAESystem/adapters
+edit_uri: edit/dev/docs/
+docs_dir: docs
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - content.action.edit
+    - content.code.copy
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+
+nav:
+  - Home: index.md
+  - Maintainers:
+      - Project services: maintainers/project-services.md
+  - Decisions:
+      - Overview: decisions/adrs/README.md
+      - Template: decisions/adrs/TEMPLATE.md
+      - ADR 000 — Use ADRs: decisions/adrs/adr-000-use-adrs.md
+      - ADR 001 — Adapter monorepo standup: decisions/adrs/adr-001-adapters-monorepo-standup.md

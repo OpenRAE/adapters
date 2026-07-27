@@ -1,5 +1,9 @@
 # aces-adapters
 
+[![Documentation](https://readthedocs.org/projects/raes-adapters/badge/?version=latest)](https://raes-adapters.readthedocs.io/en/latest/)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/RAESystem/adapters/badge)](https://scorecard.dev/viewer/?uri=github.com/RAESystem/adapters)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects?as=badge&url=https%3A%2F%2Fgithub.com%2FRAESystem%2Fadapters)](https://www.bestpractices.dev/projects?as=entry&url=https%3A%2F%2Fgithub.com%2FRAESystem%2Fadapters)
+
 A monorepo of **independent** per-simulator adapter projects that realize
 [ACES](https://github.com/Brad-Edwards/aces) scenarios against concrete
 simulator backends, plus a shared adapter base and a backend conformance
