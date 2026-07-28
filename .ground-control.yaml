@@ -8,6 +8,16 @@ workflow:
   format_command: uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s hygiene
   policy_command: make policy
   precommit_command: make precommit
+  codex_review:
+    pre_push_cap: 1
+  test_quality_review:
+    pre_push_cap: 1
+  review_disposition:
+    enabled: false
+    mode: shadow
+    max_auto_overrides: 0
+    judge:
+      enabled: false
 docs:
   adr_dir: docs/decisions/adrs/
 example_paths:
