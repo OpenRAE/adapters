@@ -26,7 +26,7 @@
 # granting a new exception is a reviewed edit to this file.
 entries:
   - path: .ground-control.yaml
-    digest: 4a3a38097470d025ee82162bc198e9c04572ab0c2a52d595642af09b24afd79d
+    digest: de1c598e28e28cbc1f336cf23a4549eb7ed214812b1ad04f2b7323741abd8e33
     record_class: external-identity
     owner: ground-control
     rationale: >-
@@ -53,7 +53,7 @@ entries:
     retires_when: >-
       autarchy-ai/Ground-Control#1471 renames the requirement-governance variable across its four consuming repositories
   - path: .gc/plan-rules.md
-    digest: 456247140348a3befa36ddf683d3135f8db1b70dcea2089c690dcf06bd3bdc46
+    digest: 5bfe09d40585816c2e7c5b3e4808981dbe8c1bad34d4a74013b9abee8ae6ea0c
     record_class: external-identity
     owner: ground-control
     rationale: >-
@@ -62,7 +62,7 @@ entries:
     retires_when: >-
       autarchy-ai/Ground-Control#1471 renames the requirement-governance variable across its four consuming repositories
   - path: AGENTS.md
-    digest: 5762e202ab1708d50c8112c08eb38b5148c9ba57109885dc1e5fc5ca2ce06b35
+    digest: a80d14984c93a3e78d488c487b4b38ef6b9af6577c01975fc8c2a6a996c43889
     record_class: external-identity
     owner: ground-control
     rationale: >-

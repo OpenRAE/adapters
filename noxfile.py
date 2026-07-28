@@ -1,23 +1,26 @@
 # ruff: noqa: E402, I001
-"""Canonical verification graph for the raes-adapters monorepo.
+"""Canonical verification graph for the raes-adapters distribution.
 
-This repository is a monorepo of *independent* per-simulator adapter projects
-(ADR-069 §5). Each adapter under ``packages/`` owns its own ``pyproject.toml``
-and ``uv.lock`` and is synced/tested in an isolated environment so that one
-simulator's dependency pins cannot constrain another's. Repo-level tooling
-(ruff, mypy, the pre-commit hooks, the governance gates) runs from the root
-tooling project (``pyproject.toml`` + root ``uv.lock``), which locks tooling
-only -- never adapter dependencies.
+``raes-adapters`` is a single published distribution: shared adapter plumbing
+(``raes_adapters.base``) plus one module per simulator backend
+(``raes_adapters.cyborg``, ...), with simulator-specific dependencies exposed as
+optional extras. One ``pyproject.toml`` + one ``uv.lock`` own the whole tree.
+
+Packaging boundary: RAES owns the contracts an adapter must honor, not this
+repo's packaging (RAES ADR-069 as amended, RAESystem/rae#949; ADR-003). A second
+simulator with a mutually-incompatible stack is isolated with uv's ``conflicts``
+extras declaration in the one lock, not a separate lockfile.
 
 Sessions:
 
 - ``hygiene``    file-level pre-commit hooks (whitespace, eol, yaml/json, ...)
 - ``lint``       ruff format --check + ruff check across the repo
-- ``typecheck``  mypy against each adapter's ``src`` in that adapter's env
-- ``tests``      pytest + coverage against each adapter in its isolated env
+- ``typecheck``  mypy against ``src`` in the project env (all extras)
+- ``tests``      pytest + coverage against ``tests`` in the project env
 - ``tool-tests`` stdlib unit tests for repository tooling and policy
 - ``docs``       strict MkDocs build used by CI and Read the Docs
 - ``policy``     requirement-governance, repo-policy, and ADR-immutability gates
+- ``distributions`` build the wheel/sdist, clean-install it, prove identity
 - ``verify``     the full graph (test_command / completion_command)
 - ``hook-pre-commit`` / ``hook-pre-push`` drive the git hooks
 """
@@ -26,11 +29,13 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+import tomllib
 
 import nox
 
 REPO_ROOT = Path(__file__).resolve().parent
-PACKAGES_DIR = REPO_ROOT / "packages"
+IMPORT_PACKAGE = "raes_adapters"
+DISTRIBUTION = "raes-adapters"
 MAX_LARGE_FILE_KB = "500"
 COVERAGE_FAIL_UNDER = "80"
 PRIVATE_KEY_EXCLUDE = ("tests/",)
@@ -40,25 +45,12 @@ nox.options.reuse_existing_virtualenvs = True
 nox.options.sessions = ["verify"]
 
 
-def _adapters() -> list[Path]:
-    """Every adapter project: a ``packages/*`` dir with a ``pyproject.toml``."""
-    return sorted(p.parent for p in PACKAGES_DIR.glob("*/pyproject.toml"))
-
-
 def _run(session: nox.Session, *args: str, **kwargs: object) -> None:
     session.run(*args, external=True, **kwargs)
 
 
-def _import_name(adapter: Path) -> str:
-    """The adapter's import package, discovered from its ``src`` layout."""
-    candidates = sorted(p.name for p in (adapter / "src").iterdir() if p.is_dir())
-    if len(candidates) != 1:
-        raise ValueError(f"expected exactly one import package under {adapter}/src")
-    return candidates[0]
-
-
 def _uv_run_root(session: nox.Session, *args: str) -> None:
-    """Run a tool from the root tooling env (locked by the root uv.lock)."""
+    """Run a tool from the project env (locked by the root uv.lock)."""
     _run(session, "uv", "run", "--frozen", "--project", str(REPO_ROOT), *args)
 
 
@@ -119,31 +111,49 @@ def _lint(session: nox.Session) -> None:
     _uv_run_root(session, "ruff", "check", ".")
 
 
+def _extras() -> list[str]:
+    """Optional-dependency extras the distribution declares."""
+    data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    return sorted(data.get("project", {}).get("optional-dependencies", {}))
+
+
+def _verification_envs() -> list[tuple[list[str], str]]:
+    """The base install, then each extra ALONE.
+
+    Simulator extras may carry mutually-incompatible stacks (isolated with uv's
+    ``conflicts`` declaration in the one lock), so they are never activated
+    together: ``--all-extras`` would make the graph unresolvable the day a
+    conflicting simulator lands. Verifying base + each extra separately keeps the
+    single project and lockfile while honoring that contract.
+    """
+    return [([], "base"), *((["--extra", extra], extra) for extra in _extras())]
+
+
 def _typecheck(session: nox.Session) -> None:
-    for adapter in _adapters():
-        session.log(f"typecheck: {adapter.name}")
-        with session.chdir(adapter):
-            _run(session, "uv", "sync", "--frozen")
-            _run(session, "uv", "run", "--frozen", "mypy", "src")
+    for sync_args, label in _verification_envs():
+        session.log(f"typecheck: {label}")
+        _run(session, "uv", "sync", "--frozen", *sync_args)
+        _run(session, "uv", "run", "--frozen", "mypy", "src")
 
 
 def _tests(session: nox.Session) -> None:
-    for adapter in _adapters():
-        session.log(f"tests: {adapter.name}")
-        with session.chdir(adapter):
-            _run(session, "uv", "sync", "--frozen")
-            _run(session, "uv", "run", "--frozen", "coverage", "erase")
-            _run(session, "uv", "run", "--frozen", "coverage", "run", "-m", "pytest")
-            _run(session, "uv", "run", "--frozen", "coverage", "xml")
-            _run(
-                session,
-                "uv",
-                "run",
-                "--frozen",
-                "coverage",
-                "report",
-                f"--fail-under={COVERAGE_FAIL_UNDER}",
-            )
+    _run(session, "uv", "sync", "--frozen")
+    _run(session, "uv", "run", "--frozen", "coverage", "erase")
+    for sync_args, label in _verification_envs():
+        session.log(f"tests: {label}")
+        _run(session, "uv", "sync", "--frozen", *sync_args)
+        _run(session, "uv", "run", "--frozen", "coverage", "run", "--parallel-mode", "-m", "pytest")
+    _run(session, "uv", "run", "--frozen", "coverage", "combine")
+    _run(session, "uv", "run", "--frozen", "coverage", "xml")
+    _run(
+        session,
+        "uv",
+        "run",
+        "--frozen",
+        "coverage",
+        "report",
+        f"--fail-under={COVERAGE_FAIL_UNDER}",
+    )
 
 
 def _tool_tests(session: nox.Session) -> None:
@@ -176,22 +186,18 @@ def _policy(session: nox.Session, *args: str) -> None:
 
 
 def _distributions(session: nox.Session) -> None:
-    """Build every publishable package and prove its artifacts are clean.
+    """Build the distribution and prove its artifacts carry only current identity.
 
     Editable installs resolve through the source tree, so they hide packaging
     defects: a stale import path keeps working because the checkout is on
-    ``sys.path``. This stage builds a wheel and an sdist, installs the wheel into
-    a throwaway environment *outside* the checkout with no ``PYTHONPATH``, and
+    ``sys.path``. This builds a wheel and an sdist, installs the wheel into a
+    throwaway environment *outside* the checkout with no ``PYTHONPATH``, and
     checks identity there -- in the artifacts and in the installed metadata.
     """
     workdir = Path(session.create_tmp())
     dist = workdir / "dist"
 
-    # Build everything first: an adapter may depend on a sibling that is not on
-    # PyPI, so the install below resolves siblings from this directory.
-    for adapter in _adapters():
-        session.log(f"build: {adapter.name}")
-        _run(session, "uv", "build", "--project", str(adapter), "--out-dir", str(dist))
+    _run(session, "uv", "build", "--out-dir", str(dist))
 
     archives = sorted(dist.glob("*.whl")) + sorted(dist.glob("*.tar.gz"))
     if not archives:
@@ -200,50 +206,47 @@ def _distributions(session: nox.Session) -> None:
     for archive in archives:
         archive_args += ["--archive", str(archive)]
 
-    for adapter in _adapters():
-        module = _import_name(adapter)
-        wheels = sorted(dist.glob(f"{module}-*.whl"))
-        if not wheels:
-            session.error(f"no wheel built for {adapter.name}")
+    wheels = sorted(dist.glob(f"{IMPORT_PACKAGE}-*.whl"))
+    if not wheels:
+        session.error(f"no wheel built for {DISTRIBUTION}")
 
-        session.log(f"clean install: {adapter.name}")
-        venv = workdir / f"venv-{adapter.name}"
-        # --clear keeps the session re-runnable: nox reuses its tmp directory.
-        _run(session, "uv", "venv", "--quiet", "--clear", str(venv))
-        _run(
-            session,
-            "uv",
-            "pip",
-            "install",
-            "--quiet",
-            "--python",
-            str(venv),
-            "--find-links",
-            str(dist),
-            str(wheels[0]),
-        )
+    session.log(f"clean install: {DISTRIBUTION}")
+    venv = workdir / "venv"
+    _run(session, "uv", "venv", "--quiet", "--clear", str(venv))
+    _run(
+        session,
+        "uv",
+        "pip",
+        "install",
+        "--quiet",
+        "--python",
+        str(venv),
+        "--find-links",
+        str(dist),
+        str(wheels[0]),
+    )
 
-        # Probe from a clean working directory with no PYTHONPATH, so nothing
-        # resolves through the checkout.
-        _run(
-            session,
-            str(venv / "bin" / "python"),
-            str(REPO_ROOT / "tools" / "probe_installed_identity.py"),
-            module,
-            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
-        )
+    # Probe from a clean working directory with no PYTHONPATH, so nothing
+    # resolves through the checkout.
+    _run(
+        session,
+        str(venv / "bin" / "python"),
+        str(REPO_ROOT / "tools" / "probe_installed_identity.py"),
+        IMPORT_PACKAGE,
+        env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+    )
 
-        site_packages = next(iter((venv / "lib").glob("python3.*/site-packages")))
-        _uv_run_root(
-            session,
-            "python",
-            "tools/check_identity_policy.py",
-            *archive_args,
-            "--site-packages",
-            str(site_packages),
-            "--distribution",
-            module,
-        )
+    site_packages = next(iter((venv / "lib").glob("python3.*/site-packages")))
+    _uv_run_root(
+        session,
+        "python",
+        "tools/check_identity_policy.py",
+        *archive_args,
+        "--site-packages",
+        str(site_packages),
+        "--distribution",
+        IMPORT_PACKAGE,
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -286,7 +289,7 @@ def policy(session: nox.Session) -> None:
 
 @nox.session
 def distributions(session: nox.Session) -> None:
-    """Build, clean-install, and identity-check every publishable package."""
+    """Build, clean-install, and identity-check the distribution."""
     _distributions(session)
 
 
@@ -300,37 +303,6 @@ def verify(session: nox.Session) -> None:
     _tests(session)
     _distributions(session)
     _docs(session)
-
-
-@nox.session(name="ci-adapter")
-def ci_adapter(session: nox.Session) -> None:
-    """Typecheck + test a single adapter in isolation (per-adapter CI matrix).
-
-    Pass the adapter directory name(s) as posargs, e.g.
-    ``nox -s ci-adapter -- cyborg_adapter``. With no posargs, runs every
-    adapter (useful locally).
-    """
-    names = [a for a in session.posargs if not a.startswith("-")]
-    targets = [PACKAGES_DIR / n for n in names] if names else _adapters()
-    for adapter in targets:
-        if not (adapter / "pyproject.toml").is_file():
-            session.error(f"no adapter project at {adapter}")
-        session.log(f"ci-adapter: {adapter.name}")
-        with session.chdir(adapter):
-            _run(session, "uv", "sync", "--frozen")
-            _run(session, "uv", "run", "--frozen", "mypy", "src")
-            _run(session, "uv", "run", "--frozen", "coverage", "erase")
-            _run(session, "uv", "run", "--frozen", "coverage", "run", "-m", "pytest")
-            _run(session, "uv", "run", "--frozen", "coverage", "xml")
-            _run(
-                session,
-                "uv",
-                "run",
-                "--frozen",
-                "coverage",
-                "report",
-                f"--fail-under={COVERAGE_FAIL_UNDER}",
-            )
 
 
 @nox.session(name="hook-pre-commit")

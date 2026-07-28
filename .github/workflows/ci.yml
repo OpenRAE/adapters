@@ -16,9 +16,11 @@ permissions:
   contents: read
 
 jobs:
-  # Repo-level gates that are NOT adapter-specific: hygiene, lint, and the
-  # governance policy gates (requirement governance, repo policy, ADR pins).
-  repo-checks:
+  # One distribution, one verification graph: hygiene, lint, governance policy,
+  # tool tests, typecheck, tests, the build/clean-install identity proof, and the
+  # strict docs build. `raes-adapters` is a single package with optional
+  # per-simulator extras, so there is no per-adapter matrix.
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -37,7 +39,7 @@ jobs:
           REQ_UID="$(printf '%s\n' "$BRANCH" | grep -oE '[A-Z]{3}-[0-9]{3}' | head -n1 || true)"
           echo "Resolved branch='$BRANCH' uid='$REQ_UID'"
           echo "uid=$REQ_UID" >> "$GITHUB_OUTPUT"
-      - name: Repo-level checks (hygiene, lint, policy)
+      - name: Canonical verification graph
         run: |
           policy_args=()
           if [ -n "${{ steps.requirement.outputs.uid }}" ]; then
@@ -45,85 +47,28 @@ jobs:
           else
             policy_args+=(--skip-requirement)
           fi
-          uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s hygiene lint
-          uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s policy -- "${policy_args[@]}"
-      - name: Tool tests
-        run: uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s tool-tests
-      # Identity proof at the artifact level (ADR-002). The policy session above
-      # only scans the tracked tree; this builds each publishable package and
-      # installs it outside the checkout, so a retired import path cannot survive
-      # in a wheel, an sdist, or installed metadata while an editable install
-      # hides it. Without this step the artifact half of the gate never runs.
-      - name: Distribution identity and clean-install proof
-        run: uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s distributions
-
-  # Per-adapter CI matrix (ADR-069 §5). Each adapter is synced/typechecked/
-  # tested in an isolated environment keyed by its own lockfile and Python
-  # version, so one simulator's dependency pins can never gate another's job.
-  # Add a row when a new adapter lands.
-  adapter:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: sim_adapter_base
-            path: packages/sim_adapter_base
-            python: "3.12"
-            extras: ""
-            conformance_profile: none
-            seed_suite: none
-            source_ledger: none
-          - name: cyborg_adapter
-            path: packages/cyborg_adapter
-            python: "3.12"
-            extras: ""
-            conformance_profile: cage2-backend
-            seed_suite: cage2-default
-            source_ledger: cage2-source-ledger
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
-        with:
-          python-version: ${{ matrix.python }}
-      - name: Install uv
-        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8
-      - name: Verify adapter (${{ matrix.name }}) in isolation
-        run: uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s ci-adapter -- ${{ matrix.name }}
-      - name: Upload adapter coverage
+          uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s verify -- "${policy_args[@]}"
+      - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: coverage-${{ matrix.name }}
-          path: ${{ matrix.path }}/coverage.xml
+          name: coverage
+          path: coverage.xml
           if-no-files-found: ignore
 
   sonar:
     name: SonarCloud
     runs-on: ubuntu-latest
-    needs: [repo-checks, adapter]
+    needs: [verify]
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
-      - name: Download adapter coverage reports
+      - name: Download coverage report
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          pattern: coverage-*
-          merge-multiple: false
-      - name: Stage coverage reports at expected paths
-        run: |
-          for dir in coverage-*; do
-            [ -d "$dir" ] || continue
-            adapter="${dir#coverage-}"
-            if [ -f "$dir/coverage.xml" ]; then
-              mkdir -p "packages/$adapter"
-              cp "$dir/coverage.xml" "packages/$adapter/coverage.xml"
-            fi
-          done
+          name: coverage
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@299e4b793aaa83bf2aba7c9c14bedbb485688ec4 # v7
         env:
@@ -131,23 +76,18 @@ jobs:
 
   pr-gate:
     name: PR Gate
-    needs: [repo-checks, adapter, sonar]
+    needs: [verify, sonar]
     if: ${{ always() && github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     steps:
       - name: Assert required PR jobs passed
         env:
-          ADAPTER_RESULT: ${{ needs.adapter.result }}
-          REPO_CHECKS_RESULT: ${{ needs.repo-checks.result }}
+          VERIFY_RESULT: ${{ needs.verify.result }}
           SAME_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
           SONAR_RESULT: ${{ needs.sonar.result }}
         run: |
-          if [ "$REPO_CHECKS_RESULT" != "success" ]; then
-            echo "::error::Repo checks did not succeed ($REPO_CHECKS_RESULT)"
-            exit 1
-          fi
-          if [ "$ADAPTER_RESULT" != "success" ]; then
-            echo "::error::Adapter matrix did not succeed ($ADAPTER_RESULT)"
+          if [ "$VERIFY_RESULT" != "success" ]; then
+            echo "::error::Verify did not succeed ($VERIFY_RESULT)"
             exit 1
           fi
           if [ "$SAME_REPOSITORY" = "true" ] && [ "$SONAR_RESULT" != "success" ]; then

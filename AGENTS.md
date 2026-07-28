@@ -11,16 +11,19 @@ issue-driven from RAES (RAES ADR-069 §8).
 - **RAES is the authority.** Do not add backend-specific SDL, schemas, profiles,
   vocabularies, manifest blocks, exceptions, stores, or policy gates to make a
   mapping convenient (ADR-069 §1). Adapters consume RAES *published contracts*.
-- **Backend concepts stay in their adapter.** CybORG and CAGE-2 material is
-  scoped source/backend evidence inside `cyborg_adapter`; it must never define
-  the shared semantic boundary (ADR-002).
-- **`sim_adapter_base` is plumbing, not authority.** It must not define a
+- **Backend concepts stay in their module.** CybORG and CAGE-2 material is
+  scoped source/backend evidence inside `raes_adapters.cyborg`; it must never
+  define the shared semantic boundary (ADR-002).
+- **`raes_adapters.base` is plumbing, not authority.** It must not define a
   semantic model, schema registry, backend protocol, diagnostic envelope,
   exception hierarchy, conformance-profile table, fixture corpus, concept
   catalog, or policy gate (ADR-069 §4).
-- **Per-adapter isolation.** Each adapter owns its own `pyproject.toml` +
-  `uv.lock`. Never introduce a global adapter lockfile or uv workspace
-  (ADR-069 §5).
+- **Packaging is a local decision.** `raes-adapters` is one distribution with an
+  optional extra per simulator (`raes-adapters[cyborg]`) under a single
+  `uv.lock`. RAES owns the contracts an adapter honors, not how this repo
+  packages, locks, or releases — the packaging half of ADR-069 §5 is amended
+  (RAESystem/rae#949; ADR-003). A simulator with a mutually-incompatible stack
+  is isolated with uv's `conflicts` extras declaration, not a separate lockfile.
 - **No native simulator leakage.** Native CybORG state, gym/PettingZoo tuples,
   reward vectors, action ids, object reprs, raw logs, hidden truth, argv/env
   dumps, tokens, and full tracebacks must not appear in portable RAES artifacts
@@ -41,6 +44,8 @@ maintenance.
 
 ## Governing documents
 
-- RAES ADR-069 — CAGE-2 Replication Architecture (authority).
+- RAES ADR-069 — CAGE-2 Replication Architecture (authority; §5 packaging amended
+  by RAESystem/rae#949).
 - RAES `docs/decisions/cage-2-replication-design.md` — implementation checklist.
-- Repo-local ADRs under `docs/decisions/adrs/`.
+- Repo-local ADRs under `docs/decisions/adrs/` (ADR-003 = single distribution +
+  Trusted Publishing).

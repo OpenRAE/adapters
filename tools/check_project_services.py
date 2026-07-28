@@ -146,10 +146,9 @@ def validate_repository(repo_root: Path) -> list[str]:
     ci = _read_required(repo_root, ".github/workflows/ci.yml", errors)
     for expected in (
         "name: PR Gate",
-        "needs: [repo-checks, adapter, sonar]",
+        "needs: [verify, sonar]",
         "if: ${{ always() && github.event_name == 'pull_request' }}",
-        "Repo checks did not succeed",
-        "Adapter matrix did not succeed",
+        "Verify did not succeed",
         "SonarCloud did not succeed for a same-repository PR",
     ):
         _require(ci, expected, ".github/workflows/ci.yml", errors)
@@ -195,12 +194,43 @@ def validate_repository(repo_root: Path) -> list[str]:
     services = _read_required(repo_root, "docs/maintainers/project-services.md", errors)
     for expected in (
         "Read the Docs project: `raes-adapters`",
-        "PyPI distribution name (reserved, not yet published): `raes-adapters`",
+        "PyPI distribution name: `raes-adapters`",
+        "PyPI Trusted Publisher workflow: `release-please.yml`",
+        "PyPI environment: `pypi`",
         "SonarCloud project key: `RAESystem_adapters`",
         "OpenSSF Scorecard URI: `github.com/RAESystem/adapters`",
         "OpenSSF Best Practices lookup: `https://github.com/RAESystem/adapters`",
     ):
         _require(services, expected, "docs/maintainers/project-services.md", errors)
+
+    # Release Please owns versioning + CHANGELOG; PyPI publication is OIDC Trusted
+    # Publishing only (ADR-003). Validate the config, manifest, and workflow
+    # boundary here rather than in a second release-config validator.
+    release_config = _read_required(repo_root, "release-please-config.json", errors)
+    for expected in (
+        '"release-type": "python"',
+        '"package-name": "raes-adapters"',
+    ):
+        _require(release_config, expected, "release-please-config.json", errors)
+
+    _read_required(repo_root, ".release-please-manifest.json", errors)
+
+    release_wf = _read_required(repo_root, ".github/workflows/release-please.yml", errors)
+    for expected in (
+        "googleapis/release-please-action@",
+        "pypa/gh-action-pypi-publish@",
+        "environment: pypi",
+        "id-token: write",
+    ):
+        _require(release_wf, expected, ".github/workflows/release-please.yml", errors)
+    # No stored PyPI credential, and no silent `skip-existing` recovery that could
+    # mask a partial or duplicate publication.
+    for forbidden in ("PYPI_API_TOKEN", "TWINE_PASSWORD", "skip-existing: true"):
+        if forbidden in release_wf:
+            errors.append(
+                ".github/workflows/release-please.yml: forbidden release setting "
+                f"present: {forbidden}"
+            )
 
     workflows = sorted((repo_root / ".github/workflows").glob("*.y*ml"))
     for workflow in workflows:
