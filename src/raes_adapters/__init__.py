@@ -20,5 +20,7 @@ __all__ = ["__version__"]
 
 try:
     __version__ = version("raes-adapters")
-except PackageNotFoundError:  # pragma: no cover - source tree without installed metadata
+except PackageNotFoundError:
+    # Source tree without installed metadata; coverage excludes this fallback via
+    # [tool.coverage.report] exclude_also in pyproject.toml.
     __version__ = "0.0.0"

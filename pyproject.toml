@@ -103,3 +103,9 @@ source = ["raes_adapters"]
 
 [tool.coverage.report]
 show_missing = true
+exclude_also = [
+    # Defensive fallback taken only when the distribution metadata is absent
+    # (importing from a source tree that was never installed); unreachable while
+    # the package is installed, as it always is under test.
+    "except PackageNotFoundError:",
+]
