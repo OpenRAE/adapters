@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Repo-structure policy gate for aces-adapters.
+"""Repo-structure policy gate for raes-adapters.
 
 Enforces the plan rules in ``.gc/plan-rules.md``:
 

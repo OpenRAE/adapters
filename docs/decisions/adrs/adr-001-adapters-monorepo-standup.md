@@ -2,7 +2,16 @@
 
 ## Status
 
-accepted
+superseded
+
+Superseded by [ADR-002](adr-002-raes-authority-and-adapter-boundaries.md) on
+2026-07-28 (RAES identity cutover, issue #5). This record is retained unchanged
+as the historical decision: its pre-cutover wording is an accurate record of what
+was decided at the time, not current guidance. Per the ADR governance in
+[README.md](README.md), a superseded ADR leaves the pinned set; its content is
+instead digest-pinned in
+[`../identity-register.yaml`](../identity-register.yaml) so the
+retired identity it records cannot drift.
 
 ## Date
 

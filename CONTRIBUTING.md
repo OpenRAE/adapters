@@ -1,8 +1,10 @@
-# Contributing to aces-adapters
+# Contributing to raes-adapters
 
-This repository is part of the ACES CAGE-2 replication program and is driven
-from ACES issues and requirements (ACES ADR-069 §8). Contributions land through
-the Ground Control `/implement` workflow.
+This repository hosts simulator adapters for RAES (Reproducible Agentic
+Environments System) and is driven from RAES issues and requirements (RAES
+ADR-069 §8). CAGE-2 replication is one backend served by the CybORG adapter
+rather than the scope of the repository. Contributions land through the Ground
+Control `/implement` workflow.
 
 ## Branching
 
@@ -41,7 +43,7 @@ environment).
 3. Add its `src`/`tests` dirs and `coverage.xml` path to
    `sonar-project.properties`.
 4. Keep adapter dependencies inside that package — never introduce a shared
-   adapter lockfile (ACES ADR-069 §5).
+   adapter lockfile (RAES ADR-069 §5).
 
 ## Changes and changelog
 

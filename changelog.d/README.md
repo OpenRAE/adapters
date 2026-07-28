@@ -19,7 +19,7 @@ The fragment body is a single Markdown bullet's worth of prose (no leading
 `-`). Example (`changelog.d/636.added.md`):
 
 ```
-Stand up the aces-adapters monorepo with Ground Control onboarding and a
+Stand up the raes-adapters monorepo with Ground Control onboarding and a
 strict SonarCloud quality gate.
 ```
 

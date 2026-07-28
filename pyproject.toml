@@ -1,15 +1,21 @@
-# Root project for the aces-adapters monorepo.
+# Root project for the raes-adapters monorepo.
 #
-# This is TOOLING ONLY. It locks the repo-level toolchain (ruff, the pre-commit
-# hooks, towncrier) in the root `uv.lock`. It deliberately does NOT declare or
-# resolve any adapter/simulator dependency: per ADR-069 §5 each adapter under
-# `packages/` owns an independent `pyproject.toml` + `uv.lock` so incompatible
-# simulator stacks cannot gate one another. There is no uv workspace here for
-# the same reason (a workspace shares one lock).
+# `raes-adapters` is this repository's reserved PyPI distribution name. It is NOT
+# published yet: the project is virtual (`package = false`), builds no artifact,
+# and issue #4 wires up Release Please and publication. The name is claimed here
+# so it cannot drift before then; nothing in the tree may describe it as a live
+# distribution until #4 lands.
+#
+# Today this root is TOOLING ONLY. It locks the repo-level toolchain (ruff, the
+# pre-commit hooks, towncrier) in the root `uv.lock`. It deliberately does NOT
+# declare or resolve any adapter/simulator dependency: per ADR-069 §5 each
+# adapter under `packages/` owns an independent `pyproject.toml` + `uv.lock` so
+# incompatible simulator stacks cannot gate one another. There is no uv workspace
+# here for the same reason (a workspace shares one lock).
 [project]
-name = "aces-adapters-tooling"
+name = "raes-adapters"
 version = "0.0.0"
-description = "Repo-level toolchain for the aces-adapters monorepo (not published)."
+description = "Repo-level toolchain for the raes-adapters monorepo (not yet published; see issue #4)."
 requires-python = ">=3.12"
 dependencies = []
 

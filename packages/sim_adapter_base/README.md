@@ -1,10 +1,10 @@
 # sim_adapter_base
 
-Shared plumbing for ACES simulator adapters — a convenience library for
+Shared plumbing for RAES simulator adapters — a convenience library for
 simulator drivers, **not** an authority.
 
-Per ACES [ADR-069](https://github.com/Brad-Edwards/aces/blob/main/docs/decisions/adrs/adr-069-cage-2-replication-architecture.md)
-§4, this package consumes ACES published contracts and must never define a new
+Per RAES [ADR-069](https://github.com/RAESystem/rae/blob/main/docs/decisions/adrs/adr-069-cage-2-replication-architecture.md)
+§4, this package consumes RAES published contracts and must never define a new
 semantic model, schema registry, backend protocol, diagnostic envelope,
 exception hierarchy, conformance-profile table, fixture corpus, concept
 catalog, or policy gate.

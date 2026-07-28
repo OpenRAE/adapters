@@ -26,3 +26,6 @@ htmlcov/
 
 # Local env
 .env
+
+# Local MCP server registration (machine-specific paths)
+.mcp.json

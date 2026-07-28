@@ -1,0 +1,94 @@
+# Identity register (ADR-002).
+#
+# The single exception to the fail-closed identity gate. Every entry is an exact
+# path pinned by content digest and occurrence count, naming its owner, the
+# rationale, and the condition that retires it. The gate fails closed on any
+# drift. There are no globs, path prefixes, or directory exemptions, and an entry
+# never excuses retired identity in current, owned guidance.
+#
+# Two record classes, deliberately distinct:
+#
+#   external-identity  A live identity this repository provably does not own --
+#                      an immutable key in another system, or a contract emitted
+#                      by a shared workflow. This is a debt: it carries a real
+#                      retiring condition, and when that condition is met the
+#                      entry is deleted, not amended.
+#
+#   historical-record  A decision superseded by ADR-002 and retained unchanged
+#                      because it accurately records what was decided at the
+#                      time. This is an asset: permanent, and the retained
+#                      document must say plainly that it is history, not current
+#                      guidance. Deleting it to clear a scan would destroy the
+#                      record ADR-000 promised to keep.
+#
+# Re-pin an entry with `tools/check_identity_policy.py --update` when a
+# registered file changes for an unrelated reason. That flag cannot add an entry;
+# granting a new exception is a reviewed edit to this file.
+entries:
+  - path: .ground-control.yaml
+    digest: 06cd8b48e54239e27dbb75b2d52aa75525ea756a3ddc487168e20c680974e5c1
+    record_class: external-identity
+    owner: ground-control
+    rationale: >-
+      immutable Ground Control project key; PUT /api/v1/projects/{id} updates only name and description
+    occurrences: 1
+    retires_when: >-
+      Ground Control offers a project-identifier migration
+  - path: Makefile
+    digest: d2b9e787116d9d6458648202610e036a95fb6898581c3c85e73f6ef1ef310ab9
+    record_class: external-identity
+    owner: ground-control
+    rationale: >-
+      requirement-governance environment variable emitted by the Ground Control workflow constant; renaming it here alone would leave the gate reading a variable the workflow never sets
+    occurrences: 1
+    retires_when: >-
+      autarchy-ai/Ground-Control#1471 renames the requirement-governance variable across its four consuming repositories
+  - path: tools/check_requirement_governance.py
+    digest: ecb7dcad9a2ea5ab190fd4f90c8836ef9f99864535f2b448a56ef1c55153c031
+    record_class: external-identity
+    owner: ground-control
+    rationale: >-
+      requirement-governance environment variable emitted by the Ground Control workflow constant; renaming it here alone would leave the gate reading a variable the workflow never sets
+    occurrences: 3
+    retires_when: >-
+      autarchy-ai/Ground-Control#1471 renames the requirement-governance variable across its four consuming repositories
+  - path: .gc/plan-rules.md
+    digest: 456247140348a3befa36ddf683d3135f8db1b70dcea2089c690dcf06bd3bdc46
+    record_class: external-identity
+    owner: ground-control
+    rationale: >-
+      requirement-governance environment variable emitted by the Ground Control workflow constant; renaming it here alone would leave the gate reading a variable the workflow never sets
+    occurrences: 1
+    retires_when: >-
+      autarchy-ai/Ground-Control#1471 renames the requirement-governance variable across its four consuming repositories
+  - path: AGENTS.md
+    digest: 5762e202ab1708d50c8112c08eb38b5148c9ba57109885dc1e5fc5ca2ce06b35
+    record_class: external-identity
+    owner: ground-control
+    rationale: >-
+      requirement-governance environment variable emitted by the Ground Control workflow constant; renaming it here alone would leave the gate reading a variable the workflow never sets
+    occurrences: 1
+    retires_when: >-
+      autarchy-ai/Ground-Control#1471 renames the requirement-governance variable across its four consuming repositories
+  - path: docs/decisions/adrs/adr-000-use-adrs.md
+    digest: 895068ddaeb99ae6d2e1832b7a6dfaacf9dba37b30b1624f44d3b83f24a98dc8
+    record_class: historical-record
+    owner: repository-decision-history
+    rationale: >-
+      superseded by ADR-002 and retained unchanged as the decision to use pinned ADRs, recorded before the RAES cutover;
+      it is an accurate record of what was decided, not current guidance
+    occurrences: 7
+    retires_when: >-
+      never; a historical decision is permanent. Deleting it would erase the
+      record ADR-000 itself promised to keep.
+  - path: docs/decisions/adrs/adr-001-adapters-monorepo-standup.md
+    digest: e385e4fb7d97520d68356b830fc48e38574b71067656fa861ebd91292a939130
+    record_class: historical-record
+    owner: repository-decision-history
+    rationale: >-
+      superseded by ADR-002 and retained unchanged as the monorepo standup decision, recorded before the RAES cutover;
+      it is an accurate record of what was decided, not current guidance
+    occurrences: 16
+    retires_when: >-
+      never; a historical decision is permanent. Deleting it would erase the
+      record ADR-000 itself promised to keep.

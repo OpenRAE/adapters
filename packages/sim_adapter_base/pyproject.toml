@@ -1,12 +1,13 @@
 [project]
 name = "sim-adapter-base"
 version = "0.0.0"
-description = "Shared plumbing for ACES simulator adapters (skeleton; see ADR-001 / ACES ADR-069 §4)."
+description = "Shared plumbing for RAES simulator adapters (skeleton; see ADR-002 / RAES ADR-069 §4)."
 requires-python = ">=3.12"
-# Intentionally no dependencies yet. sim_adapter_base consumes ACES published
-# contracts and is NOT a semantic/protocol authority (ACES ADR-069 §4). Real
-# dependencies and helpers land in REP-004.
-dependencies = []
+# RAES is the sole authority dependency, pinned exactly and resolved from PyPI
+# in this package's own lock (ADR-002). sim_adapter_base consumes those published
+# contracts and is NOT a semantic/protocol authority (RAES ADR-069 §4); its
+# helpers land in REP-004.
+dependencies = ["raes==2.0.0"]
 
 [build-system]
 requires = ["hatchling"]

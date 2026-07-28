@@ -47,6 +47,15 @@ jobs:
           fi
           uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s hygiene lint
           uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s policy -- "${policy_args[@]}"
+      - name: Tool tests
+        run: uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s tool-tests
+      # Identity proof at the artifact level (ADR-002). The policy session above
+      # only scans the tracked tree; this builds each publishable package and
+      # installs it outside the checkout, so a retired import path cannot survive
+      # in a wheel, an sdist, or installed metadata while an editable install
+      # hides it. Without this step the artifact half of the gate never runs.
+      - name: Distribution identity and clean-install proof
+        run: uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s distributions
 
   # Per-adapter CI matrix (ADR-069 §5). Each adapter is synced/typechecked/
   # tested in an isolated environment keyed by its own lockfile and Python
