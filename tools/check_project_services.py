@@ -92,6 +92,9 @@ def validate_repository(repo_root: Path) -> list[str]:
     if "default_fallback:" in ground_control:
         errors.append(".ground-control.yaml: routing.default_fallback is retired")
 
+    root_pyproject = _read_required(repo_root, "pyproject.toml", errors)
+    _require(root_pyproject, 'name = "raes-adapters"', "pyproject.toml", errors)
+
     makefile = _read_required(repo_root, "Makefile", errors)
     _require(makefile, ".PHONY:", "Makefile", errors)
     _validate_devmain(makefile, errors)
@@ -192,6 +195,7 @@ def validate_repository(repo_root: Path) -> list[str]:
     services = _read_required(repo_root, "docs/maintainers/project-services.md", errors)
     for expected in (
         "Read the Docs project: `raes-adapters`",
+        "PyPI distribution name (reserved, not yet published): `raes-adapters`",
         "SonarCloud project key: `RAESystem_adapters`",
         "OpenSSF Scorecard URI: `github.com/RAESystem/adapters`",
         "OpenSSF Best Practices lookup: `https://github.com/RAESystem/adapters`",

@@ -1,7 +1,7 @@
-"""CybORG simulator backend adapter for ACES.
+"""CybORG simulator backend adapter for RAES.
 
-Per ACES ADR-069 §3 the CybORG adapter is a *conformant simulator backend*
-behind the existing ACES backend protocol surface (Provisioner, Orchestrator,
+Per RAES ADR-069 §3 the CybORG adapter is a *conformant simulator backend*
+behind the existing RAES backend protocol surface (Provisioner, Orchestrator,
 Evaluator, ParticipantRuntime). It publishes a ``backend-manifest-v2``, declares
 only evidence-backed capabilities, and keeps native CybORG state, gym/PettingZoo
 tuples, reward vectors, action ids, and simulator object reprs adapter-private.

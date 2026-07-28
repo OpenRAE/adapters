@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PR title guard for aces-adapters (stdlib only).
+"""PR title guard for raes-adapters (stdlib only).
 
 Guards against agent-branded PR titles (e.g. ``[codex] ...``) and enforces the
 basic shape Ground Control's /implement Step 9 documents. The PR title is

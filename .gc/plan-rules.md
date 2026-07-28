@@ -1,4 +1,4 @@
-# aces-adapters plan rules
+# raes-adapters plan rules
 
 Mandatory constraints the `/implement` skill applies during the plan phase.
 
@@ -9,16 +9,16 @@ Mandatory constraints the `/implement` skill applies during the plan phase.
   for genuine requirement-free maintenance work.
 - Plans MUST keep each adapter under `packages/` independent: its own
   `pyproject.toml` and `uv.lock`. Plans MUST NOT introduce a global adapter
-  lockfile or a uv workspace (ACES ADR-069 §5).
+  lockfile or a uv workspace (RAES ADR-069 §5).
 - Plans that add an adapter MUST add its CI matrix row in
   `.github/workflows/ci.yml` and its `src`/`tests`/`coverage.xml` paths in
   `sonar-project.properties`.
 - Plans MUST NOT add CAGE-specific SDL, schemas, profiles, vocabularies, or
-  policy gates; adapters consume ACES published contracts (ACES ADR-069 §1).
+  policy gates; adapters consume RAES published contracts (RAES ADR-069 §1).
 - Plans MUST keep `sim_adapter_base` free of semantic/protocol/authority
-  definitions (ACES ADR-069 §4).
+  definitions (RAES ADR-069 §4).
 - Plans MUST NOT leak native simulator objects, raw logs, hidden truth, tokens,
-  or full tracebacks into portable ACES artifacts (ACES ADR-069 §3).
+  or full tracebacks into portable RAES artifacts (RAES ADR-069 §3).
 - Plans with a user-visible change MUST add a fragment under
   `changelog.d/<issue>.<type>.md` (or `changelog.d/+<slug>.<type>.md` for
   issue-free entries); do not edit `CHANGELOG.md` directly.

@@ -1,14 +1,19 @@
-# Agent guide — aces-adapters
+# Agent guide — raes-adapters
 
-This repo is part of the ACES CAGE-2 replication program. ACES
-(`Brad-Edwards/aces`) is the semantic authority; work here is issue-driven from
-ACES (ACES ADR-069 §8).
+This repo hosts simulator adapters for RAES (Reproducible Agentic Environments
+System). RAES (`RAESystem/rae`) is the semantic authority and its scope is
+agentic environments generally; CAGE-2 replication is the first backend the
+CybORG adapter serves, not the boundary of the repository. Work here is
+issue-driven from RAES (RAES ADR-069 §8).
 
 ## Hard rules
 
-- **ACES is the authority.** Do not add CAGE-specific SDL, schemas, profiles,
+- **RAES is the authority.** Do not add backend-specific SDL, schemas, profiles,
   vocabularies, manifest blocks, exceptions, stores, or policy gates to make a
-  mapping convenient (ADR-069 §1). Adapters consume ACES *published contracts*.
+  mapping convenient (ADR-069 §1). Adapters consume RAES *published contracts*.
+- **Backend concepts stay in their adapter.** CybORG and CAGE-2 material is
+  scoped source/backend evidence inside `cyborg_adapter`; it must never define
+  the shared semantic boundary (ADR-002).
 - **`sim_adapter_base` is plumbing, not authority.** It must not define a
   semantic model, schema registry, backend protocol, diagnostic envelope,
   exception hierarchy, conformance-profile table, fixture corpus, concept
@@ -18,7 +23,7 @@ ACES (ACES ADR-069 §8).
   (ADR-069 §5).
 - **No native simulator leakage.** Native CybORG state, gym/PettingZoo tuples,
   reward vectors, action ids, object reprs, raw logs, hidden truth, argv/env
-  dumps, tokens, and full tracebacks must not appear in portable ACES artifacts
+  dumps, tokens, and full tracebacks must not appear in portable RAES artifacts
   (ADR-069 §3, risks).
 - **No agent attribution** in commits, PRs, issues, code, or docs.
 
@@ -36,6 +41,6 @@ maintenance.
 
 ## Governing documents
 
-- ACES ADR-069 — CAGE-2 Replication Architecture (authority).
-- ACES `docs/decisions/cage-2-replication-design.md` — implementation checklist.
+- RAES ADR-069 — CAGE-2 Replication Architecture (authority).
+- RAES `docs/decisions/cage-2-replication-design.md` — implementation checklist.
 - Repo-local ADRs under `docs/decisions/adrs/`.

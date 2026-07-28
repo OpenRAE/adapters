@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Requirement-governance gate for aces-adapters.
+"""Requirement-governance gate for raes-adapters.
 
 Every change must be attributable to a Ground Control requirement UID so the
 cross-repo replication program (ADR-069 §8) stays traceable. The UID is read,

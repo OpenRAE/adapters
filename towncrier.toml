@@ -1,5 +1,5 @@
 [tool.towncrier]
-name = "aces-adapters"
+name = "raes-adapters"
 filename = "CHANGELOG.md"
 directory = "changelog.d"
 template = "changelog.d/_template.md.jinja"

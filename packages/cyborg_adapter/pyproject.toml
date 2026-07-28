@@ -1,7 +1,7 @@
 [project]
-name = "aces-adapter-cyborg"
+name = "raes-adapter-cyborg"
 version = "0.0.0"
-description = "CybORG simulator backend adapter for ACES (skeleton; see ADR-001 / ACES ADR-069 §3)."
+description = "CybORG simulator backend adapter for RAES (skeleton; see ADR-002 / RAES ADR-069 §3)."
 requires-python = ">=3.12"
 # Depends on the shared base by workspace reference (ADR-069 §5: an adapter may
 # depend on sim_adapter_base by version or path, but does NOT share one global
@@ -17,7 +17,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/aces_adapter_cyborg"]
+packages = ["src/raes_adapter_cyborg"]
 
 [dependency-groups]
 dev = [
@@ -37,7 +37,7 @@ addopts = "-q"
 
 [tool.coverage.run]
 branch = true
-source = ["aces_adapter_cyborg"]
+source = ["raes_adapter_cyborg"]
 
 [tool.coverage.report]
 show_missing = true

@@ -1,7 +1,7 @@
-"""Shared plumbing for ACES simulator adapters.
+"""Shared plumbing for RAES simulator adapters.
 
-This package is a *convenience library* for simulator drivers. Per ACES ADR-069
-§4 it consumes ACES published contracts and MUST NOT define a new semantic
+This package is a *convenience library* for simulator drivers. Per RAES ADR-069
+§4 it consumes RAES published contracts and MUST NOT define a new semantic
 model, schema registry, backend protocol, diagnostic envelope, exception
 hierarchy, conformance-profile table, fixture corpus, concept catalog, or
 policy gate.

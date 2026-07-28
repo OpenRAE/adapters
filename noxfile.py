@@ -1,5 +1,5 @@
 # ruff: noqa: E402, I001
-"""Canonical verification graph for the aces-adapters monorepo.
+"""Canonical verification graph for the raes-adapters monorepo.
 
 This repository is a monorepo of *independent* per-simulator adapter projects
 (ADR-069 §5). Each adapter under ``packages/`` owns its own ``pyproject.toml``
@@ -45,8 +45,16 @@ def _adapters() -> list[Path]:
     return sorted(p.parent for p in PACKAGES_DIR.glob("*/pyproject.toml"))
 
 
-def _run(session: nox.Session, *args: str) -> None:
-    session.run(*args, external=True)
+def _run(session: nox.Session, *args: str, **kwargs: object) -> None:
+    session.run(*args, external=True, **kwargs)
+
+
+def _import_name(adapter: Path) -> str:
+    """The adapter's import package, discovered from its ``src`` layout."""
+    candidates = sorted(p.name for p in (adapter / "src").iterdir() if p.is_dir())
+    if len(candidates) != 1:
+        raise ValueError(f"expected exactly one import package under {adapter}/src")
+    return candidates[0]
 
 
 def _uv_run_root(session: nox.Session, *args: str) -> None:
@@ -164,6 +172,78 @@ def _policy(session: nox.Session, *args: str) -> None:
     _uv_run_root(session, "python", "tools/check_requirement_governance.py", *args)
     _uv_run_root(session, "python", "tools/check_adr_immutability.py")
     _uv_run_root(session, "python", "tools/check_project_services.py")
+    _uv_run_root(session, "python", "tools/check_identity_policy.py")
+
+
+def _distributions(session: nox.Session) -> None:
+    """Build every publishable package and prove its artifacts are clean.
+
+    Editable installs resolve through the source tree, so they hide packaging
+    defects: a stale import path keeps working because the checkout is on
+    ``sys.path``. This stage builds a wheel and an sdist, installs the wheel into
+    a throwaway environment *outside* the checkout with no ``PYTHONPATH``, and
+    checks identity there -- in the artifacts and in the installed metadata.
+    """
+    workdir = Path(session.create_tmp())
+    dist = workdir / "dist"
+
+    # Build everything first: an adapter may depend on a sibling that is not on
+    # PyPI, so the install below resolves siblings from this directory.
+    for adapter in _adapters():
+        session.log(f"build: {adapter.name}")
+        _run(session, "uv", "build", "--project", str(adapter), "--out-dir", str(dist))
+
+    archives = sorted(dist.glob("*.whl")) + sorted(dist.glob("*.tar.gz"))
+    if not archives:
+        session.error("no distributions were built")
+    archive_args: list[str] = []
+    for archive in archives:
+        archive_args += ["--archive", str(archive)]
+
+    for adapter in _adapters():
+        module = _import_name(adapter)
+        wheels = sorted(dist.glob(f"{module}-*.whl"))
+        if not wheels:
+            session.error(f"no wheel built for {adapter.name}")
+
+        session.log(f"clean install: {adapter.name}")
+        venv = workdir / f"venv-{adapter.name}"
+        # --clear keeps the session re-runnable: nox reuses its tmp directory.
+        _run(session, "uv", "venv", "--quiet", "--clear", str(venv))
+        _run(
+            session,
+            "uv",
+            "pip",
+            "install",
+            "--quiet",
+            "--python",
+            str(venv),
+            "--find-links",
+            str(dist),
+            str(wheels[0]),
+        )
+
+        # Probe from a clean working directory with no PYTHONPATH, so nothing
+        # resolves through the checkout.
+        _run(
+            session,
+            str(venv / "bin" / "python"),
+            str(REPO_ROOT / "tools" / "probe_installed_identity.py"),
+            module,
+            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+        )
+
+        site_packages = next(iter((venv / "lib").glob("python3.*/site-packages")))
+        _uv_run_root(
+            session,
+            "python",
+            "tools/check_identity_policy.py",
+            *archive_args,
+            "--site-packages",
+            str(site_packages),
+            "--distribution",
+            module,
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -205,6 +285,12 @@ def policy(session: nox.Session) -> None:
 
 
 @nox.session
+def distributions(session: nox.Session) -> None:
+    """Build, clean-install, and identity-check every publishable package."""
+    _distributions(session)
+
+
+@nox.session
 def verify(session: nox.Session) -> None:
     _hygiene(session, _tracked(session))
     _policy(session, *session.posargs)
@@ -212,6 +298,7 @@ def verify(session: nox.Session) -> None:
     _tool_tests(session)
     _typecheck(session)
     _tests(session)
+    _distributions(session)
     _docs(session)
 
 

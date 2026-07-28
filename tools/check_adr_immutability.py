@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ADR acceptance-content pin gate for aces-adapters (mirrors ACES ADR-059).
+"""ADR acceptance-content pin gate for raes-adapters (mirrors RAES ADR-059).
 
 An ``accepted`` ADR's content is pinned: its canonical-content sha256 is
 recorded in ``docs/decisions/adrs/adr-index.yaml`` and enforced here. A
