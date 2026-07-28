@@ -6,7 +6,7 @@ along with their context, rationale, and consequences.
 
 RAES (`RAESystem/rae`) remains the semantic authority for the replication
 program (ADR-069 §1). ADRs here record decisions *local to this repository*
-(monorepo structure, CI isolation, adapter conventions) and reference the
+(the distribution and release model, adapter conventions) and reference the
 governing RAES requirements, ADRs, and design records rather than restating
 them.
 
@@ -37,6 +37,7 @@ Each ADR includes: **Status**, **Date**, **Classification**, **Context**,
 | [000](adr-000-use-adrs.md) | Use Architecture Decision Records | superseded | 2026-07-04 |
 | [001](adr-001-adapters-monorepo-standup.md) | Adapters Monorepo Standup and CI Isolation | superseded | 2026-07-04 |
 | [002](adr-002-raes-authority-and-adapter-boundaries.md) | RAES Authority, ADR Migration, and Adapter Boundaries | accepted | 2026-07-28 |
+| [003](adr-003-single-distribution-and-trusted-publishing.md) | Single Distribution and Trusted Publishing | proposed | 2026-07-28 |
 
 ADR-000 and ADR-001 were superseded by ADR-002 in the RAES cutover. They are
 retained unchanged as historical records: they state accurately what was decided

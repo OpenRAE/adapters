@@ -43,7 +43,9 @@ def main(argv: list[str]) -> int:
     if "site-packages" not in origin:
         _fail(f"{module_name!r} resolved from {origin!r}, not the installed distribution")
 
-    # 2. The retired import path must be gone, not shadowed or forwarded.
+    # 2. The retired import path must be gone, not shadowed or forwarded. This is
+    #    the pre-cutover adapter import (retired stem), deliberately distinct from
+    #    the live ``raes_adapters`` distribution imported above.
     retired = f"{_RETIRED_PREFIX}_adapter_cyborg"
     try:
         importlib.import_module(retired)
@@ -58,8 +60,8 @@ def main(argv: list[str]) -> int:
         if _RETIRED_PREFIX in name.lower():
             _fail(f"installed distribution metadata still names {name!r}")
 
-    # 4. The shared base reaches the published RAES surfaces it depends on.
-    if module_name == "sim_adapter_base":
+    # 4. The distribution reaches the published RAES surfaces it depends on.
+    if module_name == "raes_adapters":
         for surface in _RAES_SURFACES:
             try:
                 importlib.import_module(surface)

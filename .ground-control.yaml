@@ -21,8 +21,8 @@ workflow:
 docs:
   adr_dir: docs/decisions/adrs/
 example_paths:
-  source: packages/
-  test: packages/
+  source: src/raes_adapters/
+  test: tests/
 requirements:
   uid_examples:
     - REP-002

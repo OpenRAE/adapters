@@ -1,33 +1,75 @@
-# Root project for the raes-adapters monorepo.
+# The `raes-adapters` distribution.
 #
-# `raes-adapters` is this repository's reserved PyPI distribution name. It is NOT
-# published yet: the project is virtual (`package = false`), builds no artifact,
-# and issue #4 wires up Release Please and publication. The name is claimed here
-# so it cannot drift before then; nothing in the tree may describe it as a live
-# distribution until #4 lands.
+# `raes-adapters` is this repository's single published PyPI distribution. It
+# ships shared adapter plumbing (`raes_adapters.base`) plus one module per
+# simulator backend (`raes_adapters.cyborg`, ...). Simulator-specific
+# dependencies are optional extras: `pip install raes-adapters[cyborg]`.
 #
-# Today this root is TOOLING ONLY. It locks the repo-level toolchain (ruff, the
-# pre-commit hooks, towncrier) in the root `uv.lock`. It deliberately does NOT
-# declare or resolve any adapter/simulator dependency: per ADR-069 §5 each
-# adapter under `packages/` owns an independent `pyproject.toml` + `uv.lock` so
-# incompatible simulator stacks cannot gate one another. There is no uv workspace
-# here for the same reason (a workspace shares one lock).
+# Packaging boundary (RAES ADR-069 as amended — RAESystem/rae#949 — and ADR-003):
+# RAES owns the contracts an adapter must honor, not this repo's packaging. This
+# repository deliberately uses ONE distribution + optional per-simulator extras
+# rather than a per-adapter monorepo. When a second simulator with a
+# mutually-incompatible stack lands, its extra is isolated from cyborg's with
+# uv's `conflicts` declaration so neither gates the other in the single lock.
 [project]
 name = "raes-adapters"
+# Release Please owns this version (release-type "python"); it bumps it from
+# Conventional Commit history on `main`. 0.0.0 is the unreleased baseline; the
+# first release cuts 0.1.0.
 version = "0.0.0"
-description = "Repo-level toolchain for the raes-adapters monorepo (not yet published; see issue #4)."
+description = "RAES simulator adapters: shared plumbing plus optional per-simulator backends."
+readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "RAES" }]
+keywords = ["raes", "simulator", "adapter", "cyborg", "cage-2", "cyber-defense"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Typing :: Typed",
+]
+dependencies = ["raes==2.0.0"]
+
+[project.optional-dependencies]
+# CybORG backend. Declared now so the extra and its Trusted-Publishing pipeline
+# exist before the concrete simulator pin lands under REP-004.
+cyborg = []
+
+[project.urls]
+Homepage = "https://github.com/RAESystem/adapters"
+Documentation = "https://raes-adapters.readthedocs.io"
+Repository = "https://github.com/RAESystem/adapters"
+Issues = "https://github.com/RAESystem/adapters/issues"
+Changelog = "https://github.com/RAESystem/adapters/blob/main/CHANGELOG.md"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/raes_adapters"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/raes_adapters", "tests", "README.md", "CHANGELOG.md", "LICENSE"]
 
 [tool.uv]
-package = false
+# One lock for the whole distribution. `raes-adapters` builds an artifact, so it
+# is not a virtual project.
+package = true
 
 [dependency-groups]
 dev = [
+    "pytest>=8.0",
+    "coverage[toml]>=7.5",
+    "mypy>=1.10",
     "ruff>=0.10",
     "pre-commit>=4.0",
     "pre-commit-hooks>=5.0",
-    "towncrier>=24.8",
     "pyyaml>=6.0",
 ]
 docs = [
@@ -45,3 +87,25 @@ select = ["E", "F", "I", "UP", "B", "SIM", "C4"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.coverage.run]
+branch = true
+source = ["raes_adapters"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_also = [
+    # Defensive fallback taken only when the distribution metadata is absent
+    # (importing from a source tree that was never installed); unreachable while
+    # the package is installed, as it always is under test.
+    "except PackageNotFoundError:",
+]

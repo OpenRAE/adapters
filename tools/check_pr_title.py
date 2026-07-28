@@ -2,10 +2,11 @@
 """PR title guard for raes-adapters (stdlib only).
 
 Guards against agent-branded PR titles (e.g. ``[codex] ...``) and enforces the
-basic shape Ground Control's /implement Step 9 documents. The PR title is
-untrusted event data, so it is read from ``$GITHUB_EVENT_PATH`` (never
-shell-interpolated). When run outside a pull_request event it is a no-op, so it
-is safe to run locally.
+Conventional Commit shape Release Please needs to derive the version and
+CHANGELOG (GC-P027 / issue #1399): a single lowercase-subject
+``<type>(<scope>)?<!>?: <subject>``. The PR title is untrusted event data, so it
+is read from ``$GITHUB_EVENT_PATH`` (never shell-interpolated). When run outside
+a pull_request event it is a no-op, so it is safe to run locally.
 """
 
 from __future__ import annotations
@@ -20,6 +21,24 @@ AGENT_BRANDING = re.compile(
     re.IGNORECASE,
 )
 LEADING_TAG = re.compile(r"^\s*\[[^\]]+\]")
+# Conventional Commit types Release Please understands. Type-to-release behavior
+# stays Release Please configuration; this only validates the title shape.
+CONVENTIONAL_TYPES = (
+    "feat",
+    "fix",
+    "docs",
+    "style",
+    "refactor",
+    "perf",
+    "test",
+    "build",
+    "ci",
+    "chore",
+    "revert",
+)
+CONVENTIONAL = re.compile(
+    r"^(?:" + "|".join(CONVENTIONAL_TYPES) + r")(?:\([a-z0-9][a-z0-9._-]*\))?!?: (?P<subject>.+)$"
+)
 MIN_LEN = 10
 MAX_LEN = 100
 
@@ -47,6 +66,14 @@ def _validate(title: str) -> list[str]:
         errors.append("title contains agent branding / attribution")
     if LEADING_TAG.match(stripped):
         errors.append("title must not start with a bracketed tag like [codex]")
+    match = CONVENTIONAL.match(stripped)
+    if match is None:
+        errors.append(
+            "title must be a Conventional Commit '<type>(<scope>)?: <subject>' "
+            f"with type one of: {', '.join(CONVENTIONAL_TYPES)}"
+        )
+    elif match.group("subject").strip()[:1].isupper():
+        errors.append("Conventional Commit subject must not start with a capital letter")
     return errors
 
 

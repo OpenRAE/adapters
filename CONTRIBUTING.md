@@ -30,26 +30,29 @@ uv tool run --from 'nox[uv]==2026.4.10' nox -s verify
 ```
 
 The graph runs, in order: `hygiene` (file checks), `policy` (requirement
-governance, repo policy, ADR pins), `lint` (ruff), `typecheck` (mypy per
-adapter), and `tests` (pytest + coverage per adapter, each in its isolated
-environment).
+governance, repo policy, ADR pins), `lint` (ruff), `typecheck` (mypy),
+`tests` (pytest + coverage, base plus all extras), and `distributions` (build
+the wheel/sdist and prove it clean-installs).
 
-## Adding an adapter
+## Adding a simulator backend
 
-1. Create `packages/<adapter>/` with its own `pyproject.toml`, `uv.lock`,
-   `src/`, and `tests/` (copy an existing adapter as a template).
-2. Add a matrix row in `.github/workflows/ci.yml` (path, Python version, extras,
-   conformance profile id, seed suite, source-ledger id).
-3. Add its `src`/`tests` dirs and `coverage.xml` path to
-   `sonar-project.properties`.
-4. Keep adapter dependencies inside that package — never introduce a shared
-   adapter lockfile (RAES ADR-069 §5).
+1. Add a module under `src/raes_adapters/<simulator>/` (import
+   `raes_adapters.<simulator>`), guarding its heavy imports so a bare install
+   still imports cleanly.
+2. Declare its dependencies as an optional extra in `pyproject.toml`
+   (`[project.optional-dependencies]`). If its stack is mutually incompatible
+   with another simulator's, add a `[tool.uv] conflicts` entry so neither gates
+   the other in the single lock — do **not** add a second lockfile or a uv
+   workspace.
+3. Add tests under `tests/`. `src` and `tests` are already the SonarCloud source
+   and test roots, so no `sonar-project.properties` change is needed.
 
 ## Changes and changelog
 
-Every user-visible change adds a towncrier fragment under `changelog.d/`
-(see [`changelog.d/README.md`](changelog.d/README.md)). Do not edit
-`CHANGELOG.md` directly.
+Release Please owns `CHANGELOG.md` and the version, derived from Conventional
+Commit history on `main`. Do **not** hand-edit `CHANGELOG.md` and do **not** add
+`changelog.d/` fragments — carry the release note in the Conventional Commit PR
+title (`<type>(<scope>)?: <lowercase subject>`), which CI enforces.
 
 ## Decisions
 

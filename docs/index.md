@@ -1,10 +1,11 @@
 # RAES adapters
 
-This repository contains independent adapter projects that connect concrete
-simulator backends to published RAES contracts. Each adapter owns its dependency
-environment and lockfile so incompatible simulator dependencies remain isolated.
+This repository contains a single distribution, `raes-adapters`, that connects
+concrete simulator backends to published RAES contracts. It ships shared base
+plumbing plus one optional module per simulator (`raes-adapters[cyborg]`), so
+incompatible simulator dependencies stay behind separate extras in one lock.
 
-The shared `sim_adapter_base` package provides plumbing only. RAES remains the
+The shared `raes_adapters.base` module provides plumbing only. RAES remains the
 semantic and protocol authority.
 
 ## Start here
