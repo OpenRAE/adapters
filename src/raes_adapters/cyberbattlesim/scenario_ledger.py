@@ -520,18 +520,22 @@ def _row_disposition_problems(
 ) -> list[LedgerProblem]:
     """Dispatch to the disposition-specific target/loss checks for one row."""
     disposition = row["disposition"]
-    if disposition not in DISPOSITIONS:
-        return [LedgerProblem(row_id, "disposition", f"unknown disposition {disposition!r}")]
     target = _string_field(row, "raes_target")
     loss_ref = _string_field(row, "loss_ref")
     tier = _string_field(row, "equivalence_tier")
     if disposition == "mapped":
-        return _mapped_row_problems(
+        problems = _mapped_row_problems(
             row_id, target, loss_ref, tier, scenario=scenario, bundle=bundle
         )
-    if disposition == "excluded":
-        return _excluded_row_problems(row_id, target, loss_ref, tier)
-    return _loss_row_problems(row_id, target, loss_ref, tier, losses=losses, referenced=referenced)
+    elif disposition == "excluded":
+        problems = _excluded_row_problems(row_id, target, loss_ref, tier)
+    elif disposition == "loss-disclosed":
+        problems = _loss_row_problems(
+            row_id, target, loss_ref, tier, losses=losses, referenced=referenced
+        )
+    else:
+        problems = [LedgerProblem(row_id, "disposition", f"unknown disposition {disposition!r}")]
+    return problems
 
 
 def _digest_by_path(qualification: JsonObject) -> dict[str, str]:
@@ -543,19 +547,24 @@ def _digest_by_path(qualification: JsonObject) -> dict[str, str]:
     return result
 
 
-def _validate_row(
-    row: JsonObject,
-    position: int,
-    *,
-    source: JsonObject,
-    digest_by_path: dict[str, str],
-    scenario: raes.Scenario,
-    bundle: dict[str, JsonObject],
-    losses: dict[str, str],
-    seen_ids: set[str],
-    categories: set[str],
-    referenced: set[str],
-) -> list[LedgerProblem]:
+class _LedgerContext(NamedTuple):
+    """Shared inputs and running accumulators for one ledger validation pass.
+
+    Bundling these keeps :func:`_validate_row` to a small parameter list; the
+    ``seen_ids``/``categories``/``referenced`` sets accumulate across rows.
+    """
+
+    source: JsonObject
+    digest_by_path: dict[str, str]
+    scenario: raes.Scenario
+    bundle: dict[str, JsonObject]
+    losses: dict[str, str]
+    seen_ids: set[str]
+    categories: set[str]
+    referenced: set[str]
+
+
+def _validate_row(row: JsonObject, position: int, context: _LedgerContext) -> list[LedgerProblem]:
     """Validate one ledger row (shape, identity, source join, disposition)."""
     raw_id = row.get("source_id")
     row_id = raw_id if isinstance(raw_id, str) else f"row[{position}]"
@@ -565,18 +574,23 @@ def _validate_row(
 
     problems = list(shape)
     source_id = _as_str(row["source_id"])
-    if source_id in seen_ids:
+    if source_id in context.seen_ids:
         problems.append(LedgerProblem(row_id, "source_id", "duplicate row id"))
-    seen_ids.add(source_id)
+    context.seen_ids.add(source_id)
 
     category = _as_str(row["category"])
     if category not in REQUIRED_CATEGORIES:
         problems.append(LedgerProblem(row_id, "category", f"unknown category {category!r}"))
-    categories.add(category)
+    context.categories.add(category)
 
-    problems += _row_source_problems(row, row_id, source, digest_by_path)
+    problems += _row_source_problems(row, row_id, context.source, context.digest_by_path)
     problems += _row_disposition_problems(
-        row, row_id, scenario=scenario, bundle=bundle, losses=losses, referenced=referenced
+        row,
+        row_id,
+        scenario=context.scenario,
+        bundle=context.bundle,
+        losses=context.losses,
+        referenced=context.referenced,
     )
     return problems
 
@@ -618,28 +632,22 @@ def validate_source_ledger(
     losses: dict[str, str],
 ) -> list[LedgerProblem]:
     """Return every fail-closed problem in the ledger (empty list == valid)."""
-    source = _as_object(qualification.get("source"))
-    digest_by_path = _digest_by_path(qualification)
-    seen_ids: set[str] = set()
-    categories: set[str] = set()
-    referenced: set[str] = set()
+    context = _LedgerContext(
+        source=_as_object(qualification.get("source")),
+        digest_by_path=_digest_by_path(qualification),
+        scenario=scenario,
+        bundle=bundle,
+        losses=losses,
+        seen_ids=set(),
+        categories=set(),
+        referenced=set(),
+    )
 
     problems: list[LedgerProblem] = []
     for position, row in enumerate(rows):
-        problems += _validate_row(
-            row,
-            position,
-            source=source,
-            digest_by_path=digest_by_path,
-            scenario=scenario,
-            bundle=bundle,
-            losses=losses,
-            seen_ids=seen_ids,
-            categories=categories,
-            referenced=referenced,
-        )
-    problems += _coverage_problems(categories)
-    problems += _disclosure_problems(losses, referenced)
+        problems += _validate_row(row, position, context)
+    problems += _coverage_problems(context.categories)
+    problems += _disclosure_problems(losses, context.referenced)
     return problems
 
 
