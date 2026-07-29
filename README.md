@@ -60,6 +60,9 @@ raes-adapters/
   src/raes_adapters/
     base/                      # shared adapter plumbing (ADR-069 §4)
     cyberbattlesim/            # immutable qualification + selected public protocol
+      scenario/                # authored RAES SDL scenario (portable topology/objective truth)
+      experiment/              # published experiment contracts (reward/evaluator/stochastic intent)
+      mapping/                 # pinned CyberBattleSim → RAES source ledger + loss disclosures
     cyborg/                    # CybORG backend module (optional `cyborg` extra; ADR-069 §3)
       mapping/                 # pinned CAGE-2 → RAES source ledger (REP-003)
       profiles/                # conformance profile overrides
@@ -94,6 +97,24 @@ scenario, participant, evaluator, seed obligations, metrics, and termination
 semantics. The separate
 [architecture guardrails](docs/decisions/cyberbattlesim-qualification-guardrails.md)
 explain why this evidence is not an adapter manifest or RAES conformance claim.
+
+Issue [#26](https://github.com/RAESystem/adapters/issues/26) authors the
+portable evidence set for that case: an authored RAES SDL scenario
+(`scenario/cyberbattle-chain.sdl.yaml`) that validates and compiles against
+`raes==2.0.0`, companion published experiment contracts
+(`experiment/`) for the reward, evaluator, metric, episode/termination, and
+descriptive stochastic intent that RAES excludes from SDL, and a pinned
+[source → RAES mapping ledger](src/raes_adapters/cyberbattlesim/mapping/) whose
+rows are each `mapped`, `excluded`, or `loss-disclosed`, with every disclosed
+loss bound to the ADR-069 equivalence tier it weakens. Deterministic tests fail
+CI on source drift, a missing category, a duplicate row, an unresolvable target,
+a broken cross-artifact reference, an undisclosed loss, or leakage of a known
+native identifier or object representation (raw native arrays, reward vectors,
+and action ids are excluded structurally by the closed RAES models). The
+evidence set does not change
+the `not-admissible` decision or claim installability, replay, or equivalence;
+the [scenario/ledger guardrails](docs/decisions/cyberbattlesim-scenario-ledger-guardrails.md)
+fix its boundaries.
 
 ## Development
 

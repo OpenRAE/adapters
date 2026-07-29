@@ -16,6 +16,7 @@ semantic and protocol authority.
 - [Contribution guide](https://github.com/RAESystem/adapters/blob/dev/CONTRIBUTING.md)
 - [Architecture decisions](decisions/adrs/README.md)
 - [CyberBattleSim qualification guardrails](decisions/cyberbattlesim-qualification-guardrails.md)
+- [CyberBattleSim scenario and source-ledger guardrails](decisions/cyberbattlesim-scenario-ledger-guardrails.md)
 - [Project services](maintainers/project-services.md)
 
 ## Verify a checkout
