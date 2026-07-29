@@ -15,22 +15,51 @@ concurrency:
 permissions:
   contents: read
 
+# One distribution, one verification graph — but the graph's stages are
+# independent, so CI runs them as concurrent jobs instead of one serial job.
+# Each stage fails fast on its own; a small change gets actionable hygiene/lint
+# feedback in seconds; and SonarCloud starts as soon as coverage exists rather
+# than after the whole graph. Coverage is unchanged: every stage stays
+# mandatory because the `PR Gate` job aggregates them into the single required
+# status check (branch protection requires `PR Gate`, `CodeQL`, `Lint PR
+# title`). `raes-adapters` is a single package with optional per-simulator
+# extras, so there is no per-adapter matrix and the test suite is one shard.
+# Each job runs exactly one `nox` session and is reproduced locally with the
+# command it runs; see docs/maintainers/ci.md for the fast lane, the full gate,
+# job ownership, and local reproduction.
 jobs:
-  # One distribution, one verification graph: hygiene, lint, governance policy,
-  # tool tests, typecheck, tests, the build/clean-install identity proof, and the
-  # strict docs build. `raes-adapters` is a single package with optional
-  # per-simulator extras, so there is no per-adapter matrix.
-  verify:
+  fast-checks:
+    name: Fast checks (hygiene + lint)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-        with:
-          fetch-depth: 0
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: "3.12"
       - name: Install uv
         uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8
+        with:
+          enable-cache: true
+      - name: Hygiene
+        run: uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s hygiene
+      - name: Lint
+        # Report lint even when hygiene fails, so one fast-lane failure does not
+        # hide the other.
+        if: ${{ !cancelled() }}
+        run: uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s lint
+
+  policy:
+    name: Policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8
+        with:
+          enable-cache: true
       - name: Resolve requirement UID from branch
         id: requirement
         env:
@@ -39,7 +68,7 @@ jobs:
           REQ_UID="$(printf '%s\n' "$BRANCH" | grep -oE '[A-Z]{3}-[0-9]{3}' | head -n1 || true)"
           echo "Resolved branch='$BRANCH' uid='$REQ_UID'"
           echo "uid=$REQ_UID" >> "$GITHUB_OUTPUT"
-      - name: Canonical verification graph
+      - name: Policy gates
         run: |
           policy_args=()
           if [ -n "${{ steps.requirement.outputs.uid }}" ]; then
@@ -47,7 +76,52 @@ jobs:
           else
             policy_args+=(--skip-requirement)
           fi
-          uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s verify -- "${policy_args[@]}"
+          uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s policy -- "${policy_args[@]}"
+
+  tool-tests:
+    name: Tool tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8
+        with:
+          enable-cache: true
+      - name: Tool tests
+        run: uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s tool-tests
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8
+        with:
+          enable-cache: true
+      - name: Typecheck
+        run: uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s typecheck
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8
+        with:
+          enable-cache: true
+      - name: Tests
+        run: uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s tests
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -56,10 +130,42 @@ jobs:
           path: coverage.xml
           if-no-files-found: ignore
 
+  distributions:
+    name: Distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8
+        with:
+          enable-cache: true
+      - name: Build, clean-install, prove identity
+        run: uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s distributions
+
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8
+        with:
+          enable-cache: true
+      - name: Strict docs build
+        run: uv tool run --from 'nox[uv]==2026.4.10' nox -f noxfile.py -s docs
+
   sonar:
     name: SonarCloud
     runs-on: ubuntu-latest
-    needs: [verify]
+    # Static analysis needs only source + coverage, so it waits on `tests`
+    # alone rather than the whole verification graph.
+    needs: [tests]
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -76,26 +182,40 @@ jobs:
 
   pr-gate:
     name: PR Gate
-    needs: [verify, sonar]
+    # GATE CONTRACT: this is the single required status check that stands in for
+    # the whole verification graph. Every verification job MUST be listed in
+    # `needs` below — the assertion enforces exactly this list, so an unlisted
+    # job is an unenforced job. Add a job here whenever you add a job above.
+    needs: [fast-checks, policy, tool-tests, typecheck, tests, distributions, docs, sonar]
     if: ${{ always() && github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Assert required PR jobs passed
+      - name: Assert required jobs passed
         env:
-          VERIFY_RESULT: ${{ needs.verify.result }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
           SAME_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
-          SONAR_RESULT: ${{ needs.sonar.result }}
         run: |
-          if [ "$VERIFY_RESULT" != "success" ]; then
-            echo "::error::Verify did not succeed ($VERIFY_RESULT)"
+          set -euo pipefail
+          echo "needs: $NEEDS_JSON"
+          # Every verification job (all needs except `sonar`) must succeed.
+          if ! jq -e '
+                to_entries
+                | map(select(.key != "sonar"))
+                | (length > 0) and all(.[]; .value.result == "success")
+              ' <<<"$NEEDS_JSON" >/dev/null; then
+            echo "::error::A required verification job did not succeed"
             exit 1
           fi
-          if [ "$SAME_REPOSITORY" = "true" ] && [ "$SONAR_RESULT" != "success" ]; then
-            echo "::error::SonarCloud did not succeed for a same-repository PR ($SONAR_RESULT)"
-            exit 1
-          fi
-          if [ "$SAME_REPOSITORY" != "true" ] && [ "$SONAR_RESULT" != "skipped" ]; then
-            echo "::error::SonarCloud must be skipped for a fork PR ($SONAR_RESULT)"
+          # SonarCloud must pass on same-repository PRs and must be skipped on
+          # fork PRs (no SONAR_TOKEN is exposed to forks).
+          sonar_result="$(jq -r '.sonar.result' <<<"$NEEDS_JSON")"
+          if [ "$SAME_REPOSITORY" = "true" ]; then
+            if [ "$sonar_result" != "success" ]; then
+              echo "::error::SonarCloud did not succeed for a same-repository PR ($sonar_result)"
+              exit 1
+            fi
+          elif [ "$sonar_result" != "skipped" ]; then
+            echo "::error::SonarCloud must be skipped for a fork PR ($sonar_result)"
             exit 1
           fi
           echo "Required PR jobs passed"

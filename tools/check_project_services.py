@@ -144,11 +144,18 @@ def validate_repository(repo_root: Path) -> list[str]:
     _require(title_lint, "name: Lint PR title", ".github/workflows/pr-title-lint.yml", errors)
 
     ci = _read_required(repo_root, ".github/workflows/ci.yml", errors)
+    # The verification graph runs as independent parallel jobs; `PR Gate` is the
+    # single aggregating required check that keeps every stage mandatory before a
+    # protected-branch merge. Pin its contract so no job can silently leave the
+    # gate: it must depend on every verification job plus Sonar, run on every PR,
+    # and fail closed unless each verification job succeeded (and Sonar passed on
+    # same-repository PRs). Adding a verification job means extending this list.
     for expected in (
         "name: PR Gate",
-        "needs: [verify, sonar]",
+        "needs: [fast-checks, policy, tool-tests, typecheck, tests, distributions, docs, sonar]",
         "if: ${{ always() && github.event_name == 'pull_request' }}",
-        "Verify did not succeed",
+        '.value.result == "success"',
+        "A required verification job did not succeed",
         "SonarCloud did not succeed for a same-repository PR",
     ):
         _require(ci, expected, ".github/workflows/ci.yml", errors)
