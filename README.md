@@ -4,10 +4,11 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/RAESystem/adapters/badge)](https://scorecard.dev/viewer/?uri=github.com/RAESystem/adapters)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects?as=badge&url=https%3A%2F%2Fgithub.com%2FRAESystem%2Fadapters)](https://www.bestpractices.dev/projects?as=entry&url=https%3A%2F%2Fgithub.com%2FRAESystem%2Fadapters)
 
-A single distribution, **`raes-adapters`**, that realizes
+A single distribution, **`raes-adapters`**, that qualifies and realizes
 [RAES](https://github.com/RAESystem/rae) scenarios against concrete simulator
 backends. It ships shared adapter plumbing plus one importable module per
-simulator, with each simulator's dependencies exposed as an optional extra.
+simulator. Implemented simulator dependencies are exposed as optional extras;
+qualification evidence can fail closed before such an extra is advertised.
 
 RAES — Reproducible Agentic Environments System — is the semantic authority.
 Its scope is agentic environments generally: cyber, AI security, AI safety,
@@ -30,6 +31,14 @@ pip install raes-adapters            # shared base plumbing
 pip install raes-adapters[cyborg]    # + the CybORG backend
 ```
 
+There is intentionally no `cyberbattlesim` extra yet. The
+[qualification record](src/raes_adapters/cyberbattlesim/qualification.json)
+found Microsoft's source legally usable and runnable, but not currently
+admissible: no official index/release artifact exists, the public evaluator
+does not bind every random stream, and material upstream benchmark findings
+remain open. Publishing an empty, direct-URL, or knowingly uninstallable extra
+would hide those blockers.
+
 ## One distribution, optional simulator extras
 
 RAES owns the *contracts* an adapter must honor; how this repository packages,
@@ -50,6 +59,7 @@ raes-adapters/
   noxfile.py                   # canonical verification graph
   src/raes_adapters/
     base/                      # shared adapter plumbing (ADR-069 §4)
+    cyberbattlesim/            # immutable qualification + selected public protocol
     cyborg/                    # CybORG backend module (optional `cyborg` extra; ADR-069 §3)
       mapping/                 # pinned CAGE-2 → RAES source ledger (REP-003)
       profiles/                # conformance profile overrides
@@ -71,6 +81,19 @@ buildable skeletons; adapter logic is downstream:
 | REP-003 | CAGE-2 RAES SDL scenario + pinned mapping ledger |
 | REP-004 | CybORG backend + `raes_adapters.base` implementation |
 | REP-005 | Replicated runs + tiered equivalence evidence |
+
+## CyberBattleSim qualification
+
+Issue [#25](https://github.com/RAESystem/adapters/issues/25) selects the
+official Microsoft source at commit
+`854d6966607fb68645651f55b0f97221bd293e0d` and one public
+`CyberBattleChain-v0` protocol with the credential-cache baseline and basic
+defender. The shipped
+[protocol](src/raes_adapters/cyberbattlesim/public-protocol.md) fixes the exact
+scenario, participant, evaluator, seed obligations, metrics, and termination
+semantics. The separate
+[architecture guardrails](docs/decisions/cyberbattlesim-qualification-guardrails.md)
+explain why this evidence is not an adapter manifest or RAES conformance claim.
 
 ## Development
 
