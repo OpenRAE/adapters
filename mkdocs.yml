@@ -37,6 +37,7 @@ nav:
       - Overview: decisions/adrs/README.md
       - Template: decisions/adrs/TEMPLATE.md
       - CyberBattleSim qualification guardrails: decisions/cyberbattlesim-qualification-guardrails.md
+      - CyberBattleSim scenario and source-ledger guardrails: decisions/cyberbattlesim-scenario-ledger-guardrails.md
       - ADR 003 — Single distribution and Trusted Publishing: decisions/adrs/adr-003-single-distribution-and-trusted-publishing.md
       - ADR 002 — RAES authority and adapter boundaries: decisions/adrs/adr-002-raes-authority-and-adapter-boundaries.md
       - ADR 000 — Use ADRs (superseded): decisions/adrs/adr-000-use-adrs.md
