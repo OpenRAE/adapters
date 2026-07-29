@@ -1,0 +1,502 @@
+{
+  "record_version": "cyberbattlesim-qualification/1",
+  "qualified_at": "2026-07-29",
+  "scope": "RAESystem/adapters#25",
+  "source": {
+    "repository": "https://github.com/microsoft/CyberBattleSim",
+    "commit": "854d6966607fb68645651f55b0f97221bd293e0d",
+    "tree": "4271b137ab2de593be52d7afb0a51bee59045a45",
+    "archive_sha256": "31c8ead1f75262b3a91146f2ccbb3d7753618751bb6efa971530ed3f573eef4c",
+    "package": "cyberbattlesim",
+    "version": "0.1.0"
+  },
+  "source_files": [
+    {
+      "path": "setup.py",
+      "sha256": "69af36bcb04450d6dd8f71f23b9340288cbb461021128915eacd28408647c949"
+    },
+    {
+      "path": "requirements.txt",
+      "sha256": "76f9e396a2c21af090844e756b2aa965f5eda3f15537daa70bc135e365d9c494"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf"
+    },
+    {
+      "path": "cyberbattle/NOTICE",
+      "sha256": "5fc64ab06837e47cb22c6fbbad556734947ec0c4af6eb0d2700668447b63d01b"
+    },
+    {
+      "path": "cyberbattle/_env/cyberbattle_env.py",
+      "sha256": "8369a1784e6ef77796766bd336c2ed7b3f3136e61c89d54903f9742372666cc9"
+    },
+    {
+      "path": "cyberbattle/_env/defender.py",
+      "sha256": "d83abc58b30c20d25f06298d1230b554f72c8f7a97c7dbb6634e6a2a78033074"
+    },
+    {
+      "path": "cyberbattle/_env/cyberbattle_chain.py",
+      "sha256": "6c15457a6659dc883a4eb35cb454f72c9c339751d38843ada3cec5902ad11e43"
+    },
+    {
+      "path": "cyberbattle/samples/chainpattern/chainpattern.py",
+      "sha256": "b13973ff36f2246a51c405c9d57c05f8ce448257f179ca13c68dd5d4926b4d12"
+    },
+    {
+      "path": "cyberbattle/agents/baseline/learner.py",
+      "sha256": "1cb04dc62f19924453a037bcfc2b4ce375857396010b6b84036c8fff9f830712"
+    },
+    {
+      "path": "cyberbattle/agents/baseline/agent_randomcredlookup.py",
+      "sha256": "ea69bf6f79bbac328ea8b531167e7785c6222fb359617b7e361f522ebb80a741"
+    },
+    {
+      "path": "notebooks/notebook_withdefender.py",
+      "sha256": "847999b0a907c22a6e64b93c96d444d43e0a66dbfba2a2bd0a9ba888cfa41fcc"
+    },
+    {
+      "path": "docs/benchmark.md",
+      "sha256": "0462976356adbaad02bfc0ef125ec286d56065986d887e389b8b9419d40be6d1"
+    }
+  ],
+  "benchmark_snapshot": {
+    "tag": "benchmark-2024-08-08",
+    "commit": "2cbe240a760bdf15e16277110e3065d19eb6bdbe",
+    "notebook_path": "notebooks/benchmarks/notebook_withdefender.ipynb",
+    "notebook_sha256": "3a53563bfc659ed9e56ef95ca85ce3fc09efe34790118659ac6d36228af77874",
+    "source_notebook_sha256": "847999b0a907c22a6e64b93c96d444d43e0a66dbfba2a2bd0a9ba888cfa41fcc",
+    "requirements_sha256": "7901ca3d135cb52761b0d675424feca862e882ecd8d2b55db6187a0af4832bf5",
+    "disposition": "historical-output-only",
+    "reason": "The snapshot predates the selected source commit and cannot be represented as output from it."
+  },
+  "protocol": {
+    "resource": "public-protocol.md",
+    "sha256": "e20b197f48100f0c33b4b7ae55d02bbace8fc2da5afe6552b14566648371e4c6",
+    "selection": {
+      "scenario": {
+        "gym_id": "CyberBattleChain-v0",
+        "size": 10,
+        "source_path": "cyberbattle/samples/chainpattern/chainpattern.py"
+      },
+      "attacker": {
+        "policy": "CredentialCacheExploiter",
+        "episode_count": 10,
+        "iteration_count": 600,
+        "epsilon": 0.9,
+        "epsilon_exponential_decay": 10000,
+        "epsilon_minimum": 0.1
+      },
+      "defender": {
+        "policy": "ScanAndReimageCompromisedMachines",
+        "probability": 0.6,
+        "scan_capacity": 2,
+        "scan_frequency": 5
+      },
+      "evaluator": "cyberbattle.agents.baseline.learner.epsilon_greedy_search",
+      "seed": 20260729,
+      "termination": {
+        "attacker_own_atleast": 0,
+        "attacker_own_atleast_percent": 1.0,
+        "defender_maintain_sla": 0.8,
+        "evaluator_cutoff_steps": 600
+      },
+      "metrics": [
+        "steps-to-source-native-termination-or-evaluator-cutoff",
+        "cumulative-attacker-reward-per-episode",
+        "network-availability-per-step",
+        "terminal-cause"
+      ]
+    }
+  },
+  "runtime": {
+    "python": "3.12.3",
+    "platform": "Linux-6.8.0-117-generic-x86_64-with-glibc2.39",
+    "build": "unmodified-official-git-checkout",
+    "wheel": "cyberbattlesim-0.1.0-py3-none-any.whl",
+    "wheel_sha256": "6e5f855a999ccfcb93f643dda9cbf7ac679640c67df246f4750c344acf2e2138",
+    "clean_install": "passed",
+    "working_directory": "isolated-temporary-directory",
+    "pythonpath": "cleared",
+    "python_safe_path": true,
+    "network_after_install": "not-required",
+    "smoke": {
+      "environment_type": "CyberBattleChain",
+      "reset_arity": 2,
+      "step_arity": 5,
+      "observation_type": "dict",
+      "observation_keys": [
+        "_discovered_nodes",
+        "_explored_network",
+        "action_mask",
+        "credential_cache_length",
+        "credential_cache_matrix",
+        "customer_data_found",
+        "discovered_node_count",
+        "discovered_nodes_properties",
+        "escalation",
+        "lateral_move",
+        "leaked_credentials",
+        "newly_discovered_nodes_count",
+        "nodes_privilegelevel",
+        "probe_result"
+      ],
+      "reward_type": "float",
+      "terminated_type": "bool",
+      "truncated_type": "bool",
+      "representative_step": {
+        "reward": 14.0,
+        "terminated": false,
+        "truncated": false,
+        "step_count": 1
+      },
+      "termination_probe": {
+        "reward": 5000.0,
+        "terminated": true,
+        "truncated": false,
+        "step_count": 1,
+        "post_done_guard": true
+      }
+    }
+  },
+  "dependency_resolution": {
+    "requirements_sha256": "76f9e396a2c21af090844e756b2aa965f5eda3f15537daa70bc135e365d9c494",
+    "normalized_environment_sha256": "7683481b42452df410d7ebd6dc1b2f3f0f4019c393f63677e707d106267b1b81",
+    "resolver": "uv",
+    "python": "3.12.3",
+    "artifact_hashes": "The selected upstream wheel is hashed; the normalized installed graph is hashed as a set. Upstream does not publish a hash-locked dependency graph.",
+    "lock_disposition": "Evidence only. No second repository lockfile is introduced."
+  },
+  "dependencies": [
+    {
+      "name": "asttokens",
+      "version": "3.0.2",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "boolean.py",
+      "version": "4.0",
+      "license": "BSD-2-Clause"
+    },
+    {
+      "name": "cloudpickle",
+      "version": "3.1.2",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "contourpy",
+      "version": "1.3.3",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "cyberbattlesim",
+      "version": "0.1.0",
+      "license": "MIT-in-source; wheel-metadata-missing"
+    },
+    {
+      "name": "cycler",
+      "version": "0.12.1",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "decorator",
+      "version": "4.3.0",
+      "license": "BSD-2-Clause"
+    },
+    {
+      "name": "executing",
+      "version": "2.2.1",
+      "license": "MIT"
+    },
+    {
+      "name": "Farama-Notifications",
+      "version": "0.0.6",
+      "license": "MIT"
+    },
+    {
+      "name": "fonttools",
+      "version": "4.63.0",
+      "license": "MIT"
+    },
+    {
+      "name": "gymnasium",
+      "version": "0.29.1",
+      "license": "MIT"
+    },
+    {
+      "name": "ipython",
+      "version": "8.18.1",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "jedi",
+      "version": "0.20.0",
+      "license": "MIT"
+    },
+    {
+      "name": "kiwisolver",
+      "version": "1.5.0",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "matplotlib",
+      "version": "3.11.1",
+      "license": "PSF-based"
+    },
+    {
+      "name": "matplotlib-inline",
+      "version": "0.2.2",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "networkx",
+      "version": "3.2.1",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "numpy",
+      "version": "1.26.4",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "packaging",
+      "version": "26.2",
+      "license": "Apache-2.0 OR BSD-2-Clause"
+    },
+    {
+      "name": "pandas",
+      "version": "3.0.5",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "parso",
+      "version": "0.8.7",
+      "license": "MIT"
+    },
+    {
+      "name": "pexpect",
+      "version": "4.9.0",
+      "license": "ISC"
+    },
+    {
+      "name": "pillow",
+      "version": "12.3.0",
+      "license": "MIT-CMU"
+    },
+    {
+      "name": "plotly",
+      "version": "5.15.0",
+      "license": "MIT"
+    },
+    {
+      "name": "progressbar2",
+      "version": "4.4.2",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "prompt_toolkit",
+      "version": "3.0.53",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "ptyprocess",
+      "version": "0.7.0",
+      "license": "ISC"
+    },
+    {
+      "name": "pure_eval",
+      "version": "0.2.3",
+      "license": "MIT"
+    },
+    {
+      "name": "Pygments",
+      "version": "2.20.0",
+      "license": "BSD-2-Clause"
+    },
+    {
+      "name": "pyparsing",
+      "version": "3.3.2",
+      "license": "MIT"
+    },
+    {
+      "name": "python-dateutil",
+      "version": "2.9.0.post0",
+      "license": "BSD-3-Clause OR Apache-2.0"
+    },
+    {
+      "name": "python-utils",
+      "version": "4.0.0",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "PyYAML",
+      "version": "6.0.3",
+      "license": "MIT"
+    },
+    {
+      "name": "setuptools",
+      "version": "70.0.0",
+      "license": "MIT"
+    },
+    {
+      "name": "six",
+      "version": "1.17.0",
+      "license": "MIT"
+    },
+    {
+      "name": "stack-data",
+      "version": "0.6.3",
+      "license": "MIT"
+    },
+    {
+      "name": "tabulate",
+      "version": "0.8.10",
+      "license": "MIT"
+    },
+    {
+      "name": "tenacity",
+      "version": "9.1.4",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "traitlets",
+      "version": "5.15.1",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "typing_extensions",
+      "version": "4.16.0",
+      "license": "PSF-2.0"
+    },
+    {
+      "name": "wcwidth",
+      "version": "0.8.2",
+      "license": "MIT"
+    },
+    {
+      "name": "wheel",
+      "version": "0.44.0",
+      "license": "MIT"
+    },
+    {
+      "name": "zipp",
+      "version": "3.19.1",
+      "license": "MIT"
+    }
+  ],
+  "stochastic_sources": [
+    {
+      "owner": "gym-environment",
+      "api": "CyberBattleEnv.reset(seed=20260729)",
+      "binding_status": "lost-by-evaluator-reset-without-seed"
+    },
+    {
+      "owner": "gym-action-space",
+      "api": "env.action_space.seed(20260729)",
+      "binding_status": "not-bound-by-public-notebook"
+    },
+    {
+      "owner": "python-random",
+      "api": "random.seed(20260729)",
+      "binding_status": "not-bound-by-public-notebook"
+    },
+    {
+      "owner": "numpy-global",
+      "api": "numpy.random.seed(20260729)",
+      "binding_status": "not-bound-by-public-notebook"
+    }
+  ],
+  "legal": {
+    "upstream_license": "MIT",
+    "license_sha256": "3d4ada4e04d153d74f5bc4e5e6aebd12ef20077716529c36089dc07f14fd0dcf",
+    "notice_required": true,
+    "notice_sha256": "5fc64ab06837e47cb22c6fbbad556734947ec0c4af6eb0d2700668447b63d01b",
+    "notice_components": [
+      "PyTorch Reinforcement Learning Tutorial (BSD-3-Clause)",
+      "Adam Paszke attribution"
+    ],
+    "redistribution": "permitted-with-notices",
+    "attribution": "Retain the Microsoft MIT notice, the bundled NOTICE, and third-party notices.",
+    "trademarks": "Do not imply Microsoft sponsorship or misuse Microsoft marks.",
+    "retained_output": "permitted",
+    "privacy": "Upstream states that the bundled models and topologies are fictitious and contain no customer data.",
+    "external_downloads": [],
+    "model_weights": []
+  },
+  "patches": [],
+  "maintenance": {
+    "archived": false,
+    "default_branch": "main",
+    "latest_commit": "854d6966607fb68645651f55b0f97221bd293e0d",
+    "latest_commit_at": "2026-01-13T14:43:46-08:00",
+    "release_artifacts": [],
+    "public_index_distribution": null,
+    "benchmark_tags": [
+      "benchmark-2024-08-07",
+      "benchmark-2024-08-08",
+      "latest_benchmark"
+    ]
+  },
+  "known_defects": [
+    {
+      "id": "unseeded-evaluator-reset",
+      "status": "observed-in-selected-source",
+      "impact": "The public evaluator calls reset without a seed and does not bind the action-space, Python random, or global NumPy streams."
+    },
+    {
+      "id": "reward-goal-current-step-off-by-one",
+      "status": "observed-in-selected-source",
+      "impact": "The attacker reward goal is evaluated before the current reward is appended."
+    },
+    {
+      "id": "evaluator-cutoff-not-truncation",
+      "status": "observed-in-selected-source",
+      "impact": "iteration_count stops evaluation but the Gym environment always returns truncated=false."
+    },
+    {
+      "id": "microsoft-CyberBattleSim-87",
+      "status": "open",
+      "url": "https://github.com/microsoft/CyberBattleSim/issues/87",
+      "impact": "Published benchmark results have unresolved correctness findings."
+    },
+    {
+      "id": "microsoft-CyberBattleSim-115",
+      "status": "open",
+      "url": "https://github.com/microsoft/CyberBattleSim/issues/115",
+      "impact": "The DQL evaluation path continues learning."
+    },
+    {
+      "id": "microsoft-CyberBattleSim-117",
+      "status": "open",
+      "url": "https://github.com/microsoft/CyberBattleSim/issues/117",
+      "impact": "Internal node encoding depends on action/discovery order."
+    },
+    {
+      "id": "microsoft-CyberBattleSim-156",
+      "status": "open",
+      "url": "https://github.com/microsoft/CyberBattleSim/issues/156",
+      "impact": "CustomerData reward semantics remain disputed."
+    }
+  ],
+  "packaging": {
+    "repository_extra": null,
+    "base_and_cyborg_unchanged": true,
+    "decision": "Do not publish an empty, direct-URL, or knowingly uninstallable cyberbattlesim extra.",
+    "reason": "The official source declares cyberbattlesim 0.1.0 but publishes neither an index distribution nor a release artifact. PyPI does not accept direct-URL dependencies."
+  },
+  "admissibility": {
+    "target": "RAESystem/research#12",
+    "decision": "not-admissible",
+    "decided_at": "2026-07-29",
+    "blockers": [
+      "no-index-or-release-artifact",
+      "incomplete-random-stream-binding",
+      "unresolved-upstream-benchmark-defects"
+    ],
+    "conditions_for_requalification": [
+      "Select an official index-publishable artifact or approve and qualify a governed repackaging with complete notices and provenance.",
+      "Bind every observed random stream through reset and evaluation, then repeat the clean smoke and experiment run.",
+      "Resolve or explicitly patch and qualify the material benchmark/evaluation defects against unmodified source behavior."
+    ]
+  }
+}
