@@ -123,15 +123,23 @@ started only after that job finished, then `PR Gate` (~4 s):
 > rather than a large-sample percentile. Percentiles accrue in the Actions run
 > history as more runs land on this workflow.
 
-**After — the parallel graph.** `SonarCloud`'s ~52 s quality-gate wait now
-begins after the `tests` job alone (~10–15 s) instead of after the full ~22 s
-graph, and the seven verification jobs report independently:
+**After — the parallel graph.** Observed on this change's first parallel run
+(Actions run `30407385220`): the seven verification jobs run concurrently and
+all report by **+16 s** (Typecheck +10 s; Fast checks, Policy, Tool tests +15 s;
+Tests, Docs +16 s). `SonarCloud` starts at **+18 s** — right after `tests`,
+not after the whole graph — and its ~46 s quality-gate wait ends at +64 s;
+`PR Gate` closes the run at **+74 s**.
 
-- Final required-check completion: **≈ 68 s** *(projected from the measured
-  per-stage timings above).*
-- First actionable feedback: **≈ 5–8 s** — **Fast checks** reports hygiene and
-  lint without waiting on any other stage.
+- Final required-check completion: **74 s**, down from ≈ 82–85 s. SonarCloud's
+  quality-gate wait is the tall pole in *both* designs (it needs coverage and
+  cannot be parallelized away), so the remaining time is analysis the merge
+  gate requires rather than avoidable serialization.
+- First actionable feedback: **≈ 10–16 s** — every stage reports on its own,
+  and a failure in one stage no longer hides the others. Under the old serial
+  job, stages ran one after another in a single ~22 s job and an early-stage
+  failure aborted the rest before they ran.
 
-The larger win is structural and grows with the repository: as simulators are
-added, typecheck/test/build stages that used to run one-after-another now run
-side by side, and a failure in any one stage no longer hides the others.
+This first run also populated the `setup-uv` cache, so steady-state runs start
+warm. The larger win is structural and grows with the repository: as simulators
+are added, the typecheck/test/build stages that used to run one-after-another
+now run side by side, and no single stage's failure hides the others.
