@@ -15,7 +15,6 @@ leakage), so CI fails when the checked-in evidence set drifts into that state.
 from __future__ import annotations
 
 import copy
-import dataclasses
 import hashlib
 from types import SimpleNamespace
 from typing import Any
@@ -288,21 +287,21 @@ def test_strict_jsonl_rejects_non_finite_number() -> None:
 # cross-artifact selection joins
 # --------------------------------------------------------------------------- #
 def test_join_rejects_wrong_pinned_scenario_digest() -> None:
-    bad = dataclasses.replace(sl.CYBERBATTLE_CHAIN, pinned_scenario_digest="sha256:" + "0" * 64)
+    bad = sl.CYBERBATTLE_CHAIN._replace(pinned_scenario_digest="sha256:" + "0" * 64)
     problems = sl.validate_selection_joins(bad)
     assert any(p.field == "digest" for p in problems)
     assert any(p.row_id in {"task", "spec"} and p.field.endswith("scenario_ref") for p in problems)
 
 
 def test_join_rejects_stale_task_reference() -> None:
-    bad = dataclasses.replace(sl.CYBERBATTLE_CHAIN, task_id="stale-task-id")
+    bad = sl.CYBERBATTLE_CHAIN._replace(task_id="stale-task-id")
     problems = sl.validate_selection_joins(bad)
     assert any(p.row_id == "task" and p.field == "task_id" for p in problems)
     assert any(p.row_id == "spec" and p.field == "task_ref" for p in problems)
 
 
 def test_join_rejects_wrong_scenario_and_spec_identity() -> None:
-    bad = dataclasses.replace(sl.CYBERBATTLE_CHAIN, scenario_id="wrong-scn", spec_id="wrong-spec")
+    bad = sl.CYBERBATTLE_CHAIN._replace(scenario_id="wrong-scn", spec_id="wrong-spec")
     problems = sl.validate_selection_joins(bad)
     assert any(p.row_id == "scenario" and p.field == "name" for p in problems)
     assert any(p.row_id == "spec" and p.field == "spec_id" for p in problems)
