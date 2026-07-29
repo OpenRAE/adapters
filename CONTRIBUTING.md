@@ -34,6 +34,12 @@ governance, repo policy, ADR pins), `lint` (ruff), `typecheck` (mypy),
 `tests` (pytest + coverage, base plus all extras), and `distributions` (build
 the wheel/sdist and prove it clean-installs).
 
+CI runs those stages as **independent, concurrent jobs** rather than one serial
+job, and each job maps 1:1 to a `nox` session, so you can reproduce any red CI
+job locally by running that one session (e.g. `nox -s lint`). See
+[Continuous integration](docs/maintainers/ci.md) for the fast-feedback path,
+the full merge gate, and per-job reproduction commands.
+
 ## Adding a simulator backend
 
 1. Add a module under `src/raes_adapters/<simulator>/` (import
