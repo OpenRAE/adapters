@@ -245,27 +245,28 @@ def load_loss_disclosures(
     return parse_loss_disclosures(_read_text(*selection.losses_resource))
 
 
+def _json_pointer_step(current: JsonValue, part: str) -> tuple[bool, JsonValue]:
+    """Resolve one decoded JSON-pointer segment."""
+    if isinstance(current, dict) and part in current:
+        return True, current[part]
+    if isinstance(current, list) and part.isdigit():
+        index = int(part)
+        if index < len(current):
+            return True, current[index]
+    return False, current
+
+
 def _resolve_json_pointer(root: JsonValue, pointer: str) -> bool:
     """Resolve a JSON pointer without exposing the referenced value."""
-    valid = pointer == "" or pointer.startswith("/")
+    if pointer != "" and not pointer.startswith("/"):
+        return False
     current = root
-    parts = [] if pointer == "" else pointer.removeprefix("/").split("/")
-    for raw_part in parts:
-        if not valid:
-            break
+    for raw_part in [] if pointer == "" else pointer.removeprefix("/").split("/"):
         part = raw_part.replace("~1", "/").replace("~0", "~")
-        if isinstance(current, dict):
-            valid = part in current
-            if valid:
-                current = current[part]
-        elif isinstance(current, list) and part.isdigit():
-            index = int(part)
-            valid = index < len(current)
-            if valid:
-                current = current[index]
-        else:
-            valid = False
-    return valid
+        valid, current = _json_pointer_step(current, part)
+        if not valid:
+            return False
+    return True
 
 
 def resolve_raes_target(target: str, bundle: dict[str, JsonObject]) -> bool:
@@ -401,8 +402,8 @@ class _LedgerValidationContext(NamedTuple):
     """Immutable dependencies shared by per-row ledger validation."""
 
     selected_files: dict[str, str]
-    expected_repo: Any
-    expected_version: Any
+    expected_repo: str | None
+    expected_version: str | None
     qualification: dict[str, Any]
     bundle: dict[str, JsonObject]
     losses: dict[str, set[str]]
@@ -422,8 +423,10 @@ def _validation_context(
         and isinstance(item.get("sha256"), str)
     }
     source = qualification.get("source", {})
-    expected_repo = source.get("repository") if isinstance(source, dict) else None
-    expected_version = source.get("commit") if isinstance(source, dict) else None
+    source_repo = source.get("repository") if isinstance(source, dict) else None
+    source_version = source.get("commit") if isinstance(source, dict) else None
+    expected_repo = source_repo if isinstance(source_repo, str) else None
+    expected_version = source_version if isinstance(source_version, str) else None
     return _LedgerValidationContext(
         selected_files,
         expected_repo,
