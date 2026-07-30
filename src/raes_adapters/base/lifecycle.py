@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from typing import NotRequired, TypedDict, Unpack
 
 from raes_backend_protocols.backend_manifest import (  # type: ignore[import-untyped]
     BackendManifest,
@@ -25,6 +26,15 @@ from raes_contracts.contracts.trial_cleanup import (  # type: ignore[import-unty
 CleanupOperation = Callable[[CleanupObligationModel], CleanupObligationResultModel]
 CleanupFailureResultFactory = Callable[[CleanupObligationModel], CleanupObligationResultModel]
 
+
+class _CleanupExecutionOptions(TypedDict):
+    failure_result: CleanupFailureResultFactory
+    receipt_id: str
+    execution_attempt_id: str
+    trial_outcome: TrialOutcome
+    clean_state_claim: NotRequired[CleanStateClaimModel | None]
+
+
 _TRIGGER_BY_OUTCOME: dict[TrialOutcome, CleanupTrigger] = {
     "succeeded": "success",
     "failed": "failure",
@@ -35,6 +45,8 @@ _TRIGGER_BY_OUTCOME: dict[TrialOutcome, CleanupTrigger] = {
 
 
 def _dependency_order(plan: TrialCleanupPlanModel) -> tuple[CleanupObligationModel, ...]:
+    """Return obligations in stable dependency-first order."""
+
     ordered: list[CleanupObligationModel] = []
     visited: set[str] = set()
 
@@ -56,6 +68,8 @@ def _checked_result(
     result: object,
     obligation: CleanupObligationModel,
 ) -> CleanupObligationResultModel:
+    """Validate a callback result against its published obligation."""
+
     if not isinstance(result, CleanupObligationResultModel):
         raise ValueError("Cleanup callback did not return a published RAES obligation result.")
     if result.obligation_id != obligation.obligation_id:
@@ -67,6 +81,8 @@ def _failure_result_without_native_context(
     factory: CleanupFailureResultFactory,
     obligation: CleanupObligationModel,
 ) -> CleanupObligationResultModel:
+    """Create a portable failure result without retaining native exceptions."""
+
     try:
         return factory(obligation)
     except Exception:
@@ -78,6 +94,8 @@ def _validated_failure_result(
     factory: CleanupFailureResultFactory,
     obligation: CleanupObligationModel,
 ) -> CleanupObligationResultModel:
+    """Create and validate a portable failure result."""
+
     result = _failure_result_without_native_context(factory, obligation)
     try:
         return _checked_result(result, obligation)
@@ -91,6 +109,8 @@ def _checked_result_or_failure(
     obligation: CleanupObligationModel,
     failure_result: CleanupFailureResultFactory,
 ) -> CleanupObligationResultModel:
+    """Return a valid callback result or route invalid output as failure."""
+
     try:
         return _checked_result(result, obligation)
     except Exception:
@@ -101,32 +121,32 @@ def _checked_result_or_failure(
 def _cleanup_status(
     results: Mapping[str, CleanupObligationResultModel],
 ) -> CleanupOutcome:
+    """Summarize obligation statuses using the published cleanup vocabulary."""
+
     if not results:
-        return "not-required"
-    statuses = [result.status for result in results.values()]
-    if all(status == "succeeded" for status in statuses):
-        return "succeeded"
-    if all(status == "unsupported" for status in statuses):
-        return "unsupported"
-    if all(status == "unverified" for status in statuses):
-        return "unverified"
-    if any(status == "succeeded" for status in statuses):
-        return "partial"
-    if any(status in {"failed", "skipped"} for status in statuses):
-        return "failed"
-    return "partial"
+        outcome: CleanupOutcome = "not-required"
+    else:
+        statuses = [result.status for result in results.values()]
+        if all(status == "succeeded" for status in statuses):
+            outcome = "succeeded"
+        elif all(status == "unsupported" for status in statuses):
+            outcome = "unsupported"
+        elif all(status == "unverified" for status in statuses):
+            outcome = "unverified"
+        elif any(status == "succeeded" for status in statuses):
+            outcome = "partial"
+        elif any(status in {"failed", "skipped"} for status in statuses):
+            outcome = "failed"
+        else:
+            outcome = "partial"
+    return outcome
 
 
 def execute_cleanup(
     plan: TrialCleanupPlanModel,
     manifest: BackendManifest,
     operations: Mapping[str, CleanupOperation],
-    *,
-    failure_result: CleanupFailureResultFactory,
-    receipt_id: str,
-    execution_attempt_id: str,
-    trial_outcome: TrialOutcome,
-    clean_state_claim: CleanStateClaimModel | None = None,
+    **options: Unpack[_CleanupExecutionOptions],
 ) -> TrialCleanupReceiptModel:
     """Execute triggered obligations and return a validated RAES receipt.
 
@@ -139,6 +159,11 @@ def execute_cleanup(
     result.
     """
 
+    failure_result = options["failure_result"]
+    receipt_id = options["receipt_id"]
+    execution_attempt_id = options["execution_attempt_id"]
+    trial_outcome = options["trial_outcome"]
+    clean_state_claim = options.get("clean_state_claim")
     require_cleanup_plan_capability(manifest, plan)
     trigger = _TRIGGER_BY_OUTCOME[trial_outcome]
     results: dict[str, CleanupObligationResultModel] = {}

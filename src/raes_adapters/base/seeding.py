@@ -24,6 +24,8 @@ def _seed_diagnostic(
     message: str,
     severity: Severity,
 ) -> Diagnostic:
+    """Build and validate one published RAES seed diagnostic."""
+
     diagnostic = Diagnostic(
         code=f"adapter.seed.{disposition}",
         domain="adapter",

@@ -228,12 +228,9 @@ def test_runtime_target_factory_delegates_shape_validation_to_raes() -> None:
     assert target.name == "toy-queue"
     assert target.provisioner is provisioner
 
+    invalid_manifest = cast(BackendManifest, ToyManifest(has_orchestrator=True))
     with pytest.raises(ValueError, match="orchestrator presence"):
-        build_runtime_target(
-            "toy-queue",
-            cast(BackendManifest, ToyManifest(has_orchestrator=True)),
-            components,
-        )
+        build_runtime_target("toy-queue", invalid_manifest, components)
 
 
 def test_logical_clock_transitions_are_explicit_and_deterministic() -> None:
@@ -415,16 +412,22 @@ def test_cleanup_uses_capability_admission_dependency_order_and_raes_receipt() -
 
 def test_cleanup_reports_unsupported_bindings_and_capability_gaps() -> None:
     plan = _cleanup_plan()
+    manifest = _manifest()
+
+    def unsupported_result(
+        obligation: CleanupObligationModel,
+    ) -> CleanupObligationResultModel:
+        return CleanupObligationResultModel(
+            obligation_id=obligation.obligation_id,
+            status="unsupported",
+        )
 
     with pytest.raises(ValueError, match="backend does not declare cleanup capabilities"):
         execute_cleanup(
             plan,
-            _manifest(),
+            manifest,
             {},
-            failure_result=lambda obligation: CleanupObligationResultModel(
-                obligation_id=obligation.obligation_id,
-                status="unsupported",
-            ),
+            failure_result=unsupported_result,
             receipt_id="queue-cleanup-receipt",
             execution_attempt_id="queue-attempt-1",
             trial_outcome="succeeded",
@@ -460,11 +463,14 @@ def test_cleanup_failure_reporting_does_not_retain_native_exception_context() ->
     def fail_reporting(obligation: CleanupObligationModel) -> CleanupObligationResultModel:
         raise HostileCleanupError()
 
+    plan = _cleanup_plan()
+    manifest = _manifest(cleanup=_cleanup_capabilities())
+    operations = {"prepare": fail_operation}
     with pytest.raises(ValueError, match=r"^Cleanup failure reporting failed\.$") as captured:
         execute_cleanup(
-            _cleanup_plan(),
-            _manifest(cleanup=_cleanup_capabilities()),
-            {"prepare": fail_operation},
+            plan,
+            manifest,
+            operations,
             failure_result=fail_reporting,
             receipt_id="queue-cleanup-receipt",
             execution_attempt_id="queue-attempt-1",
@@ -625,9 +631,10 @@ def test_projection_failure_does_not_return_or_render_native_values() -> None:
         def __repr__(self) -> str:
             raise AssertionError("native value was represented")
 
+    native_value = HostileNative()
     with pytest.raises(ValueError, match=r"^Observation projection failed\.$") as captured:
         project_observation(
-            HostileNative(),
+            native_value,
             lambda value: value,
             DiagnosticModel.model_validate,
         )

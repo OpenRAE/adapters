@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import NotRequired, TypedDict, Unpack
 
 from raes_conformance.conformance import (  # type: ignore[import-untyped]
     BackendConformanceReport,
@@ -22,18 +23,21 @@ from raes_processor.reference import ScenarioInput  # type: ignore[import-untype
 from raes_runtime.registry import RuntimeTarget  # type: ignore[import-untyped]
 
 
+class _ConformanceProbeOptions(TypedDict):
+    profile: NotRequired[BackendProfileSelector | None]
+    fixture_root_for_tests: NotRequired[Path | None]
+    profiles_root_for_tests: NotRequired[Path | None]
+    reference_scenario: NotRequired[ScenarioInput | None]
+    realization_harness: NotRequired[RealizationConformanceHarness | None]
+    execution_basis: NotRequired[ExecutionBasis]
+    realization_envelope: NotRequired[BackendRealizationEnvelopeModel | None]
+    observer_version: NotRequired[str]
+    native_conformance: NotRequired[bool]
+
+
 def run_conformance_probe(
     target: RuntimeTarget,
-    *,
-    profile: BackendProfileSelector | None = None,
-    fixture_root_for_tests: Path | None = None,
-    profiles_root_for_tests: Path | None = None,
-    reference_scenario: ScenarioInput | None = None,
-    realization_harness: RealizationConformanceHarness | None = None,
-    execution_basis: ExecutionBasis = ExecutionBasis.HERMETIC_LIVE,
-    realization_envelope: BackendRealizationEnvelopeModel | None = None,
-    observer_version: str = "raes-realization-observer/v1",
-    native_conformance: bool = False,
+    **options: Unpack[_ConformanceProbeOptions],
 ) -> BackendConformanceReport:
     """Return the exact report produced by ``run_target_conformance``.
 
@@ -45,15 +49,18 @@ def run_conformance_probe(
 
     return run_target_conformance(
         target,
-        profile=profile,
-        root=fixture_root_for_tests,
-        profiles_root=profiles_root_for_tests,
-        reference_scenario=reference_scenario,
-        realization_harness=realization_harness,
-        execution_basis=execution_basis,
-        realization_envelope=realization_envelope,
-        observer_version=observer_version,
-        native_conformance=native_conformance,
+        profile=options.get("profile"),
+        root=options.get("fixture_root_for_tests"),
+        profiles_root=options.get("profiles_root_for_tests"),
+        reference_scenario=options.get("reference_scenario"),
+        realization_harness=options.get("realization_harness"),
+        execution_basis=options.get("execution_basis", ExecutionBasis.HERMETIC_LIVE),
+        realization_envelope=options.get("realization_envelope"),
+        observer_version=options.get(
+            "observer_version",
+            "raes-realization-observer/v1",
+        ),
+        native_conformance=options.get("native_conformance", False),
     )
 
 

@@ -49,19 +49,20 @@ def bounded_context_label(text: str, *, max_length: int = _MAX_LABEL_LENGTH) -> 
     if not 1 <= max_length <= _MAX_LABEL_LENGTH:
         raise ValueError("max_length must be between 1 and 128.")
     if type(text) is not str:
-        return REDACTED
-    if not text or len(text) > max_length:
-        return REDACTED
-    if text.startswith(("/", "~")) or _WINDOWS_PATH.match(text):
-        return REDACTED
-    lowered = text.lower()
-    if any(marker in lowered for marker in _SENSITIVE_MARKERS):
-        return REDACTED
-    if _HIGH_ENTROPY_HEX.search(text):
-        return REDACTED
-    if _SAFE_LABEL.fullmatch(text) is None:
-        return REDACTED
-    return text
+        label = REDACTED
+    else:
+        lowered = text.lower()
+        safe = (
+            bool(text)
+            and len(text) <= max_length
+            and not text.startswith(("/", "~"))
+            and _WINDOWS_PATH.match(text) is None
+            and not any(marker in lowered for marker in _SENSITIVE_MARKERS)
+            and _HIGH_ENTROPY_HEX.search(text) is None
+            and _SAFE_LABEL.fullmatch(text) is not None
+        )
+        label = text if safe else REDACTED
+    return label
 
 
 __all__ = ["bounded_context_label", "redact_native_value"]

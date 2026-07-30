@@ -18,8 +18,59 @@ def _reject_unused_arguments(
     tick: int | None,
     microstep: int,
 ) -> None:
+    """Reject coordinates for transitions whose RAES operation has none."""
+
     if ticks is not None or tick is not None or microstep != 0:
         raise ValueError("This logical-clock transition does not accept coordinate arguments.")
+
+
+def _apply_advance(
+    runtime: ReferenceTimeRuntime,
+    snapshot: RuntimeSnapshot,
+    clock_address: str,
+    ticks: int | None,
+    tick: int | None,
+    microstep: int,
+) -> ApplyResult:
+    """Validate and apply a relative logical-clock advance."""
+
+    if ticks is None:
+        raise ValueError("Advance requires explicit ticks.")
+    if tick is not None:
+        raise ValueError("Advance accepts ticks, not an absolute tick.")
+    return runtime.advance(clock_address, ticks, microstep, snapshot)
+
+
+def _apply_jump(
+    runtime: ReferenceTimeRuntime,
+    snapshot: RuntimeSnapshot,
+    clock_address: str,
+    ticks: int | None,
+    tick: int | None,
+    microstep: int,
+) -> ApplyResult:
+    """Validate and apply an absolute logical-clock jump."""
+
+    if tick is None:
+        raise ValueError("Jump requires an explicit absolute tick.")
+    if ticks is not None:
+        raise ValueError("Jump accepts an absolute tick, not ticks.")
+    return runtime.jump(clock_address, tick, microstep, snapshot)
+
+
+def _apply_reset(
+    runtime: ReferenceTimeRuntime,
+    snapshot: RuntimeSnapshot,
+    clock_address: str,
+    transition: ClockTransitionKind,
+) -> ApplyResult:
+    """Apply reset or replay after rejecting irrelevant coordinates."""
+
+    return runtime.reset(
+        clock_address,
+        transition == ClockTransitionKind.REPLAY,
+        snapshot,
+    )
 
 
 def apply_logical_clock_transition(
@@ -45,31 +96,21 @@ def apply_logical_clock_transition(
             "with a published declaration."
         )
     if transition == ClockTransitionKind.ADVANCE:
-        if ticks is None:
-            raise ValueError("Advance requires explicit ticks.")
-        if tick is not None:
-            raise ValueError("Advance accepts ticks, not an absolute tick.")
-        return runtime.advance(clock_address, ticks, microstep, snapshot)
-    if transition == ClockTransitionKind.PAUSE:
+        result = _apply_advance(runtime, snapshot, clock_address, ticks, tick, microstep)
+    elif transition == ClockTransitionKind.PAUSE:
         _reject_unused_arguments(ticks=ticks, tick=tick, microstep=microstep)
-        return runtime.pause(clock_address, snapshot)
-    if transition == ClockTransitionKind.RESUME:
+        result = runtime.pause(clock_address, snapshot)
+    elif transition == ClockTransitionKind.RESUME:
         _reject_unused_arguments(ticks=ticks, tick=tick, microstep=microstep)
-        return runtime.resume(clock_address, snapshot)
-    if transition == ClockTransitionKind.JUMP:
-        if tick is None:
-            raise ValueError("Jump requires an explicit absolute tick.")
-        if ticks is not None:
-            raise ValueError("Jump accepts an absolute tick, not ticks.")
-        return runtime.jump(clock_address, tick, microstep, snapshot)
-    if transition in {ClockTransitionKind.RESET, ClockTransitionKind.REPLAY}:
+        result = runtime.resume(clock_address, snapshot)
+    elif transition == ClockTransitionKind.JUMP:
+        result = _apply_jump(runtime, snapshot, clock_address, ticks, tick, microstep)
+    elif transition in {ClockTransitionKind.RESET, ClockTransitionKind.REPLAY}:
         _reject_unused_arguments(ticks=ticks, tick=tick, microstep=microstep)
-        return runtime.reset(
-            clock_address,
-            transition == ClockTransitionKind.REPLAY,
-            snapshot,
-        )
-    raise ValueError("Unsupported logical-clock transition.")
+        result = _apply_reset(runtime, snapshot, clock_address, transition)
+    else:
+        raise ValueError("Unsupported logical-clock transition.")
+    return result
 
 
 __all__ = ["apply_logical_clock_transition"]
