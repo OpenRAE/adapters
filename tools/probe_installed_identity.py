@@ -68,6 +68,20 @@ def main(argv: list[str]) -> int:
             except ImportError as exc:
                 _fail(f"published RAES surface {surface!r} unreachable from the install: {exc}")
 
+        # Backend-local qualification evidence is part of the published adapter
+        # artifact even when the native simulator extra fails closed. Reading it
+        # here proves wheel builds did not drop the JSON or patch resources.
+        try:
+            cyborg = importlib.import_module(f"{module_name}.cyborg")
+            qualification = cyborg.load_qualification()
+            compatibility_patch = cyborg.read_compatibility_patch()
+        except (AttributeError, ImportError, OSError, ValueError):
+            _fail("installed CybORG qualification resources are unreadable")
+        if qualification.get("profile_id") != "cage2-cyborg-2.1-source-26ce1c1":
+            _fail("installed CybORG qualification profile identity is wrong")
+        if "CybORG/setup.py" not in compatibility_patch:
+            _fail("installed CybORG qualification patch identity is wrong")
+
     print(f"installed-identity probe: OK ({module_name})")
     return 0
 

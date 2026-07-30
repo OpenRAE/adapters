@@ -27,17 +27,24 @@ and never define the shared semantic boundary (ADR-002).
 ## Install
 
 ```bash
-pip install raes-adapters            # shared base plumbing
-pip install raes-adapters[cyborg]    # + the CybORG backend
+pip install raes-adapters  # shared base plumbing + qualification evidence
 ```
 
-There is intentionally no `cyberbattlesim` extra yet. The
+The `cyborg` extra key is reserved but intentionally empty. Issue
+[#12](https://github.com/RAESystem/adapters/issues/12) qualified the official
+CAGE Challenge 2 source and a packaging-only fix, but the upstream wheel omits
+the version and Scenario2 runtime data. The fixed wheel passed a clean Python
+3.12 smoke locally, but it is not a governed public artifact and the
+distribution's declared Python/platform range is not yet qualified. Advertising
+an editable checkout, install-time clone, or unpublished wheel as the extra
+would hide those blockers.
+
+There is also intentionally no `cyberbattlesim` extra. The
 [qualification record](src/raes_adapters/cyberbattlesim/qualification.json)
 found Microsoft's source legally usable and runnable, but not currently
 admissible: no official index/release artifact exists, the public evaluator
 does not bind every random stream, and material upstream benchmark findings
-remain open. Publishing an empty, direct-URL, or knowingly uninstallable extra
-would hide those blockers.
+remain open.
 
 ## One distribution, optional simulator extras
 
@@ -60,7 +67,7 @@ raes-adapters/
   src/raes_adapters/
     base/                      # shared adapter plumbing (ADR-069 §4)
     cyberbattlesim/            # immutable qualification + selected public protocol
-    cyborg/                    # CybORG backend module (optional `cyborg` extra; ADR-069 §3)
+    cyborg/                    # CybORG qualification, patch evidence, and future backend
       mapping/                 # pinned CAGE-2 → RAES source ledger (REP-003)
       profiles/                # conformance profile overrides
   tests/                       # pytest suite for the distribution
@@ -94,6 +101,24 @@ scenario, participant, evaluator, seed obligations, metrics, and termination
 semantics. The separate
 [architecture guardrails](docs/decisions/cyberbattlesim-qualification-guardrails.md)
 explain why this evidence is not an adapter manifest or RAES conformance claim.
+
+## CybORG/CAGE-2 runtime qualification
+
+Issue [#12](https://github.com/RAESystem/adapters/issues/12) selects the
+official CAGE Challenge 2 repository at commit
+`26ce1c1253fa9e2e73f25e6a7f2da32860c11257`, including its bundled CybORG 2.1,
+Scenario2, evaluator, wrappers, and baseline agents as one source closure. The
+[qualification record](src/raes_adapters/cyborg/qualification.json) binds the
+source and file digests, dependency resolution, legal decisions, known defects,
+and sanitized red/blue/green smoke result. The accompanying
+[packaging patch](src/raes_adapters/cyborg/cage2-wheel-package-data.patch) is
+qualification evidence only; it is not silently applied or published.
+
+The separate
+[architecture guardrails](docs/decisions/cyborg-cage2-runtime-qualification-guardrails.md)
+define the boundary: the result is not an adapter manifest, conformance claim,
+replication claim, or permission to place native CybORG state in portable RAES
+artifacts.
 
 ## Development
 

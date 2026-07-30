@@ -1,15 +1,31 @@
-"""CybORG simulator backend adapter for RAES (optional ``cyborg`` extra).
+"""CybORG backend-local qualification evidence.
 
-Per RAES ADR-069 §3 the CybORG adapter is a conformant simulator backend behind
-the RAES backend protocol surface (Provisioner, Orchestrator, Evaluator,
-ParticipantRuntime). It keeps native CybORG state, gym/PettingZoo tuples, reward
-vectors, action ids, and simulator object reprs adapter-private.
+Issue #12 binds one immutable CAGE-2 source closure and its qualification
+outcome here.  The record and packaging-only patch are evidence; they do not
+implement an adapter, backend manifest, conformance profile, RAES semantic
+model, or native-state serializer.
 
-Install the simulator dependencies with ``pip install raes-adapters[cyborg]``.
-The backend protocol implementations land under REP-004; the CAGE-2 mapping
-ledger (:mod:`raes_adapters.cyborg.mapping`) under REP-003.
+The native simulator is deliberately not imported by this module.  The current
+qualification is fail-closed because no governed public artifact contains the
+required packaging fix, so base-only installations remain independent.
 """
 
 from __future__ import annotations
 
-__all__: list[str] = []
+import json
+from importlib.resources import files
+from typing import Any, cast
+
+__all__ = ["load_qualification", "read_compatibility_patch"]
+
+
+def load_qualification() -> dict[str, Any]:
+    """Load a fresh copy of the selected CAGE-2 qualification record."""
+    resource = files(__package__).joinpath("qualification.json")
+    return cast(dict[str, Any], json.loads(resource.read_text(encoding="utf-8")))
+
+
+def read_compatibility_patch() -> str:
+    """Read the qualification-only packaging patch verbatim."""
+    resource = files(__package__).joinpath("cage2-wheel-package-data.patch")
+    return resource.read_text(encoding="utf-8")
