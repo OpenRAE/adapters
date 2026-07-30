@@ -58,6 +58,39 @@ heavy, mutually-incompatible dependencies live behind an extra. A single
 `uv.lock` covers the tree; a future simulator with a conflicting stack is
 isolated with uv's `conflicts` extras declaration, not a separate lockfile.
 
+## Shared adapter plumbing
+
+`raes_adapters.base` is available from the base installation and composes the
+published RAES APIs directly:
+
+- `build_runtime_target` constructs `raes_runtime.RuntimeTarget` from a
+  published manifest and component set, leaving all shape checks to RAES.
+- `apply_logical_clock_transition` dispatches a caller-selected transition
+  through `ReferenceTimeRuntime`; adapters must explicitly map native events and
+  supply exact coordinates.
+- `apply_seed_controls` applies an ordered list of published stochastic-control
+  bindings through driver-local callables and returns RAES diagnostics for
+  applied, unbound, unsupported, and failed controls. Application alone is not
+  a replay claim.
+- `execute_cleanup` admits a published cleanup plan, runs driver-local
+  operations in dependency order, and returns a validated
+  `TrialCleanupReceiptModel`. Operations are synchronous and remain responsible
+  for native timeout and verification mechanics.
+- `project_action`, `project_observation`, and `project_evaluation` provide
+  typed direction-specific callable seams. Observation and evaluation outputs
+  must pass a caller-supplied RAES validator; native failures never become
+  portable fallback values.
+- `redact_native_value` is default-deny and never renders arbitrary objects.
+  `bounded_context_label` admits only short, grammar-checked, intentionally safe
+  labels.
+- `run_conformance_probe` returns the exact `BackendConformanceReport` from the
+  published RAES target runner without adding profiles, fixtures, cases, or
+  claims.
+
+These helpers do not define simulator concepts, portable DTOs, schemas,
+backend protocols, diagnostic envelopes, stores, policy gates, or conformance
+authority.
+
 ## Layout
 
 ```text
