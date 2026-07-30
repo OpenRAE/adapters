@@ -24,6 +24,8 @@ from raes_runtime.registry import RuntimeTarget  # type: ignore[import-untyped]
 
 
 class _ConformanceProbeOptions(TypedDict):
+    """Type the optional keywords forwarded to the published RAES runner."""
+
     profile: NotRequired[BackendProfileSelector | None]
     fixture_root_for_tests: NotRequired[Path | None]
     profiles_root_for_tests: NotRequired[Path | None]

@@ -28,6 +28,8 @@ CleanupFailureResultFactory = Callable[[CleanupObligationModel], CleanupObligati
 
 
 class _CleanupExecutionOptions(TypedDict):
+    """Type the execution metadata used to construct a RAES cleanup receipt."""
+
     failure_result: CleanupFailureResultFactory
     receipt_id: str
     execution_attempt_id: str
@@ -51,6 +53,8 @@ def _dependency_order(plan: TrialCleanupPlanModel) -> tuple[CleanupObligationMod
     visited: set[str] = set()
 
     def visit(obligation_id: str) -> None:
+        """Visit one obligation after recursively visiting its dependencies."""
+
         if obligation_id in visited:
             return
         obligation = plan.cleanup_obligations[obligation_id]
