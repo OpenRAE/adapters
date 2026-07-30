@@ -1,0 +1,431 @@
+{
+  "record_version": "cyborg-cage2-qualification/1",
+  "profile_id": "cage2-cyborg-2.1-source-26ce1c1",
+  "qualified_at": "2026-07-30",
+  "scope": "RAESystem/adapters#12",
+  "source": {
+    "repository": "https://github.com/cage-challenge/cage-challenge-2",
+    "commit": "26ce1c1253fa9e2e73f25e6a7f2da32860c11257",
+    "tree": "f2ed32db4ac93500659d6e320e898c83e544e1c6",
+    "cyborg_tree": "a125e32fb9b7392ae2ac1b94485f53570298974a",
+    "package_tree": "b4180d2be22baf79e16a84bd375e03c2d42565c9",
+    "archive_sha256": "b1127d8f77ddf8f69ec6ebc21691ae8484e7040e71704493ad20d81a2b280d1a",
+    "package": "CybORG",
+    "version": "2.1"
+  },
+  "selected_files": [
+    {
+      "path": "LICENSE",
+      "sha256": "feaf0fa4b07710228ac471388210bdfb442932af277938d73f29f12104bb29fb"
+    },
+    {
+      "path": "README.md",
+      "sha256": "f48bc9ec73a59b401da77806a68c18c06b86428d116bc226ece8d5d8831fb754"
+    },
+    {
+      "path": "CybORG/LICENSE.txt",
+      "sha256": "1a6b129c24eb4fd73c1b20cb12eae7d96217f03bb1acc57ac9321fdcd9cb562c"
+    },
+    {
+      "path": "CybORG/setup.py",
+      "sha256": "62a0d4ff3888eaeb4cd3bf96bbbd8592b6b442f4d291675a5ef5a4d8eeb76797"
+    },
+    {
+      "path": "CybORG/Requirements.txt",
+      "sha256": "a930508faee1766fb685ffa2fdd924121fdd0c056c92144850d20383951ba301"
+    },
+    {
+      "path": "CybORG/CybORG/version.txt",
+      "sha256": "bf8bd8826b985abf5e6347211af927ee7130a5df00cfed5f1517cbcc1134b0c3"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/Scenarios/Scenario2.yaml",
+      "sha256": "c2f15ec1bd9ab94d2a44acadf6cb9a71acdcb4cbb8fc946129c832139b155b1b"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/Scenarios/images/Gateway_image.yaml",
+      "sha256": "3606cf43fbb8c259a6ab74c717c6e5c7a4e069d816f312d17c0d512862996915"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/Scenarios/images/Internal_image.yaml",
+      "sha256": "301c42ee3e9c410fc7df778d450d315aff1eedad873e01b8d79dfcac3a299ae8"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/Scenarios/images/Kali_Box_image.yaml",
+      "sha256": "119b10680bca8e20981b63aca3b5f726aa905f14523199b20985e4796d10aecb"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/Scenarios/images/OP_Server_image.yaml",
+      "sha256": "43fcbe629ce635edb6647ed60abb3365f276c226edaba9888be2f6705de2c04d"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/Scenarios/images/Velociraptor_Server_image.yaml",
+      "sha256": "6a890510d62e68417f59637c82caed873801c742e71199d6f18738a96f3adf2e"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/Scenarios/images/images.yaml",
+      "sha256": "8467fca6b6f6baff4514993b8516cb9d3efd629f14f7afacea95f6f141722993"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/Scenarios/images/linux_decoy_host_image.yaml",
+      "sha256": "846dd8848a720341b0207d6dc58c3e05f199cf33c6164ef9a55184b4c349358d"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/Scenarios/images/linux_user_host_image1.yaml",
+      "sha256": "a474343f4cd6c922eeb9ec9f24c57bd2b93c01ab7a7bc18fa11f2b97bf1bb6f1"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/Scenarios/images/linux_user_host_image2.yaml",
+      "sha256": "c77e490c7eb2e972be7e5c71daa94d7a38d3b6995653a3b888453d63962e3940"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/Scenarios/images/windows_user_host_image1.yaml",
+      "sha256": "895a902fb2294da3dd6f1da373222d6cc8dd60ed861190b49f6da104944673f9"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/Scenarios/images/windows_user_host_image2.yaml",
+      "sha256": "b8a0f29b5424e7c91ca2586b863c45f91cef402ddb0c91b84c17568adcec8e5a"
+    },
+    {
+      "path": "CybORG/CybORG/Evaluation/evaluation.py",
+      "sha256": "e4980dea8f1243ffda44bbae92521fc79ce89e74183623cce4d21715b940d51c"
+    },
+    {
+      "path": "CybORG/CybORG/Agents/Wrappers/ChallengeWrapper.py",
+      "sha256": "61ff99c786c63613c8db2a908c43a5e2835bff9c0fd760a6d1064cc5eb37102c"
+    },
+    {
+      "path": "CybORG/CybORG/Agents/SimpleAgents/B_line.py",
+      "sha256": "d08d86225c62da0081c3c99bf63cee9bb32670e4d7d56382d3cd1d61e384ae2f"
+    },
+    {
+      "path": "CybORG/CybORG/Agents/SimpleAgents/Meander.py",
+      "sha256": "518b6e65c9a810dea434c83f1aa30d9662d5afd253d8c27c4d0375de42e0d173"
+    },
+    {
+      "path": "CybORG/CybORG/Agents/SimpleAgents/GreenAgent.py",
+      "sha256": "eaaa58a79db113752a273030ff0cb346c2b1dbb59b7fbb35622081b4a59c271c"
+    },
+    {
+      "path": "CybORG/CybORG/Agents/SimpleAgents/SleepAgent.py",
+      "sha256": "59407ee56bf1cf5cfa7a5d6929874e7bb444e06e052daa4456a7bf1cef051248"
+    },
+    {
+      "path": "CybORG/CybORG/Agents/SimpleAgents/BlueLoadAgent.py",
+      "sha256": "86ee7e45b053bd66d4cbf42fed6bd915c8bde40fd9da0f8bc0230da8337ba453"
+    }
+  ],
+  "selection": {
+    "scenario": {
+      "path": "CybORG/CybORG/Shared/Scenarios/Scenario2.yaml",
+      "environment": "sim"
+    },
+    "evaluation": {
+      "path": "CybORG/CybORG/Evaluation/evaluation.py",
+      "episodes": 100,
+      "trial_lengths": [
+        30,
+        50,
+        100
+      ]
+    },
+    "wrapper": {
+      "symbol": "CybORG.Agents.Wrappers.ChallengeWrapper",
+      "agent_name": "Blue",
+      "smoke_max_steps": 2
+    },
+    "agents": {
+      "blue": "external Sleep action",
+      "red": "CybORG.Agents.B_lineAgent",
+      "green": "CybORG.Agents.GreenAgent",
+      "evaluation_red_set": [
+        "B_lineAgent",
+        "RedMeanderAgent",
+        "SleepAgent"
+      ],
+      "evaluation_blue": "BlueLoadAgent"
+    },
+    "supported_boundary": "Scenario2 simulation through the source-native CybORG 2.1 core and legacy ChallengeWrapper only; no adapter, conformance, replay, determinism, or outcome-equivalence claim"
+  },
+  "packaging": {
+    "documented_install": "editable checkout from the bundled CybORG directory",
+    "unmodified_wheel": {
+      "sha256": "80708d7e8c964a598530718895c374242b03992d6189c3de9a00666d6c67275d",
+      "normalized_sha256": "ee61283f78df460441285263c861fc9c7ce65737b39f131125f889aadfd21bcd",
+      "build": "passed",
+      "import": "failed",
+      "missing_runtime_files": [
+        "CybORG/version.txt",
+        "CybORG/Shared/Scenarios/Scenario2.yaml",
+        "CybORG/Shared/Scenarios/images/*.yaml"
+      ]
+    },
+    "original_behavior_probe": {
+      "installation": "editable-source",
+      "result": "passed",
+      "python": "3.12.3",
+      "reset_type": "Results",
+      "step_type": "Results",
+      "reward_type": "float",
+      "done": false,
+      "role_actions": {
+        "blue": "Sleep",
+        "red": "DiscoverRemoteSystems",
+        "green": "GreenPortScan"
+      }
+    },
+    "patched_wheel": {
+      "filename": "cyborg-2.1-py3-none-any.whl",
+      "sha256": "c855bb40c88adbd02a6959ecfc325ca9cb1119680dd339a1220c6ae758b04347",
+      "normalized_sha256": "9b6ecd41749466f3f6f5cc118be9536f153e57fb66b400aaa949f88d1c736039",
+      "clean_install": "passed",
+      "source_native_smoke": "passed",
+      "published": false
+    }
+  },
+  "patches": [
+    {
+      "resource": "cage2-wheel-package-data.patch",
+      "sha256": "8d5ce9ceed1631227a8afd1d77aab68c920a5c5d62bda93911cdd20dfbaa8832",
+      "kind": "packaging-only",
+      "status": "qualification-candidate-only",
+      "original_setup_blob": "b41e2ba35fb8ac87bbda68bdd3f1a65a0467f4f5",
+      "patched_setup_blob": "4b8b58ef4131d86fa3fe6863a6601eddf485779b",
+      "patched_setup_sha256": "65472d96adadad8a03bd64ca983e890169ab6c5ccb06bd4e9b80332d16ad9886",
+      "behavioral_delta": "none",
+      "purpose": "include the version, configuration, Scenario2, and scenario image YAML files required by the installed runtime",
+      "license": "MIT",
+      "maintenance_owner": "none; not approved for publication",
+      "update_policy": "requalify against a new upstream commit or governed patch artifact"
+    }
+  ],
+  "runtime": {
+    "python": "3.12.3",
+    "platform": {
+      "system": "Linux",
+      "kernel": "6.8.0-117-generic",
+      "machine": "x86_64",
+      "libc": "glibc-2.39"
+    },
+    "working_directory": "isolated-temporary-directory",
+    "pythonpath": "cleared",
+    "python_safe_path": true,
+    "network_after_install": "not-required",
+    "smoke": {
+      "seed": 3,
+      "scenario_exists": true,
+      "reset_type": "ndarray",
+      "reset_shape": [
+        52
+      ],
+      "step_arity": 4,
+      "reward_types": [
+        "float",
+        "float"
+      ],
+      "step_count": 2,
+      "done_sequence": [
+        false,
+        true
+      ],
+      "termination": "ChallengeWrapper.max_steps",
+      "role_actions": {
+        "blue": [
+          "Sleep",
+          "Sleep"
+        ],
+        "red": [
+          "DiscoverRemoteSystems",
+          "DiscoverNetworkServices"
+        ],
+        "green": [
+          "GreenPortScan",
+          "GreenPortScan"
+        ]
+      }
+    }
+  },
+  "dependency_resolution": {
+    "resolver": "uv",
+    "python": "3.12.3",
+    "requirements_sha256": "a930508faee1766fb685ffa2fdd924121fdd0c056c92144850d20383951ba301",
+    "normalized_environment_sha256": "56e2c189d6fd4b195584f34d93f66500b30eba8eedff6fca869ed61a8ab4079a",
+    "uv_lock_sha256": "7f815a2ed3d699432eb2bbfe5b3a2d6d09eae41be36ee794ee53cdb36d28b31b",
+    "candidate_resolution": "passed",
+    "canonical_lock_disposition": "The current single uv.lock intentionally excludes the unpublished candidate CybORG artifact; the resolved environment is qualification evidence, not a second lockfile."
+  },
+  "dependencies": [
+    {
+      "name": "bcrypt",
+      "version": "5.0.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "cffi",
+      "version": "2.1.0",
+      "license": "MIT-0"
+    },
+    {
+      "name": "cloudpickle",
+      "version": "3.1.2",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "cryptography",
+      "version": "49.0.0",
+      "license": "Apache-2.0 OR BSD-3-Clause"
+    },
+    {
+      "name": "docutils",
+      "version": "0.23",
+      "license": "metadata-unknown"
+    },
+    {
+      "name": "gym",
+      "version": "0.26.2",
+      "license": "MIT"
+    },
+    {
+      "name": "gym-notices",
+      "version": "0.1.0",
+      "license": "metadata-unknown"
+    },
+    {
+      "name": "iniconfig",
+      "version": "2.3.0",
+      "license": "MIT"
+    },
+    {
+      "name": "invoke",
+      "version": "3.0.3",
+      "license": "BSD-2-Clause"
+    },
+    {
+      "name": "numpy",
+      "version": "2.5.1",
+      "license": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0"
+    },
+    {
+      "name": "packaging",
+      "version": "26.2",
+      "license": "Apache-2.0 OR BSD-2-Clause"
+    },
+    {
+      "name": "paramiko",
+      "version": "5.0.0",
+      "license": "LGPL-2.1"
+    },
+    {
+      "name": "pluggy",
+      "version": "1.6.0",
+      "license": "MIT"
+    },
+    {
+      "name": "prettytable",
+      "version": "3.18.0",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "pycparser",
+      "version": "3.0",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "Pygments",
+      "version": "2.20.0",
+      "license": "BSD-2-Clause"
+    },
+    {
+      "name": "PyNaCl",
+      "version": "1.6.2",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "pytest",
+      "version": "9.1.1",
+      "license": "MIT"
+    },
+    {
+      "name": "PyYAML",
+      "version": "6.0.3",
+      "license": "MIT"
+    },
+    {
+      "name": "wcwidth",
+      "version": "0.8.2",
+      "license": "MIT"
+    }
+  ],
+  "stochastic_sources": [
+    {
+      "owner": "cyborg-python-random",
+      "binding": "CybORG.set_seed(3)",
+      "coverage": "simulator, red agent, green agent, and Python-random action paths"
+    },
+    {
+      "owner": "gym-action-space",
+      "binding": "not sampled by the smoke; explicit action 0 is used",
+      "coverage": "legacy wrapper action-space RNG remains a separate stream"
+    },
+    {
+      "owner": "numpy-global",
+      "binding": "numpy.random.seed(3)",
+      "coverage": "legacy wrapper and array-library global RNG"
+    },
+    {
+      "owner": "external-blue-policy",
+      "binding": "deterministic Sleep action in the smoke",
+      "coverage": "the official BlueLoadAgent evaluator policy does not bind its framework RNG"
+    }
+  ],
+  "legal": {
+    "root_license": "MIT",
+    "bundled_cyborg_license": "MIT",
+    "notice_required": true,
+    "source_redistribution": "permitted-with-notice",
+    "patched_wheel_redistribution": "permitted-with-notice",
+    "scenario_redistribution": "permitted-with-notice",
+    "bundled_examples_redistribution": "permitted-with-notice",
+    "retained_output": "permitted",
+    "external_downloads": [],
+    "model_weights": []
+  },
+  "known_defects": [
+    {
+      "id": "wheel-omits-runtime-data",
+      "evidence": "The unmodified wheel omits CybORG/version.txt and Scenario2 YAML resources, so importing CybORG fails after a normal wheel install.",
+      "disposition": "blocking for the published extra"
+    },
+    {
+      "id": "legacy-gym-unmaintained",
+      "evidence": "Gym 0.26.2 emits its upstream unmaintained/NumPy 2 warning during the clean patched-wheel smoke.",
+      "disposition": "supported only inside the recorded legacy wrapper boundary"
+    },
+    {
+      "id": "remove-success-misreport",
+      "evidence": "The selected Remove action initializes a successful observation even when no suspicious process is removed; the maintained CybORG++ source documents and patches this behavior.",
+      "disposition": "unpatched behavioral limitation"
+    },
+    {
+      "id": "scenario-user3-port-mismatch",
+      "evidence": "The selected linux_user_host_image1.yaml records local port 3389 where the maintained CybORG++ source documents 3390 for the SQL-injection path.",
+      "disposition": "unpatched scenario limitation"
+    },
+    {
+      "id": "evaluation-seed-not-bound",
+      "evidence": "The pinned evaluation.py does not call random.seed or CybORG.set_seed even though the leaderboard README describes validated results with random.seed(153).",
+      "disposition": "no outcome-reproducibility claim"
+    }
+  ],
+  "admissibility": {
+    "decision": "not-admissible",
+    "scope": "published raes-adapters[cyborg] runtime",
+    "blockers": [
+      "no-governed-public-patched-artifact",
+      "declared-python-range-not-qualified",
+      "declared-platform-range-not-qualified"
+    ],
+    "extra_disposition": "leave the cyborg extra empty rather than publish a local path, editable checkout, install-time clone, or ungoverned wheel",
+    "requalification_trigger": "an immutable governed artifact that contains the packaging-only fix and is qualified across the declared Python and platform support boundary"
+  }
+}

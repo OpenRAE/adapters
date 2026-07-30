@@ -1,0 +1,17 @@
+diff --git a/CybORG/setup.py b/CybORG/setup.py
+index b41e2ba..4b8b58e 100644
+--- a/CybORG/setup.py
++++ b/CybORG/setup.py
+@@ -17,4 +17,12 @@ setup(
+     version=CYBORG_VERSION,
+     install_requires=requirements,
+     description="A Cyber Security Research Environment",
++    package_data={
++        "CybORG": [
++            "version.txt",
++            "Shared/Config/*.ini",
++            "Shared/Scenarios/*.yaml",
++            "Shared/Scenarios/images/*.yaml",
++        ]
++    },
+ )

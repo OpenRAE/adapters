@@ -142,6 +142,8 @@ def _tests(session: nox.Session) -> None:
     for sync_args, label in _verification_envs():
         session.log(f"tests: {label}")
         _run(session, "uv", "sync", "--frozen", *sync_args)
+        if label == "cyborg":
+            _uv_run_root(session, "python", "tools/verify_cyborg_qualification.py")
         _run(session, "uv", "run", "--frozen", "coverage", "run", "--parallel-mode", "-m", "pytest")
     _run(session, "uv", "run", "--frozen", "coverage", "combine")
     _run(session, "uv", "run", "--frozen", "coverage", "xml")
