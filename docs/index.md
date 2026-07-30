@@ -18,6 +18,7 @@ semantic and protocol authority.
 - [Architecture decisions](decisions/adrs/README.md)
 - [CybORG/CAGE-2 runtime qualification guardrails](decisions/cyborg-cage2-runtime-qualification-guardrails.md)
 - [CyberBattleSim qualification guardrails](decisions/cyberbattlesim-qualification-guardrails.md)
+- [CyberBattleSim scenario and source-ledger guardrails](decisions/cyberbattlesim-scenario-ledger-guardrails.md)
 - [Project services](maintainers/project-services.md)
 
 ## Verify a checkout

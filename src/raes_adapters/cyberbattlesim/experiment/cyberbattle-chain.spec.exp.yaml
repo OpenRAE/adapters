@@ -1,0 +1,62 @@
+schema_version: experiment-authoring-input/v1
+spec_id: cyberbattlesim-chain-spec
+spec_version: 1.0.0
+title: CyberBattleChain-v0 public run plan
+description: >-
+  Authoring input for the selected public CyberBattleSim protocol. Carries the
+  episode/turn/termination control and the four descriptive stochastic controls
+  that RAES SDL excludes. The stochastic controls are descriptive only: the
+  public evaluator drops the seed bindings, so no executable random-stream
+  binding is claimed and the determinism loss is retained.
+task_ref:
+  ref_kind: task
+  ref_id: cyberbattlesim-chain-task
+intended_scenario_ref:
+  ref_kind: scenario-snapshot
+  ref_id: cyberbattlesim-chain
+  ref_digest: sha256:9d696ea7fa23a1e7cf4c1cbc145a7989370dc4e9afff2cd5a17d6d1af887b528
+  ref_path: scenario/cyberbattle-chain.sdl.yaml
+run_plan:
+  episode_control:
+    turn_order: sequential
+    termination_rule: >-
+      After each attacker and defender step, evaluate in precedence order:
+      (1) attacker goal reached or defender SLA broken -> terminate with the
+      winning reward; (2) else defender eviction goal reached -> terminate with
+      the losing reward; (3) else continue. Gym always returns truncated=false;
+      the evaluator iteration cutoff is not Gym truncation.
+    max_steps: 600
+    termination_condition_refs:
+      - attacker-ownership
+      - defender-sla
+      - defender-eviction
+      - evaluator-cutoff
+    description: >-
+      Source-native termination causes stay distinct from the evaluator cutoff
+      and from Gym terminated/truncated.
+  stochastic_controls:
+    - control_id: gym-environment
+      role: seed
+      value: "20260729"
+      description: >-
+        CyberBattleEnv.reset(seed=20260729). Lost: the public evaluator calls
+        reset without forwarding a seed. Descriptive only; no executable binding.
+    - control_id: gym-action-space
+      role: sampling
+      value: "20260729"
+      description: >-
+        env.action_space.seed(20260729). Not bound by the public notebook.
+        Descriptive only; no executable binding.
+    - control_id: python-random
+      role: randomization
+      value: "20260729"
+      description: >-
+        random.seed(20260729) for the defender's Python random calls. Not bound
+        by the public notebook. Descriptive only; no executable binding.
+    - control_id: numpy-global
+      role: randomization
+      value: "20260729"
+      description: >-
+        numpy.random.seed(20260729) for defender and baseline NumPy calls. Not
+        bound by the public notebook. Descriptive only; no executable binding.
+  target_run_count: 10

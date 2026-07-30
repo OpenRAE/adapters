@@ -1,0 +1,125 @@
+schema_version: experiment-task/v1
+task_id: cyberbattlesim-chain-task
+task_version: 1.0.0
+title: CyberBattleChain-v0 credential-cache evaluation task
+description: >-
+  Published evaluation-protocol contract for the selected public CyberBattleSim
+  case (CyberBattleChain-v0, size=10, CredentialCacheExploiter attacker,
+  ScanAndReimage defender). Carries the reward, evaluator, and metric intent
+  that RAES SDL deliberately excludes. Native reward vectors, action ids, and
+  observations remain source-private; only bounded measure definitions are
+  portable.
+scenario_ref:
+  ref_kind: scenario-snapshot
+  ref_id: cyberbattlesim-chain
+  ref_digest: sha256:9d696ea7fa23a1e7cf4c1cbc145a7989370dc4e9afff2cd5a17d6d1af887b528
+  ref_path: scenario/cyberbattle-chain.sdl.yaml
+evaluation_protocol:
+  protocol_id: cyberbattlesim-chain-protocol
+  protocol_version: 1.0.0
+  intent: >-
+    Measure attacker progress, reward, availability, and terminal cause for the
+    selected public protocol without asserting reproducibility or admissibility.
+  unit_of_analysis: episode
+  metric_definitions:
+    steps_to_termination:
+      metric_id: steps_to_termination
+      metric_version: 1.0.0
+      name: Steps to termination
+      measured_construct: >-
+        Attacker steps to source-native termination, or 600 when the evaluator
+        iteration cutoff fires first.
+      unit_of_analysis: episode
+      value_kind: count
+      direction: descriptive
+      evidence_requirements:
+        - ref_kind: evidence
+          ref_id: attacker-action-log
+    cumulative_attacker_reward:
+      metric_id: cumulative_attacker_reward
+      metric_version: 1.0.0
+      name: Cumulative attacker reward
+      measured_construct: >-
+        Per-episode cumulative attacker reward. Source-native winning reward is
+        5000.0 and losing reward is 0.0; these constants are the evaluator's,
+        not an SDL objective score or equivalence claim.
+      unit_of_analysis: episode
+      value_kind: number
+      direction: higher-is-better
+      evidence_requirements:
+        - ref_kind: evidence
+          ref_id: attacker-action-log
+    network_availability:
+      metric_id: network_availability
+      metric_version: 1.0.0
+      name: Network availability
+      measured_construct: >-
+        Per-step network availability series; the defender maintains a 0.80 SLA
+        floor as a source-native termination constraint.
+      unit_of_analysis: episode
+      value_kind: number
+      direction: target
+      evidence_requirements:
+        - ref_kind: evidence
+          ref_id: availability-series
+    terminal_cause:
+      metric_id: terminal_cause
+      metric_version: 1.0.0
+      name: Terminal cause
+      measured_construct: >-
+        Reconstructed terminal cause, one of attacker-ownership, defender-sla,
+        defender-eviction, or evaluator-cutoff. These causes stay distinct from
+        Gym terminated/truncated and from the off-by-one reward-goal predicate.
+      unit_of_analysis: episode
+      value_kind: category
+      direction: descriptive
+      evidence_requirements:
+        - ref_kind: evidence
+          ref_id: attacker-action-log
+  observation_requirements:
+    - ref_kind: evidence
+      ref_id: attacker-action-log
+    - ref_kind: evidence
+      ref_id: availability-series
+intended_use: >-
+  Define the portable evaluation protocol for the selected public CyberBattleSim
+  case so a future admitted run can be scored consistently.
+population_or_construct: >-
+  A single credential-cache baseline attacker against a basic scan-and-reimage
+  defender on the fixed CyberBattleChain-v0 topology.
+split_and_leakage_controls:
+  partitioning_strategy: >-
+    Single held-out public protocol run; the historical benchmark snapshot is
+    excluded and never combined with the selected source commit.
+apparatus_constraints:
+  notes:
+    - >-
+      No CyberBattleSim adapter, backend, or participant manifest is implemented.
+      The case is not-admissible to RAESystem/research#12 (no index/release
+      artifact, incomplete random-stream binding, unresolved benchmark defects).
+validity_notes:
+  - category: construct
+    note: >-
+      Cumulative reward is an evaluator signal, not the study metric; the source
+      reward-goal predicate reads prior-step rewards (off-by-one limitation).
+  - category: internal
+    note: >-
+      The public evaluator resets without a seed and does not bind the
+      action-space, Python random, or global NumPy streams, so no run under this
+      protocol is a deterministic replay.
+  - category: external
+    note: >-
+      Upstream benchmark/evaluation defects (microsoft/CyberBattleSim #87, #115,
+      #117, #156) remain open, weakening outcome comparability.
+artifact_refs:
+  - artifact_id: cyberbattlesim-public-protocol
+    role: protocol
+    media_type: text/markdown
+    uri: file://public-protocol.md
+    checksum:
+      algorithm: sha256
+      value: e20b197f48100f0c33b4b7ae55d02bbace8fc2da5afe6552b14566648371e4c6
+    size_bytes: 6804
+    created_at: "2026-07-29T00:00:00Z"
+    source: RAESystem/adapters#25 qualification
+    sensitivity: public
