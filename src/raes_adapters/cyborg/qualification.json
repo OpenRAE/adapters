@@ -113,6 +113,58 @@
     {
       "path": "CybORG/CybORG/Agents/SimpleAgents/BlueLoadAgent.py",
       "sha256": "86ee7e45b053bd66d4cbf42fed6bd915c8bde40fd9da0f8bc0230da8337ba453"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/EnvironmentController.py",
+      "sha256": "7fcbd15064268d9bb45cd9e1774d6160f4f82dd563ac6e709556042eb8c98478"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/Observation.py",
+      "sha256": "a20f9c3d46f5cfc9e4632ee3baf801041f20ff4077b829e70c1af5a1b68a1186"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/BlueRewardCalculator.py",
+      "sha256": "2377df1196db8dbaeff6cb3b03a5e3bb0e690c699c1a8abb1ebefa8ab569b61f"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/RedRewardCalculator.py",
+      "sha256": "965b523a60bf01a9c70a59834f5cc07cee5bdb76881df807d3e6d56c8ef6c062"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/Actions/AbstractActions/Monitor.py",
+      "sha256": "3a62df8f19cbb7461a17c00553914d8dd14f8f947d24d18c52b0dd93bdaad9a5"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/Actions/AbstractActions/Analyse.py",
+      "sha256": "cc4bd1301e2ed47fc92bdce37bc2bd58e86aa7a9dd5f56eae3431c7e87749b03"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/Actions/AbstractActions/Remove.py",
+      "sha256": "06cebaea236023425990d07f8b3119c8248d04c212525486a0b6fef81937b4af"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/Actions/AbstractActions/Restore.py",
+      "sha256": "cf82d7517b762814f104bce8f135ee7109c9702c60748d1c8baccf7526d39978"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/Actions/AbstractActions/DiscoverRemoteSystems.py",
+      "sha256": "2990da59387fd1d143bdb780b993db5b849b2a2e0461012caae8f465ba250a71"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/Actions/AbstractActions/DiscoverNetworkServices.py",
+      "sha256": "10f6b5bfb82ca8f77c9f694820931e021244a4149512082f8046508cc4397bb0"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/Actions/AbstractActions/ExploitRemoteService.py",
+      "sha256": "55ca88b04d05cc5d50838af6101e108f97c3c09d38999ef7dbcce866e1d5f2dd"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/Actions/AbstractActions/PrivilegeEscalate.py",
+      "sha256": "91953c3b21991397c0b312f6e50f826d49a003ffc01fa12f31436d11d7206318"
+    },
+    {
+      "path": "CybORG/CybORG/Shared/Actions/AbstractActions/Impact.py",
+      "sha256": "249c28a3aa0730138f327f1f635bcbb5b4adc0979bea82146f2950b051cd489f"
     }
   ],
   "selection": {
