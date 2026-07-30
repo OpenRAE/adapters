@@ -1,7 +1,9 @@
 # CAGE-2 → RAES mapping ledger
 
-**Authored under REP-003 (RAES issue for the CAGE-2 scenario + mapping).** This
-directory is a placeholder standup under REP-002.
+This backend-local evidence bridges the source closure qualified by issue #12
+to the published RAES surfaces that can carry each CAGE-2 fact. It does not
+author an SDL scenario or experiment, implement a backend, change the
+qualification's `not-admissible` result, or establish equivalence.
 
 Per RAES ADR-069 §2 and `docs/decisions/cage-2-replication-design.md`, the
 mapping from upstream CAGE-2/CybORG source facts to portable RAES artifacts is a
@@ -10,13 +12,27 @@ mapping from upstream CAGE-2/CybORG source facts to portable RAES artifacts is a
 ## Files
 
 - `cage2-source-ledger.jsonl` — one JSON object per source fact. Each row records
-  `source_id`, `source_repo`, `source_version`, `source_path`, `source_selector`,
-  optional `source_digest`, `cage_fact_type`, `raes_target`, `mapping_rule`,
-  `loss_disclosure`, and `verification` (see the design record for field
-  definitions). Empty until REP-003.
+  a unique id, source family, fact facet, qualified repository/commit/path/digest,
+  verifiable selector, disposition, mapping rule, and verification. A mapped or
+  partially mapped fact cites a published schema-bundle id plus JSON pointer.
+  Qualification-owned legal evidence uses a `qualification.json` pointer rather
+  than pretending it is RAES semantics.
 - `cage2-loss-disclosures.md` — narrative loss disclosures for source facts RAES
-  cannot carry exactly. A disclosed gap weakens the replication claim; it is
-  never backfilled with raw CybORG logs or prose-only evidence.
+  cannot carry exactly. Each disclosure has a machine-parsed set of weakened
+  ADR-069 equivalence tiers that must exactly match its ledger rows.
 
-Every upstream source fact must be mapped, explicitly declared out of scope, or
-loss-disclosed. No claim may rest on CI success or a single cumulative score.
+The module-local validator enforces both completeness axes from the accepted
+design: source families (Scenario2/images, actions, observations, rewards,
+wrappers, agents, evaluation, and provenance/licensing) and semantic facets
+(topology through derived measures plus licensing/attribution). It rejects
+malformed or open-ended rows, duplicate ids, coverage gaps, unclassified facts,
+source-profile/digest drift, unresolved published targets, selector failures,
+and missing/orphan/mismatched loss disclosures. The qualification reproducer
+also checks every selector against a detached checkout without importing or
+executing upstream code.
+
+Every fact is `mapped`, `out-of-scope`, or `loss-disclosed`. Native state,
+observations, hidden truth, action ids, reward vectors, object representations,
+raw logs, environment data, and tracebacks remain outside portable artifacts.
+No claim may rest on a green validator, CI success, native-log similarity, or a
+single cumulative score.

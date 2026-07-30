@@ -30,5 +30,8 @@ htmlcov/
 # Local MCP server registration (machine-specific paths)
 .mcp.json
 
+# Local Codex workspace configuration
+.codex/
+
 # Ground Control local operational cache (per-run sonar-watch state)
 .gc/sonar/

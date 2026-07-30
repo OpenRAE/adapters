@@ -15,6 +15,7 @@ from typing import Any
 from urllib.request import ProxyHandler, Request, build_opener
 
 import raes_adapters.cyborg as cyborg
+import raes_adapters.cyborg.source_ledger as source_ledger
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 _RUNTIME_FILES = {
@@ -310,6 +311,12 @@ def verify_qualification(repo_root: Path = REPO_ROOT) -> None:
         if any(identities[key] != source_record[key] for key in identities):
             raise RuntimeError("CybORG qualification source identity mismatch")
         _verify_source_files(source, record["selected_files"])
+        source_problems = source_ledger.validate_source_checkout(
+            source,
+            source_ledger.load_source_ledger(),
+        )
+        if source_problems:
+            raise RuntimeError("CybORG source ledger source verification failed")
 
         archive_url = (
             "https://codeload.github.com/cage-challenge/cage-challenge-2/tar.gz/"
