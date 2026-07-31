@@ -3,10 +3,11 @@
 A single distribution, ``raes-adapters``, that ships shared adapter plumbing
 (:mod:`raes_adapters.base`), one importable module per simulator backend
 (:mod:`raes_adapters.cyborg`, ...), and backend-local qualification evidence.
-Implemented simulator dependencies are optional extras, so
-``pip install raes-adapters`` gives the base plumbing and
-``pip install raes-adapters[cyborg]`` adds the CybORG backend. A failed
-qualification does not advertise a broken extra.
+Simulator install surfaces are optional extras, so ``pip install
+raes-adapters`` gives the base plumbing and ``pip install
+raes-adapters[cyborg]`` selects the CybORG adapter surface. Maintainer selection
+admits a simulator; qualification limitations bound the claims made for that
+surface and may require native dependencies to be installed separately.
 
 Packaging boundary: RAES owns the *contracts* an adapter must honor; how this
 repository structures its packages, locks, and releases is a local decision

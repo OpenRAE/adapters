@@ -36,10 +36,15 @@ classifiers = [
 dependencies = ["raes==2.0.0"]
 
 [project.optional-dependencies]
+# Microsoft publishes the selected CyberBattleSim source but no index or
+# release artifact. The adapter extra is therefore dependency-light; users
+# install the pinned simulator source separately and target construction
+# reports its absence without weakening the base installation.
+cyberbattlesim = []
 # Reserved CybORG backend key. Issue #12 found the official CAGE-2 source
 # runnable only after a packaging-data patch that has no governed public
-# artifact. Keep the extra empty rather than publish an editable checkout,
-# install-time clone, or ungoverned wheel; the backend-local qualification
+# artifact. Keep the extra dependency-light rather than publish an editable
+# checkout, install-time clone, or ungoverned wheel; the backend-local qualification
 # record carries the exact source, patch, dependency, and smoke evidence.
 cyborg = []
 

@@ -8,7 +8,10 @@ A single distribution, **`raes-adapters`**, that qualifies and realizes
 [RAES](https://github.com/RAESystem/rae) scenarios against concrete simulator
 backends. It ships shared adapter plumbing plus one importable module per
 simulator. Implemented simulator dependencies are exposed as optional extras;
-qualification evidence can fail closed before such an extra is advertised.
+qualification evidence bounds the claims made for each selected backend.
+Maintainer selection determines admission: a qualification record documents
+source identity, attainable evidence, limitations, and claim strength, but it
+does not veto implementation of a selected simulator.
 
 RAES — Reproducible Agentic Environments System — is the semantic authority.
 Its scope is agentic environments generally: cyber, AI security, AI safety,
@@ -30,21 +33,22 @@ and never define the shared semantic boundary (ADR-002).
 pip install raes-adapters  # shared base plumbing + qualification evidence
 ```
 
-The `cyborg` extra key is reserved but intentionally empty. Issue
+The `cyborg` extra key is dependency-light. Issue
 [#12](https://github.com/RAESystem/adapters/issues/12) qualified the official
 CAGE Challenge 2 source and a packaging-only fix, but the upstream wheel omits
 the version and Scenario2 runtime data. The fixed wheel passed a clean Python
 3.12 smoke locally, but it is not a governed public artifact and the
-distribution's declared Python/platform range is not yet qualified. Advertising
-an editable checkout, install-time clone, or unpublished wheel as the extra
-would hide those blockers.
+distribution's declared Python/platform range is not yet qualified. Those
+limitations bound installability and reproducibility claims; they do not veto
+the maintainer-selected backend. The empty dependency list avoids advertising
+an editable checkout, install-time clone, or unpublished wheel.
 
-There is also intentionally no `cyberbattlesim` extra. The
+The `cyberbattlesim` extra is likewise dependency-light. The
 [qualification record](src/raes_adapters/cyberbattlesim/qualification.json)
-found Microsoft's source legally usable and runnable, but not currently
-admissible: no official index/release artifact exists, the public evaluator
-does not bind every random stream, and material upstream benchmark findings
-remain open.
+binds Microsoft's legally usable, runnable source and admits the selected
+profile. Because no official index/release artifact exists, users install the
+pinned simulator source separately. Unbound random streams and open benchmark
+findings remain explicit limits on deterministic-replay and outcome claims.
 
 ## One distribution, optional simulator extras
 
@@ -114,8 +118,9 @@ raes-adapters/
 
 ## Program status
 
-This repository is stood up under **REP-002** (RAES issue #636). The modules are
-buildable skeletons; adapter logic is downstream:
+This repository was stood up under **REP-002** (RAES issue #636). Shared
+plumbing and the CyberBattleSim backend are implemented; remaining simulator
+backends land issue by issue:
 
 | Requirement | Scope |
 |-------------|-------|
@@ -151,10 +156,58 @@ CI on source drift, a missing category, a duplicate row, an unresolvable target,
 a broken cross-artifact reference, an undisclosed loss, or leakage of a known
 native identifier or object representation (raw native arrays, reward vectors,
 and action ids are excluded structurally by the closed RAES models). The
-evidence set does not change
-the `not-admissible` decision or claim installability, replay, or equivalence;
+evidence set does not turn source identity into a claim of dependency
+installability, deterministic replay, or outcome equivalence;
 the [scenario/ledger guardrails](docs/decisions/cyberbattlesim-scenario-ledger-guardrails.md)
 fix its boundaries.
+
+## CyberBattleSim backend
+
+Issue [#27](https://github.com/RAESystem/adapters/issues/27) implements a RAES
+runtime target for the admitted size-10 `CyberBattleChain-v0` profile:
+
+```python
+from raes_adapters.cyberbattlesim.backend import create_cyberbattlesim_target
+from raes_adapters.base import run_conformance_probe
+
+target = create_cyberbattlesim_target(seed=20260729)
+report = run_conformance_probe(target)
+```
+
+Target creation is dependency-light and does not import the simulator.
+Provisioning verifies the qualified simulator import-root identity and selected
+dependency wheel identities, complete installed import-root trees (including
+native libraries and unexpected files),
+critical-file digests, dependency versions, and module origins for the directly
+imported source, Gymnasium, and NumPy packages before importing and constructing
+the separately installed source. The locally built simulator wheel is admitted
+by its complete root because upstream publishes no reproducible wheel artifact;
+direct Gymnasium/NumPy wheel installs must also match the recorded archive hash.
+Editable/directory installations, symlinks, unqualified direct dependency
+artifacts, absence, or an identity mismatch become a bounded
+RAES diagnostic (and a source-backed conformance probe therefore fails rather
+than pretending to run). The
+reference processor compiles the checked-in scenario against the manifest, and
+the shared target then realizes the applicable provisioning, orchestration,
+participant, evaluation, observation, and cleanup surfaces.
+
+One admitted attacker action maps to at most one serialized native `env.step`.
+The selected scan-and-reimage defender runs source-internally during that step;
+it is not exposed as a second participant-admitted transition.
+Native observations, masks, credentials, action coordinates, `info`, reward
+vectors, and exceptions remain driver-private. Participant observations and
+typed action results carry only RAES references admitted by their disclosure
+boundary. Because the representative authored topology cannot identify the
+selected native action coordinate, requested targets remain intent and are not
+echoed as realized effect targets. Cumulative reward is evaluator-owned. Seed
+bindings report the Gym environment and action-space streams as applied and the
+Python/NumPy global streams as unbound. These controls improve run attestation
+and bound repeatability without claiming byte-identical replay of a stochastic
+experiment.
+
+The [backend architecture guardrails](docs/decisions/cyberbattlesim-backend-guardrails.md)
+record the component ownership, failure hygiene, capability claims, and
+acceptance-test mapping.
 
 ## CybORG/CAGE-2 runtime qualification
 

@@ -161,7 +161,7 @@ def test_selection_dependencies_and_stochastic_sources_are_explicit() -> None:
         "56e2c189d6fd4b195584f34d93f66500b30eba8eedff6fca869ed61a8ab4079a"
     )
     assert record["dependency_resolution"]["uv_lock_sha256"] == (
-        "7f815a2ed3d699432eb2bbfe5b3a2d6d09eae41be36ee794ee53cdb36d28b31b"
+        "2ee83cdc249ba289b818c89f2c1c5ddd3a03f7587652ad17bfb8c7065847082e"
     )
     assert record["dependencies"]
     assert all(
@@ -175,7 +175,7 @@ def test_selection_dependencies_and_stochastic_sources_are_explicit() -> None:
     }
 
 
-def test_legal_defect_and_fail_closed_packaging_decisions_are_explicit() -> None:
+def test_legal_defect_and_claim_bounded_packaging_decisions_are_explicit() -> None:
     record = cyborg.load_qualification()
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     extras = project["project"]["optional-dependencies"]
@@ -199,11 +199,19 @@ def test_legal_defect_and_fail_closed_packaging_decisions_are_explicit() -> None
         "scenario-user3-port-mismatch",
         "evaluation-seed-not-bound",
     }
-    assert record["admissibility"]["decision"] == "not-admissible"
-    assert set(record["admissibility"]["blockers"]) == {
+    assert record["admission"]["decision"] == "admitted"
+    assert record["admission"]["authority"] == "maintainer-selection"
+    assert set(record["admission"]["limitations"]) == {
         "no-governed-public-patched-artifact",
         "declared-python-range-not-qualified",
         "declared-platform-range-not-qualified",
+    }
+    assert record["admission"]["claim_strength"] == {
+        "source_identity": "attested",
+        "protocol_configuration": "attested",
+        "execution_controls": "partial",
+        "run_evidence": "attestable",
+        "outcome_reproduction": "stochastic-bounded",
     }
     assert extras["cyborg"] == []
     assert "CybORG" not in project["project"]["dependencies"]

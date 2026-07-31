@@ -1422,7 +1422,7 @@ docs = [
 
 [package.metadata]
 requires-dist = [{ name = "raes", specifier = "==2.0.0" }]
-provides-extras = ["cyborg"]
+provides-extras = ["cyberbattlesim", "cyborg"]
 
 [package.metadata.requires-dev]
 dev = [

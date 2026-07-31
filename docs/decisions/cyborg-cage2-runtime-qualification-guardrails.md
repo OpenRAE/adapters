@@ -64,12 +64,14 @@ root license is not by itself evidence that every nested or separately sourced
 asset can be redistributed. Dependency licenses and notice obligations remain
 part of the resolved profile.
 
-The `cyborg` extra must be installable from the published `raes-adapters`
-artifact on the declared Python/platform boundary. A successful editable
-checkout, local path dependency, floating branch or tag, install-time clone, or
-warm user cache is not that proof. If official source cannot produce a
-publishable immutable dependency, any governed repackaging or maintained fork
-must preserve notices and bind:
+The dependency-light `cyborg` adapter extra must be installable from the
+published `raes-adapters` artifact on the declared Python/platform boundary.
+That proves the adapter install surface, not acquisition of the native
+simulator. A successful editable checkout, local path dependency, floating
+branch or tag, install-time clone, or warm user cache is not evidence for a
+native-dependency installability claim. If a later extra declares a governed
+repackaging or maintained fork as an immutable dependency, that artifact must
+preserve notices and bind:
 
 - the unmodified upstream commit and tree;
 - the fork or patch commit, patch digest, and resulting tree/wheel digest;

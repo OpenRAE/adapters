@@ -5,9 +5,10 @@ outcome here.  The record and packaging-only patch are evidence; they do not
 implement an adapter, backend manifest, conformance profile, RAES semantic
 model, or native-state serializer.
 
-The native simulator is deliberately not imported by this module.  The current
-qualification is fail-closed because no governed public artifact contains the
-required packaging fix, so base-only installations remain independent.
+The native simulator is deliberately not imported by this module. The selected
+profile is admitted, while the absence of a governed public artifact containing
+the packaging fix limits installability claims. The published extra therefore
+stays dependency-light and base-only installations remain independent.
 """
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
 # CyberBattleSim qualification guardrails
 
-Issue #25 is the authority for the qualification outcome. This note fixes the
+Issue #25 is the authority for the qualification evidence. This note fixes the
 repository boundaries the qualification must respect; it is not an experiment
 selection, qualification record, or implementation plan.
 
@@ -16,8 +16,9 @@ The implementation must not collapse these different artifacts into a generic
 
 - The **qualification record** identifies the immutable upstream source/runtime,
   legal and maintenance disposition, known defects, patches, and the
-  admissibility decision for `RAESystem/research#12`. It is backend-local
-  evidence, not a RAES schema or conformance claim.
+  maintainer's admission plus attainable claim strength for
+  `RAESystem/research#12`. It is backend-local evidence, not a RAES schema,
+  policy gate, or conformance claim.
 - The **public experiment protocol** identifies the selected scenario, baseline
   participant(s), basic defender, evaluator, reset semantics, stochastic
   controls, metrics, and termination rules. If it is emitted in machine-readable
@@ -58,15 +59,16 @@ immutable source identity. The record must bind:
 - upstream and dependency licenses at the pinned revisions, attribution and
   notice duties, redistribution permission, retained-output permission,
   maintenance/archive status, and the evidence used for each conclusion; and
-- a dated `admissible` or `not admissible` decision for
-  `RAESystem/research#12`, scoped to exactly the recorded source and protocol.
+- the dated maintainer admission for `RAESystem/research#12`, scoped to exactly
+  the recorded source and protocol, plus explicit limitations on installability,
+  stochastic control, run attestation, and outcome reproduction.
 
 An immutable Git source and a publishable Python dependency are separate
 questions. Do not put a floating Git reference, local path, install-time clone,
 or unverified direct URL into the published extra. If the official source has no
 publishable installation route that reproduces the selected commit, the record
-must expose that gap; an empty or Python-excluded extra is not a passing
-qualification.
+must expose that gap. The gap weakens apparatus-reconstruction claims; it does
+not veto a maintainer-selected adapter or make a dependency-light extra false.
 
 Compatibility patches are part of the identity. Record the unmodified commit,
 patch digest, patched-tree or resulting-artifact digest, purpose, license,
@@ -102,9 +104,10 @@ not setup conveniences.
 The extension seam is the selected qualification/protocol artifact identity
 passed to a module-local smoke runner. Scenario, participant, evaluator, seed,
 metric, or termination values must be read from that one canonical selection,
-not repeated in tests, scripts, notebooks, and prose. A second admissible public
-protocol should be addable as another immutable selection without changing the
-runner or inventing a central simulator registry.
+not repeated in tests, scripts, notebooks, and prose. A second
+maintainer-selected public protocol should be addable as another immutable
+selection without changing the runner or inventing a central simulator
+registry.
 
 ## Security and observability boundary
 
@@ -142,7 +145,7 @@ facts are sufficient to prove the smoke behavior.
   CyberBattleSim dependency transitively.
 - Do not treat a successful import, notebook execution, single episode, or CI
   pass as proof of reproducibility, determinism, legal usability, scientific
-  validity, or admissibility.
+  validity, or outcome equivalence.
 - Do not conflate simulator `done`/`terminated`/`truncated`, goal satisfaction,
   defender SLA failure, maximum steps, evaluator cutoff, and participant stop
   conditions. Record their identities, precedence, and off-by-one behavior.

@@ -19,7 +19,8 @@ evaluation_protocol:
   protocol_version: 1.0.0
   intent: >-
     Measure attacker progress, reward, availability, and terminal cause for the
-    selected public protocol without asserting reproducibility or admissibility.
+    selected admitted public protocol without asserting deterministic replay or
+    outcome equivalence.
   unit_of_analysis: episode
   metric_definitions:
     steps_to_termination:
@@ -83,7 +84,7 @@ evaluation_protocol:
       ref_id: availability-series
 intended_use: >-
   Define the portable evaluation protocol for the selected public CyberBattleSim
-  case so a future admitted run can be scored consistently.
+  case so an attested run can be scored consistently.
 population_or_construct: >-
   A single credential-cache baseline attacker against a basic scan-and-reimage
   defender on the fixed CyberBattleChain-v0 topology.
@@ -94,9 +95,9 @@ split_and_leakage_controls:
 apparatus_constraints:
   notes:
     - >-
-      No CyberBattleSim adapter, backend, or participant manifest is implemented.
-      The case is not-admissible to RAESystem/research#12 (no index/release
-      artifact, incomplete random-stream binding, unresolved benchmark defects).
+      The maintainer-selected profile is admitted. No index/release artifact,
+      incomplete random-stream binding, and unresolved benchmark defects limit
+      installability, deterministic-replay, and outcome claims.
 validity_notes:
   - category: construct
     note: >-
@@ -118,8 +119,8 @@ artifact_refs:
     uri: file://public-protocol.md
     checksum:
       algorithm: sha256
-      value: e20b197f48100f0c33b4b7ae55d02bbace8fc2da5afe6552b14566648371e4c6
-    size_bytes: 6804
+      value: 0de0d8585ee9e3bb0901bd2d71b71a9504774b38bdab38f6f5509d0a9e34d26f
+    size_bytes: 6864
     created_at: "2026-07-29T00:00:00Z"
     source: RAESystem/adapters#25 qualification
     sensitivity: public

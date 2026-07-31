@@ -28,6 +28,10 @@
       "sha256": "5fc64ab06837e47cb22c6fbbad556734947ec0c4af6eb0d2700668447b63d01b"
     },
     {
+      "path": "cyberbattle/__init__.py",
+      "sha256": "146a6297d4361b7cd550e293e050c98b6795c4fc5416a1e72f62a8dc142668c4"
+    },
+    {
       "path": "cyberbattle/_env/cyberbattle_env.py",
       "sha256": "8369a1784e6ef77796766bd336c2ed7b3f3136e61c89d54903f9742372666cc9"
     },
@@ -60,6 +64,71 @@
       "sha256": "0462976356adbaad02bfc0ef125ec286d56065986d887e389b8b9419d40be6d1"
     }
   ],
+  "runtime_source_tree": {
+    "root": "cyberbattle",
+    "include": "all regular files; symlinks and unlisted files are rejected",
+    "file_count": 48,
+    "canonicalization": "Sorted POSIX path, NUL, lowercase SHA-256 of raw file bytes, LF.",
+    "sha256": "aa97624b86b2f5c9ad80ea52a345d5fd6f8fa89cad31070c5e4748c55510ba02"
+  },
+  "runtime_artifacts": [
+    {
+      "name": "cyberbattlesim",
+      "version": "0.1.0",
+      "artifact": {
+        "filename": "cyberbattlesim-0.1.0-py3-none-any.whl",
+        "sha256": "6e5f855a999ccfcb93f643dda9cbf7ac679640c67df246f4750c344acf2e2138",
+        "require_direct_archive_sha256": false,
+        "runtime_identity": "complete-root-tree"
+      },
+      "roots": [
+        {
+          "path": "cyberbattle",
+          "file_count": 48,
+          "sha256": "aa97624b86b2f5c9ad80ea52a345d5fd6f8fa89cad31070c5e4748c55510ba02"
+        }
+      ]
+    },
+    {
+      "name": "gymnasium",
+      "version": "0.29.1",
+      "artifact": {
+        "filename": "gymnasium-0.29.1-py3-none-any.whl",
+        "sha256": "61c3384b5575985bb7f85e43213bcb40f36fcdff388cae6bc229304c71f2843e",
+        "require_direct_archive_sha256": true,
+        "runtime_identity": "complete-root-tree"
+      },
+      "roots": [
+        {
+          "path": "gymnasium",
+          "file_count": 252,
+          "sha256": "c165ab8c58c65f7481aab52f532eeafc754c1cbe3ab369c6ee7d5d41291c467a"
+        }
+      ]
+    },
+    {
+      "name": "numpy",
+      "version": "1.26.4",
+      "artifact": {
+        "filename": "numpy-1.26.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        "sha256": "675d61ffbfa78604709862923189bad94014bef562cc35cf61d3a07bba02a7ed",
+        "require_direct_archive_sha256": true,
+        "runtime_identity": "complete-root-tree"
+      },
+      "roots": [
+        {
+          "path": "numpy",
+          "file_count": 781,
+          "sha256": "799d65585b710293c6b526ea2968e437743b2a53228cd2c7aad9b6e358bffe37"
+        },
+        {
+          "path": "numpy.libs",
+          "file_count": 3,
+          "sha256": "cf040ac02020f0dbb7f41d0bb78050b176b681ed1c9868ea4953de9ce1b8de4c"
+        }
+      ]
+    }
+  ],
   "benchmark_snapshot": {
     "tag": "benchmark-2024-08-08",
     "commit": "2cbe240a760bdf15e16277110e3065d19eb6bdbe",
@@ -72,7 +141,7 @@
   },
   "protocol": {
     "resource": "public-protocol.md",
-    "sha256": "e20b197f48100f0c33b4b7ae55d02bbace8fc2da5afe6552b14566648371e4c6",
+    "sha256": "0de0d8585ee9e3bb0901bd2d71b71a9504774b38bdab38f6f5509d0a9e34d26f",
     "selection": {
       "scenario": {
         "gym_id": "CyberBattleChain-v0",
@@ -164,7 +233,7 @@
     "normalized_environment_sha256": "7683481b42452df410d7ebd6dc1b2f3f0f4019c393f63677e707d106267b1b81",
     "resolver": "uv",
     "python": "3.12.3",
-    "artifact_hashes": "The selected upstream wheel is hashed; the normalized installed graph is hashed as a set. Upstream does not publish a hash-locked dependency graph.",
+    "artifact_hashes": "The selected simulator wheel and the directly imported Gymnasium and NumPy wheels are SHA-256 pinned. Complete import-root tree digests cover all regular files, including native libraries, and reject symlinks or unlisted files before driver import. The remaining normalized installed graph is evidence rather than a runtime authenticity claim.",
     "lock_disposition": "Evidence only. No second repository lockfile is introduced."
   },
   "dependencies": [
@@ -479,24 +548,28 @@
     }
   ],
   "packaging": {
-    "repository_extra": null,
+    "repository_extra": "cyberbattlesim",
     "base_and_cyborg_unchanged": true,
-    "decision": "Do not publish an empty, direct-URL, or knowingly uninstallable cyberbattlesim extra.",
-    "reason": "The official source declares cyberbattlesim 0.1.0 but publishes neither an index distribution nor a release artifact. PyPI does not accept direct-URL dependencies."
+    "decision": "Publish a dependency-light adapter extra and keep simulator acquisition outside the wheel metadata.",
+    "reason": "The official source declares cyberbattlesim 0.1.0 but publishes neither an index distribution nor a release artifact. The adapter therefore checks for the separately installed pinned source at target construction and reports an explicit bounded failure when it is absent."
   },
-  "admissibility": {
+  "admission": {
     "target": "RAESystem/research#12",
-    "decision": "not-admissible",
-    "decided_at": "2026-07-29",
-    "blockers": [
+    "decision": "admitted",
+    "authority": "maintainer-selection",
+    "decided_at": "2026-07-31",
+    "limitations": [
       "no-index-or-release-artifact",
       "incomplete-random-stream-binding",
       "unresolved-upstream-benchmark-defects"
     ],
-    "conditions_for_requalification": [
-      "Select an official index-publishable artifact or approve and qualify a governed repackaging with complete notices and provenance.",
-      "Bind every observed random stream through reset and evaluation, then repeat the clean smoke and experiment run.",
-      "Resolve or explicitly patch and qualify the material benchmark/evaluation defects against unmodified source behavior."
-    ]
+    "claim_strength": {
+      "source_identity": "attested",
+      "protocol_configuration": "attested",
+      "execution_controls": "partial",
+      "run_evidence": "attestable",
+      "outcome_reproduction": "stochastic-bounded"
+    },
+    "interpretation": "The maintainer-selected profile is admitted for adapter realization. Packaging gaps, uncontrolled random streams, and upstream defects bound the claims that RAES may attest; they do not veto the simulator."
   }
 }

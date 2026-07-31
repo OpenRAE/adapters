@@ -21,12 +21,12 @@ names no loss, or a loss declares no tier.
 The official Microsoft source declares `cyberbattlesim==0.1.0` but publishes
 neither a public index distribution nor a release artifact, and PyPI does not
 accept direct-URL dependencies. The exact selected commit therefore cannot be
-reinstalled through a published, hash-locked route, so no `cyberbattlesim` extra
-is advertised. This defeats the base reproducibility precondition on which every
-higher equivalence tier depends: an apparatus that cannot be reconstructed from a
-published artifact cannot ground a portable replication claim. The gap is a
-standing admissibility blocker for RAESystem/research#12, not a packaging
-convenience to be papered over with a floating Git reference or an empty extra.
+reinstalled through a published, hash-locked dependency route. The
+dependency-light `cyberbattlesim` extra therefore carries the adapter without
+pretending to install upstream. This weakens apparatus reconstruction and every
+higher equivalence tier. It does not make the maintainer-selected simulator
+unavailable to the adapter, and the limitation must not be hidden with a
+floating Git reference.
 
 ## loss-unbound-random-streams
 
