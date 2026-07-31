@@ -132,7 +132,7 @@ class _Selection(TypedDict):
 
 
 @dataclass(frozen=True)
-class DriverResetReport(object):  # noqa: UP004
+class DriverResetReport(object):
     """Sanitized reset and stochastic-control dispositions."""
 
     operation_ref: str
@@ -141,7 +141,7 @@ class DriverResetReport(object):  # noqa: UP004
 
 
 @dataclass(frozen=True)
-class DriverStep(object):  # noqa: UP004
+class DriverStep(object):
     """Sanitized facts from at most one source transition."""
 
     operation_ref: str
@@ -155,7 +155,7 @@ class DriverStep(object):  # noqa: UP004
 
 
 @dataclass(frozen=True)
-class DriverEvaluation(object):  # noqa: UP004
+class DriverEvaluation(object):
     """Evaluator-only source facts; never a participant result."""
 
     step_count: int
@@ -168,7 +168,7 @@ class DriverEvaluation(object):  # noqa: UP004
 
 
 @dataclass(frozen=True)
-class DriverCleanupReport(object):  # noqa: UP004
+class DriverCleanupReport(object):
     """Sanitized close and verification facts."""
 
     operation_ref: str
@@ -193,7 +193,7 @@ class CyberBattleSimDriverProtocol(Protocol):
     def verify_closed(self) -> bool: ...
 
 
-class CyberBattleSimDriver(object):  # noqa: UP004
+class CyberBattleSimDriver(object):
     """Lazy in-process driver for the selected public chain profile.
 
     Native objects never leave this class. The portable action selects one
@@ -760,25 +760,45 @@ class CyberBattleSimDriver(object):  # noqa: UP004
     ) -> None:
         """Reject unverifiable editable/VCS installs and check archive identity."""
 
-        read_text = getattr(selected_distribution, "read_text", None)
-        if not callable(read_text):
-            return
-        direct_url_text = read_text("direct_url.json")
+        direct_url_text = CyberBattleSimDriver._direct_url_text(selected_distribution)
         if direct_url_text is None:
             return
-        artifact = record.get("artifact")
-        expected_digest = artifact.get("sha256") if isinstance(artifact, dict) else None
-        require_archive_digest = (
-            artifact.get("require_direct_archive_sha256") if isinstance(artifact, dict) else None
+        expected_digest, require_archive_digest = CyberBattleSimDriver._direct_artifact_policy(
+            record
         )
-        if not isinstance(expected_digest, str) or not isinstance(require_archive_digest, bool):
-            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
         direct_url = CyberBattleSimDriver._load_direct_url(direct_url_text)
-        if not isinstance(direct_url, dict) or "dir_info" in direct_url or "vcs_info" in direct_url:
+        if not {"dir_info", "vcs_info"}.isdisjoint(direct_url):
             raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
         observed_digest = CyberBattleSimDriver._archive_sha256(direct_url)
         if require_archive_digest and observed_digest != expected_digest:
             raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
+
+    @staticmethod
+    def _direct_url_text(selected_distribution: Distribution) -> str | None:
+        """Read optional direct-install provenance from a distribution."""
+
+        read_text = getattr(selected_distribution, "read_text", None)
+        if not callable(read_text):
+            return None
+        direct_url_text = read_text("direct_url.json")
+        if direct_url_text is not None and not isinstance(direct_url_text, str):
+            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
+        return direct_url_text
+
+    @staticmethod
+    def _direct_artifact_policy(record: dict[object, object]) -> tuple[str, bool]:
+        """Read the selected archive digest policy from an artifact record."""
+
+        artifact = record.get("artifact")
+        if not isinstance(artifact, dict):
+            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
+        expected_digest = artifact.get("sha256")
+        require_archive_digest = artifact.get("require_direct_archive_sha256")
+        if not isinstance(expected_digest, str):
+            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
+        if not isinstance(require_archive_digest, bool):
+            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
+        return expected_digest, require_archive_digest
 
     @staticmethod
     def _load_direct_url(direct_url_text: str) -> dict[object, object]:

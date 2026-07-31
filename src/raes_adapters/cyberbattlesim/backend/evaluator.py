@@ -77,7 +77,7 @@ def _scoped_id(base: str, projection_ref: str) -> str:
     return f"{base}.{identity_digest}"
 
 
-class CyberBattleSimEvaluator(object):  # noqa: UP004
+class CyberBattleSimEvaluator(object):
     """Read evaluator-owned facts without advancing the source environment."""
 
     def __init__(self, driver: CyberBattleSimDriverProtocol) -> None:

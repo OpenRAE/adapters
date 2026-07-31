@@ -36,7 +36,7 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
-class CyberBattleSimOrchestrator(object):  # noqa: UP004
+class CyberBattleSimOrchestrator(object):
     """Own workflow lifecycle only; participant runtime owns source steps."""
 
     def __init__(self) -> None:

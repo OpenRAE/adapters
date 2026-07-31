@@ -25,7 +25,7 @@ _SUPPORTED_RESOURCE_TYPES = frozenset(
 )
 
 
-class CyberBattleSimProvisioner(object):  # noqa: UP004
+class CyberBattleSimProvisioner(object):
     """Realize the selected generated chain while preserving portable intent."""
 
     def __init__(self, driver: CyberBattleSimDriverProtocol) -> None:
