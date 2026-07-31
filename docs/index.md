@@ -5,8 +5,8 @@ concrete simulator backends to published RAES contracts. It ships shared base
 plumbing plus backend modules whose dependencies can live behind separate
 extras in one lock once qualified. The reserved `cyborg` extra remains empty
 because the selected upstream source needs an unpublished packaging fix.
-Backend-local qualification evidence ships fail-closed without making the
-native simulator a base dependency.
+The maintainer-admitted backend is supported through its documented source
+installation without making the native simulator a base dependency.
 
 The shared `raes_adapters.base` module provides plumbing only. RAES remains the
 semantic and protocol authority.
@@ -16,8 +16,9 @@ semantic and protocol authority.
 - [Repository overview](https://github.com/RAESystem/adapters#readme)
 - [Contribution guide](https://github.com/RAESystem/adapters/blob/dev/CONTRIBUTING.md)
 - [Architecture decisions](decisions/adrs/README.md)
-- [CybORG/CAGE-2 runtime qualification guardrails](decisions/cyborg-cage2-runtime-qualification-guardrails.md)
+- [CybORG/CAGE-2 backend qualification guardrails](decisions/cyborg-cage2-runtime-qualification-guardrails.md)
 - [CybORG/CAGE-2 source-ledger guardrails](decisions/cyborg-cage2-source-ledger-guardrails.md)
+- [CybORG/CAGE-2 provisioner and backend-manifest guardrails](decisions/cyborg-cage2-provisioner-manifest-guardrails.md)
 - [CyberBattleSim qualification guardrails](decisions/cyberbattlesim-qualification-guardrails.md)
 - [CyberBattleSim scenario and source-ledger guardrails](decisions/cyberbattlesim-scenario-ledger-guardrails.md)
 - [Project services](maintainers/project-services.md)

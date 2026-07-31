@@ -1,9 +1,15 @@
-# CybORG/CAGE-2 runtime qualification guardrails
+# CybORG/CAGE-2 backend qualification guardrails
 
 Issue #12 is the authority for the qualification outcome. This note fixes the
 repository and contract boundaries that outcome must respect; it does not select
 an upstream revision, define a runtime-profile schema, or describe an
 implementation plan.
+
+Maintainer selection admits the CybORG backend. Qualification grades the
+selected source, installation path, controls, known losses, and attainable
+reproduction claims; it does not veto adapter implementation. A source-installed
+backend can be supported while automatic installation through the optional
+extra remains unavailable.
 
 ## Keep the source closure coherent
 
@@ -64,10 +70,12 @@ root license is not by itself evidence that every nested or separately sourced
 asset can be redistributed. Dependency licenses and notice obligations remain
 part of the resolved profile.
 
-The `cyborg` extra must be installable from the published `raes-adapters`
-artifact on the declared Python/platform boundary. A successful editable
-checkout, local path dependency, floating branch or tag, install-time clone, or
-warm user cache is not that proof. If official source cannot produce a
+If the `cyborg` extra is populated and advertised as an automatic installation
+route, it must be installable from the published `raes-adapters` artifact on the
+declared Python/platform boundary. A successful editable checkout, local path
+dependency, floating branch or tag, install-time clone, or warm user cache is
+not proof of that packaging claim. Keeping the extra empty does not prohibit
+the documented source-install route. If official source cannot produce a
 publishable immutable dependency, any governed repackaging or maintained fork
 must preserve notices and bind:
 
@@ -119,10 +127,10 @@ the portability claim of the RAES contracts themselves.
 | Durable state | RAES `ControlPlaneStore` | Qualification uses checked-in immutable evidence and explicit ephemeral temporary directories; it introduces no database, cache authority, or evidence repository. |
 | Workflow gates | the `policy`, `typecheck`, `tests`, `distributions`, `docs`, and `verify` nox sessions | Keep one canonical graph. Any new CI job would also have to join the `PR Gate` `needs` contract, so qualification belongs in the existing sessions unless isolation cannot otherwise be achieved. |
 
-The release workflow already installs the public
-`raes-adapters[cyborg]` artifact on Python 3.12. It remains the public-index
-check; source qualification and clean built-wheel smoke belong in the canonical
-nox graph, not a second release path.
+The release workflow installs the public `raes-adapters[cyborg]` artifact on
+Python 3.12. While the extra is empty, that is a distribution-isolation check,
+not a claim that it installs CybORG. Source qualification and clean built-wheel
+smoke belong in the canonical nox graph, not a second release path.
 
 ## Native smoke and observability boundary
 

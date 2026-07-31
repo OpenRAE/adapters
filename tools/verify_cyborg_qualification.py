@@ -102,6 +102,85 @@ print(
 )
 """
 
+_ADAPTER_SMOKE_CODE = r"""
+import json
+import textwrap
+
+from raes import parse_sdl
+from raes_adapters.cyborg import (
+    CYBORG_BACKEND_NAME,
+    SourceInstalledCyborgDriver,
+    create_cyborg_target,
+    translate_scenario,
+)
+from raes_contracts.runtime_state import RuntimeSnapshot
+from raes_runtime.manager import RuntimeManager
+
+class AuditedSourceDriver:
+    def __init__(self):
+        self.delegate = SourceInstalledCyborgDriver(expected_version="2.1")
+        self.native_projection_matches = False
+
+    def construct(self, descriptor, *, seed):
+        expected = translate_scenario(descriptor)
+        native = self.delegate.construct(descriptor, seed=seed)
+        scenario = native.environment_controller.scenario
+        state = native.environment_controller.state
+        expected_subnets = expected["Subnets"]
+        memberships_match = all(
+            scenario.get_subnet_hosts(name) == subnet["Hosts"]
+            for name, subnet in expected_subnets.items()
+        )
+        self.native_projection_matches = (
+            set(scenario.hosts) == set(expected["Hosts"])
+            and set(scenario.subnets) == set(expected_subnets)
+            and scenario.agents == []
+            and memberships_match
+            and set(state.hosts) == set(expected["Hosts"])
+            and set(state.subnet_name_to_cidr) == set(expected_subnets)
+        )
+        return native
+
+    def cleanup(self, handle):
+        return self.delegate.cleanup(handle)
+
+driver = AuditedSourceDriver()
+target = create_cyborg_target(driver=driver, seed=3)
+scenario = parse_sdl(
+    textwrap.dedent(
+        '''
+        name: cyborg-adapter-smoke
+        nodes:
+          user: {type: switch}
+          user0: {type: vm, os: windows}
+        infrastructure:
+          user:
+            properties: {cidr: 10.20.0.0/24, gateway: 10.20.0.1}
+          user0: {count: 1, links: [user]}
+        '''
+    )
+)
+execution_plan = RuntimeManager(target).plan(scenario)
+if execution_plan.diagnostics:
+    raise RuntimeError("CybORG adapter smoke plan was not admitted")
+plan = execution_plan.provisioning
+result = target.provisioner.apply(plan, RuntimeSnapshot())
+cleaned = target.provisioner.cleanup()
+print(
+    json.dumps(
+        {
+            "backend": CYBORG_BACKEND_NAME,
+            "constructed": result.success,
+            "cleaned": cleaned,
+            "native_projection_matches": driver.native_projection_matches,
+            "recorded_resources": len(result.snapshot.entries),
+            "realization_recorded": result.snapshot.realization_envelope is not None,
+        },
+        sort_keys=True,
+    )
+)
+"""
+
 
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
@@ -150,6 +229,20 @@ def validate_smoke(actual: dict[str, Any], expected: dict[str, Any]) -> None:
     forbidden = {"native_state", "observation_values", "reward_vector", "action_id"}
     if actual != expected or forbidden & set(actual):
         raise RuntimeError("CybORG qualification smoke result mismatch")
+
+
+def validate_adapter_smoke(actual: dict[str, Any], expected: dict[str, Any]) -> None:
+    """Require the exact bounded RAES adapter construction/cleanup result."""
+
+    forbidden = {
+        "action_id",
+        "native_handle",
+        "native_state",
+        "observation_values",
+        "reward_vector",
+    }
+    if actual != expected or forbidden & set(actual):
+        raise RuntimeError("CybORG qualification adapter smoke result mismatch")
 
 
 def validate_reproducer_runtime(
@@ -261,6 +354,25 @@ def _verify_source_files(source: Path, selected_files: list[dict[str, str]]) -> 
             raise RuntimeError("CybORG qualification selected source digest mismatch")
 
 
+def python_source_tree_identity(package_root: Path) -> tuple[int, str]:
+    """Return the canonical identity used for pre-import source verification."""
+
+    root = package_root.resolve()
+    files = sorted(
+        root.rglob("*.py"),
+        key=lambda path: path.relative_to(root).as_posix(),
+    )
+    digest = hashlib.sha256()
+    for path in files:
+        resolved = path.resolve()
+        if not resolved.is_relative_to(root) or not resolved.is_file():
+            raise RuntimeError("CybORG qualification Python source path is invalid")
+        digest.update(path.relative_to(root).as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(hashlib.sha256(resolved.read_bytes()).digest())
+    return len(files), digest.hexdigest()
+
+
 def verify_qualification(repo_root: Path = REPO_ROOT) -> None:
     """Rebuild and execute the selected profile from public immutable inputs."""
     record = cyborg.load_qualification()
@@ -311,6 +423,13 @@ def verify_qualification(repo_root: Path = REPO_ROOT) -> None:
         if any(identities[key] != source_record[key] for key in identities):
             raise RuntimeError("CybORG qualification source identity mismatch")
         _verify_source_files(source, record["selected_files"])
+        integrity = runtime_record["integrity"]
+        source_count, source_digest = python_source_tree_identity(source / "CybORG" / "CybORG")
+        if (
+            source_count != integrity["python_source_count"]
+            or source_digest != integrity["python_source_tree_sha256"]
+        ):
+            raise RuntimeError("CybORG qualification Python source identity mismatch")
         source_problems = source_ledger.validate_source_checkout(
             source,
             source_ledger.load_source_ledger(),
@@ -497,6 +616,49 @@ def verify_qualification(repo_root: Path = REPO_ROOT) -> None:
         if probe.get("dependencies") != expected_versions:
             raise RuntimeError("CybORG qualification dependency metadata mismatch")
         validate_smoke(probe.get("smoke", {}), runtime_record["smoke"])
+
+        adapter_dist = root / "adapter-dist"
+        _run(
+            "adapter wheel build",
+            [
+                "uv",
+                "build",
+                "--wheel",
+                "--out-dir",
+                str(adapter_dist),
+                str(repo_root),
+            ],
+            cwd=root,
+            env=env,
+        )
+        adapter_wheel = _single_wheel(adapter_dist)
+        _run(
+            "adapter wheel install",
+            [
+                "uv",
+                "pip",
+                "install",
+                "--python",
+                str(patched_python),
+                str(adapter_wheel),
+            ],
+            cwd=root,
+            env=env,
+        )
+        adapter_result = _run(
+            "RAES adapter construction",
+            [str(patched_python), "-c", _ADAPTER_SMOKE_CODE],
+            cwd=runtime_dir,
+            env=env,
+        )
+        try:
+            adapter_probe = json.loads(adapter_result.stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("CybORG qualification adapter smoke output is invalid") from exc
+        validate_adapter_smoke(
+            adapter_probe,
+            runtime_record["adapter_smoke"],
+        )
 
 
 def main(argv: list[str]) -> int:
