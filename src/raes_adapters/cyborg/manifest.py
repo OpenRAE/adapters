@@ -7,9 +7,14 @@ from importlib.metadata import version as distribution_version
 from typing import Any
 
 from raes_backend_protocols.capabilities import (  # type: ignore[import-untyped]
+    TIME_CAPABILITY_REQUIRED_CONTRACTS,
     BackendCapabilitySet,
     BackendManifest,
+    OrchestratorCapabilities,
+    ParticipantRuntimeCapabilities,
     ProvisionerCapabilities,
+    TimeCapabilities,
+    WorkflowFeature,
 )
 from raes_backend_protocols.manifest import (  # type: ignore[import-untyped]
     backend_manifest_payload,
@@ -39,6 +44,14 @@ _SUPPORTED_CONTRACTS = frozenset(
         "provisioning-plan-v1",
         "realization-envelope-v1",
         "runtime-snapshot-v1",
+        "orchestration-plan-v1",
+        "participant-episode-state-envelope-v1",
+        "participant-episode-history-event-stream-v1",
+        "participant-behavior-history-event-stream-v1",
+        "participant-shared-state-record-v1",
+        "participant-joint-action-record-v1",
+        "participant-time-management-context-v1",
+        *TIME_CAPABILITY_REQUIRED_CONTRACTS,
     }
 )
 
@@ -166,7 +179,7 @@ def _provisioner_capabilities(
 
 
 def create_cyborg_manifest(**config: object) -> BackendManifest:
-    """Return the provisioning-only manifest for the selected backend."""
+    """Return the evidence-bounded execution manifest for the selected backend."""
 
     seed = config.get("seed")
     if seed is not None and (type(seed) is not int or not 0 <= seed <= 0xFFFFFFFF):
@@ -204,6 +217,26 @@ def create_cyborg_manifest(**config: object) -> BackendManifest:
                 scope="capabilities.provisioner.supported_service_materialization_profiles",
                 family="tools-and-artifacts",
             ),
+            ConceptBinding(
+                scope="capabilities.orchestrator.supported_sections",
+                family="actions-and-events",
+            ),
+            ConceptBinding(
+                scope="capabilities.participant_runtime.supported_participant_roles",
+                family="identities",
+            ),
+            ConceptBinding(
+                scope="capabilities.participant_runtime.supported_behavior_features",
+                family="actions-and-events",
+            ),
+            ConceptBinding(
+                scope="capabilities.participant_runtime.supported_interaction_features",
+                family="relationships",
+            ),
+            ConceptBinding(
+                scope="capabilities.time.supported_domain_kinds",
+                family="time-and-apparatus",
+            ),
         ),
         realization_support=(
             RealizationSupportDeclaration(
@@ -222,6 +255,54 @@ def create_cyborg_manifest(**config: object) -> BackendManifest:
         ),
         capabilities=BackendCapabilitySet(
             provisioner=_provisioner_capabilities(envelope),
+            orchestrator=OrchestratorCapabilities(
+                name="cyborg-cage2-orchestrator",
+                supported_sections=frozenset({"workflows"}),
+                supports_workflows=True,
+                supported_workflow_features=frozenset({WorkflowFeature.SCAFFOLDED_STEPS}),
+                supports_assertion_refs=False,
+                supports_inject_bindings=False,
+                constraints={
+                    "workflow": "One scenario-defined aggregate-turn workflow is supported."
+                },
+            ),
+            participant_runtime=ParticipantRuntimeCapabilities(
+                name="cyborg-cage2-participant-runtime",
+                supported_participant_roles=frozenset({"blue", "green", "red"}),
+                supported_behavior_features=frozenset(
+                    {
+                        "action_contracts",
+                        "behavior_history",
+                        "effects",
+                        "failure_classes",
+                        "observation_boundaries",
+                        "state_transitions",
+                        "temporal_contracts",
+                    }
+                ),
+                supported_interaction_features=frozenset({"shared_state_change"}),
+                constraints={
+                    "aggregate_turn": "One admitted blue action drives one serialized CAGE-2 turn."
+                },
+            ),
+            time=TimeCapabilities(
+                name="cyborg-cage2-time-runtime",
+                supported_contract_versions=TIME_CAPABILITY_REQUIRED_CONTRACTS,
+                supported_domain_kinds=frozenset({"logical"}),
+                supported_authority_kinds=frozenset({"runtime"}),
+                supported_advancement_modes=frozenset({"event_driven"}),
+                supported_synchronization_modes=frozenset({"none"}),
+                supported_mapping_kinds=frozenset({"identity"}),
+                supported_constraint_kinds=frozenset({"precedence"}),
+                supported_reset_behaviors=frozenset({"new_segment_zero"}),
+                supported_replay_behaviors=frozenset({"unsupported"}),
+                max_time_domains=1,
+                max_clocks=1,
+                supports_pause=True,
+                supports_exact_rational_mappings=True,
+                supports_append_only_history=True,
+                supports_run_provenance=True,
+            ),
         ),
         realization_envelope=envelope,
         constraints={
@@ -233,8 +314,9 @@ def create_cyborg_manifest(**config: object) -> BackendManifest:
             "equivalence": (
                 "Provisioning records and constructs the admitted RAES topology; "
                 "CybORG substitutes selected OS images and native private addresses. "
-                "This provisioning-only target makes no action, observation, "
-                "evaluation, or outcome-equivalence claim."
+                "Logical action execution is bounded to the selected aggregate-turn "
+                "mapping. It makes no observation, evaluation, reward, or "
+                "outcome-equivalence claim."
             ),
         },
     )

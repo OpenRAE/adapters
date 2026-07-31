@@ -170,17 +170,26 @@ and sanitized red/blue/green smoke result. The accompanying
 [packaging patch](src/raes_adapters/cyborg/cage2-wheel-package-data.patch) is
 qualification evidence only; it is not silently applied or published.
 
-Issue [#15](https://github.com/RAESystem/adapters/issues/15) supplies a
-provisioning-only RAES target for that backend. `create_cyborg_target()` accepts
+Issue [#15](https://github.com/RAESystem/adapters/issues/15) supplies the
+provisioning path for that backend. `create_cyborg_target()` accepts
 admitted RAES provisioning plans and deterministically generates the native
 CybORG scenario: RAES switches become subnets, VM multiplicity becomes hosts,
 infrastructure links become subnet membership, and supported OS families select
 digest-verified CybORG images. The portable compiled plan entries and
 configuration-bound realization-envelope identity remain in the RAES snapshot;
 native CybORG objects stay private. Unsupported or lossy node facts fail before
-construction. Action stepping, participant-relative observations, and evaluation
-are added by the following roadmap issues rather than being claimed by this
-first manifest.
+construction.
+
+Issue [#16](https://github.com/RAESystem/adapters/issues/16) adds aggregate
+logical-turn execution. A validated blue action is translated by exact contract
+address and drives one source-native turn; the resulting blue, green, and red
+occurrences are recorded in declared source order with shared-state, joint-action,
+and logical-time joins. B-line, Meander, and Sleep red selections and 30/50/100
+step limits are admitted through published RAES control contracts. Invalid input
+has no native effect, unprojectable post-step output quarantines the session, and
+the portable surfaces exclude native action identifiers, reward data, raw logs,
+hidden state, and native object representations. Participant-relative observation
+and evaluation remain later roadmap work and are not claimed by this manifest.
 
 The separate
 [architecture guardrails](docs/decisions/cyborg-cage2-runtime-qualification-guardrails.md)

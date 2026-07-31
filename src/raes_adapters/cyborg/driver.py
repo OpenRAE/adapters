@@ -14,12 +14,58 @@ from contextlib import suppress
 from importlib import import_module, invalidate_caches
 from importlib.machinery import PathFinder
 from pathlib import Path
-from typing import Protocol, cast
+from typing import Any, NamedTuple, Protocol, TypeGuard, cast
+
+from raes_contracts.participant_action_arguments import (  # type: ignore[import-untyped]
+    ParticipantValidatedActionSelection,
+)
 
 from .qualification import load_qualification
 from .scenario import CyborgScenarioDescriptor, translate_scenario
 
 _NATIVE_RANDOM_LOCK = threading.Lock()
+
+_BLUE = "participant.behavior.blue"
+_GREEN = "participant.behavior.green"
+_RED = "participant.behavior.red"
+
+
+class _NativeParticipantOccurrence(NamedTuple):
+    """Portable identity projected from one private native participant turn."""
+
+    participant_address: str
+    action_contract_address: str
+
+
+class _NativeTurnResult(NamedTuple):
+    """Strict, bounded projection of a completed aggregate CybORG turn."""
+
+    external_action_succeeded: bool
+    source_terminal: bool
+    occurrences: tuple[_NativeParticipantOccurrence, ...]
+
+
+_ACTION_ARGUMENTS: dict[str, frozenset[str]] = {
+    "participant.action-contract.sleep": frozenset(),
+    "participant.action-contract.monitor": frozenset({"session"}),
+    "participant.action-contract.analyse": frozenset({"hostname", "session"}),
+    "participant.action-contract.remove": frozenset({"hostname", "session"}),
+    "participant.action-contract.restore": frozenset({"hostname", "session"}),
+}
+
+
+def validate_action_selection(selection: object) -> TypeGuard[ParticipantValidatedActionSelection]:
+    """Accept only exact, closed normalized bindings supported by CAGE-2 blue."""
+
+    if not isinstance(selection, ParticipantValidatedActionSelection):
+        return False
+    allowed = _ACTION_ARGUMENTS.get(selection.action_contract_address)
+    if allowed is None or set(selection.argument_map) != allowed:
+        return False
+    values = selection.argument_map
+    return ("session" not in values or type(values["session"]) is int) and (
+        "hostname" not in values or isinstance(values["hostname"], str)
+    )
 
 
 class _NativeCyborg(Protocol):
@@ -34,11 +80,36 @@ class _NativeCyborg(Protocol):
     def shutdown(self) -> None:
         """Release native simulator state."""
 
+    def step(self, agent: str, action: object) -> object:
+        """Execute one aggregate source-native turn."""
+
+    def get_last_action(self, agent: str) -> object:
+        """Return the private action selected for one participant."""
+
+
+class _NativeObservation(Protocol):
+    """Private observation fields inspected only for the closed success enum."""
+
+    data: dict[str, object]
+
+
+class _NativeResult(Protocol):
+    """Private result fields projected into bounded portable facts."""
+
+    error: object | None
+    observation: _NativeObservation
+    done: object
+
 
 class _NativeCyborgType(Protocol):
     """Callable constructor surface exposed by the selected package."""
 
-    def __call__(self, scenario_path: str, mode: str) -> _NativeCyborg:
+    def __call__(
+        self,
+        scenario_path: str,
+        mode: str,
+        agents: dict[str, object] | None = None,
+    ) -> _NativeCyborg:
         """Construct a simulator from one generated scenario document."""
 
 
@@ -73,6 +144,7 @@ class SourceInstalledCyborgDriver(CyborgDriver):
         self._binding_lock = threading.Lock()
         self._runtime_workspace: tempfile.TemporaryDirectory[str] | None = None
         self._cyborg_type: _NativeCyborgType | None = None
+        self._random_states: dict[int, object] = {}
 
     def construct(
         self,
@@ -81,6 +153,41 @@ class SourceInstalledCyborgDriver(CyborgDriver):
         seed: int | None,
     ) -> object:
         """Construct the selected backend while keeping native values private."""
+
+        return self._construct(descriptor, seed=seed, agents=None)
+
+    def construct_execution(
+        self,
+        descriptor: CyborgScenarioDescriptor,
+        *,
+        seed: int | None,
+        red_variant: str,
+    ) -> object:
+        """Construct with the exact selected CAGE-2 red implementation."""
+
+        self._native_binding()
+        agents_module = {
+            "b-line": ("CybORG.Agents.SimpleAgents.B_line", "B_lineAgent"),
+            "meander": ("CybORG.Agents.SimpleAgents.Meander", "RedMeanderAgent"),
+            "sleep": ("CybORG.Agents.SimpleAgents.SleepAgent", "SleepAgent"),
+        }.get(red_variant)
+        if agents_module is None:
+            raise RuntimeError("CybORG execution policy is unsupported.")
+        try:
+            module_name, attribute = agents_module
+            red_agent = getattr(import_module(module_name), attribute)
+        except Exception:
+            raise RuntimeError("CybORG execution policy could not be bound.") from None
+        return self._construct(descriptor, seed=seed, agents={"Red": red_agent})
+
+    def _construct(
+        self,
+        descriptor: CyborgScenarioDescriptor,
+        *,
+        seed: int | None,
+        agents: dict[str, object] | None,
+    ) -> object:
+        """Construct a private backend and retain its isolated random stream."""
 
         cyborg_type = self._native_binding()
         scenario = translate_scenario(descriptor)
@@ -93,10 +200,15 @@ class SourceInstalledCyborgDriver(CyborgDriver):
                 try:
                     if seed is not None:
                         random.seed(seed)
-                    native = cyborg_type(str(scenario_path), "sim")
+                    native = (
+                        cyborg_type(str(scenario_path), "sim")
+                        if agents is None
+                        else cyborg_type(str(scenario_path), "sim", agents=agents)
+                    )
                     if seed is not None:
                         native.set_seed(seed)
                     native.reset()
+                    self._random_states[id(native)] = random.getstate()
                 finally:
                     random.setstate(random_state)
         except Exception:
@@ -108,15 +220,117 @@ class SourceInstalledCyborgDriver(CyborgDriver):
                 scenario_path.unlink(missing_ok=True)
         return native
 
-    @staticmethod
-    def cleanup(handle: object) -> bool:
+    def cleanup(self, handle: object) -> bool:
         """Shut down an owned CybORG backend without inspecting native output."""
 
         try:
             cast(_NativeCyborg, handle).shutdown()
         except Exception:
             return False
+        self._random_states.pop(id(handle), None)
         return True
+
+    def reset(self, handle: object, *, seed: int | None) -> bool:
+        """Reset a private session without leaking its global random stream."""
+
+        with _NATIVE_RANDOM_LOCK:
+            caller_state = random.getstate()
+            try:
+                if seed is not None:
+                    random.seed(seed)
+                    cast(_NativeCyborg, handle).set_seed(seed)
+                cast(_NativeCyborg, handle).reset()
+                self._random_states[id(handle)] = random.getstate()
+            except Exception:
+                return False
+            finally:
+                random.setstate(caller_state)
+        return True
+
+    def step(
+        self,
+        handle: object,
+        selection: ParticipantValidatedActionSelection,
+    ) -> object:
+        """Translate one exact blue binding and project one aggregate turn."""
+
+        if not validate_action_selection(selection):
+            raise RuntimeError("CybORG action binding is unsupported.")
+        native = cast(_NativeCyborg, handle)
+        action = self._native_blue_action(selection)
+        with _NATIVE_RANDOM_LOCK:
+            caller_state = random.getstate()
+            try:
+                state = self._random_states.get(id(handle))
+                if state is None:
+                    raise ValueError
+                random.setstate(cast(tuple[object, ...], state))
+                result = native.step("Blue", action)
+                projected = self._project_turn(native, result, selection.action_contract_address)
+                self._random_states[id(handle)] = random.getstate()
+            except Exception:
+                raise RuntimeError("CybORG aggregate turn projection failed.") from None
+            finally:
+                random.setstate(caller_state)
+        return projected
+
+    @staticmethod
+    def _native_blue_action(selection: ParticipantValidatedActionSelection) -> object:
+        """Bind normalized arguments to fixed source action constructors."""
+
+        actions = import_module("CybORG.Shared.Actions")
+        values = selection.argument_map
+        address = selection.action_contract_address
+        if address == "participant.action-contract.sleep":
+            return actions.Sleep()
+        if address == "participant.action-contract.monitor":
+            return actions.Monitor(session=values["session"], agent="Blue")
+        if address == "participant.action-contract.analyse":
+            return actions.Analyse(
+                session=values["session"], agent="Blue", hostname=values["hostname"]
+            )
+        if address == "participant.action-contract.remove":
+            return actions.Remove(
+                session=values["session"], agent="Blue", hostname=values["hostname"]
+            )
+        if address == "participant.action-contract.restore":
+            return actions.Restore(
+                session=values["session"], agent="Blue", hostname=values["hostname"]
+            )
+        raise ValueError
+
+    @staticmethod
+    def _project_turn(
+        native: _NativeCyborg,
+        result: object,
+        external_address: str,
+    ) -> _NativeTurnResult:
+        """Map only source types and bounded terminal facts into portable identities."""
+
+        shared = import_module("CybORG.Shared")
+        actions = import_module("CybORG.Shared.Actions")
+        enums = import_module("CybORG.Shared.Enums")
+        if type(result) is not shared.Results:
+            raise ValueError
+        native_result = cast(_NativeResult, result)
+        if native_result.error is not None:
+            raise ValueError
+        observation = native_result.observation
+        if type(observation) is not shared.Observation:
+            raise ValueError
+        success = observation.data.get("success") == enums.TrinaryEnum.TRUE
+        source_terminal = native_result.done is True
+        green = _project_native_action(native.get_last_action("Green"), actions)
+        red = _project_native_action(native.get_last_action("Red"), actions)
+        return _NativeTurnResult(
+            external_action_succeeded=success,
+            source_terminal=source_terminal,
+            occurrences=(
+                _NativeParticipantOccurrence(_BLUE, external_address),
+                _NativeParticipantOccurrence(_GREEN, green),
+                _NativeParticipantOccurrence(_RED, red),
+            ),
+        )
 
     def _native_binding(self) -> _NativeCyborgType:
         """Load the constructor from a private snapshot of verified source bytes."""
@@ -284,6 +498,30 @@ class SourceInstalledCyborgDriver(CyborgDriver):
             raise RuntimeError(
                 "The installed CybORG backend source does not match the selected profile."
             )
+
+
+def _project_native_action(action: object, actions: Any) -> str:
+    """Project a fixed selected-source action type without rendering native data."""
+
+    bindings = (
+        (actions.Sleep, "participant.action-contract.sleep"),
+        (actions.Monitor, "participant.action-contract.monitor"),
+        (actions.Analyse, "participant.action-contract.analyse"),
+        (actions.Remove, "participant.action-contract.remove"),
+        (actions.Restore, "participant.action-contract.restore"),
+        (actions.GreenPingSweep, "participant.action-contract.green-ping-sweep"),
+        (actions.GreenPortScan, "participant.action-contract.green-port-scan"),
+        (actions.GreenConnection, "participant.action-contract.green-connection"),
+        (actions.DiscoverRemoteSystems, "participant.action-contract.discover-remote-systems"),
+        (actions.DiscoverNetworkServices, "participant.action-contract.discover-network-services"),
+        (actions.ExploitRemoteService, "participant.action-contract.exploit-remote-service"),
+        (actions.PrivilegeEscalate, "participant.action-contract.privilege-escalate"),
+        (actions.Impact, "participant.action-contract.impact"),
+    )
+    for native_type, address in bindings:
+        if type(action) is native_type:
+            return address
+    raise ValueError
 
 
 __all__ = [
