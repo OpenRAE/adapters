@@ -55,7 +55,7 @@ field to carry raw native arrays, reward vectors, or action ids (a structural
 exclusion), and a deterministic scan rejects known native identifiers (grounded
 in the qualification record's recorded observation keys) and native object/array
 representations in portable content. No claim rests on CI success, a single
-cumulative score, or a top-level seed. The current
-qualification is `not-admissible`; authoring and validating this evidence set
-does not change that and asserts no installability, replay, conformance, or
-equivalence.
+cumulative score, or a top-level seed. The selected profile is admitted;
+authoring and validating this evidence set strengthens its provenance without
+asserting dependency installability, deterministic replay, conformance, or
+outcome equivalence.

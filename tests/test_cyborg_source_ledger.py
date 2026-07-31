@@ -228,7 +228,7 @@ def test_qualification_json_pointers_are_machine_resolvable() -> None:
     qualification = sl.load_qualification()
     assert sl.resolve_qualification_ref("qualification.json#/legal", qualification)
     assert sl.resolve_qualification_ref(
-        "qualification.json#/admissibility/decision",
+        "qualification.json#/admission/decision",
         qualification,
     )
     assert not sl.resolve_qualification_ref("qualification.json#/not-there", qualification)

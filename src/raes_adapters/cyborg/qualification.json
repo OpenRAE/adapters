@@ -315,7 +315,7 @@
     "python": "3.12.3",
     "requirements_sha256": "a930508faee1766fb685ffa2fdd924121fdd0c056c92144850d20383951ba301",
     "normalized_environment_sha256": "56e2c189d6fd4b195584f34d93f66500b30eba8eedff6fca869ed61a8ab4079a",
-    "uv_lock_sha256": "7f815a2ed3d699432eb2bbfe5b3a2d6d09eae41be36ee794ee53cdb36d28b31b",
+    "uv_lock_sha256": "2ee83cdc249ba289b818c89f2c1c5ddd3a03f7587652ad17bfb8c7065847082e",
     "candidate_resolution": "passed",
     "canonical_lock_disposition": "The current single uv.lock intentionally excludes the unpublished candidate CybORG artifact; the resolved environment is qualification evidence, not a second lockfile."
   },
@@ -459,7 +459,7 @@
     {
       "id": "wheel-omits-runtime-data",
       "evidence": "The unmodified wheel omits CybORG/version.txt and Scenario2 YAML resources, so importing CybORG fails after a normal wheel install.",
-      "disposition": "blocking for the published extra"
+      "disposition": "prevents declaring the ungoverned native artifact as an extra dependency; the adapter extra remains dependency-light"
     },
     {
       "id": "legacy-gym-unmaintained",
@@ -482,16 +482,24 @@
       "disposition": "no outcome-reproducibility claim"
     }
   ],
-  "admissibility": {
+  "admission": {
     "decision": "admitted",
+    "authority": "maintainer-selection",
     "scope": "maintainer-selected-cyborg-backend",
-    "installation_limitations": [
+    "limitations": [
       "no-governed-public-patched-artifact",
       "declared-python-range-not-qualified",
       "declared-platform-range-not-qualified"
     ],
-    "extra_disposition": "leave the cyborg extra empty rather than publish a local path, editable checkout, install-time clone, or ungoverned wheel",
-    "qualification_effect": "installation, replay, and equivalence claims are limited; the maintainer-selected source-installed backend remains admitted for adapter use",
+    "claim_strength": {
+      "source_identity": "attested",
+      "protocol_configuration": "attested",
+      "execution_controls": "partial",
+      "run_evidence": "attestable",
+      "outcome_reproduction": "stochastic-bounded"
+    },
+    "extra_disposition": "keep the cyborg extra dependency-light rather than publish a local path, editable checkout, install-time clone, or ungoverned wheel",
+    "interpretation": "The maintainer-selected profile is admitted for adapter realization. Artifact and platform coverage gaps bound installability and reproducibility claims; they do not veto the simulator.",
     "requalification_trigger": "an immutable governed artifact that contains the packaging-only fix and is qualified across the declared Python and platform support boundary"
   }
 }
