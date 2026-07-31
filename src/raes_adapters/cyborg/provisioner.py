@@ -158,26 +158,38 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
         """Reconstruct the private session with one exact admitted red policy."""
 
         with self._lock:
-            descriptor = self._active_descriptor
-            construct = getattr(self._driver, "construct_execution", None)
-            if descriptor is None or not callable(construct):
-                return False
-            try:
-                candidate = construct(
-                    descriptor,
-                    seed=self._seed,
-                    red_variant=red_variant,
-                )
-            except Exception:
-                return False
-            if self._active is not None and not self._cleanup_handle(self._active):
+            candidate = self._execution_candidate(red_variant)
+            configured = candidate is not None
+            if (
+                candidate is not None
+                and self._active is not None
+                and not self._cleanup_handle(self._active)
+            ):
                 self._active_available = False
                 if not self._cleanup_handle(candidate):
                     self._pending_cleanup.append(candidate)
-                return False
-            self._active = candidate
-            self._active_available = True
-            return True
+                configured = False
+            elif candidate is not None:
+                self._active = candidate
+                self._active_available = True
+            return configured
+
+    def _execution_candidate(self, red_variant: str) -> object | None:
+        """Construct a candidate for one exact admitted red policy."""
+
+        descriptor = self._active_descriptor
+        construct = getattr(self._driver, "construct_execution", None)
+        if descriptor is None or not callable(construct):
+            return None
+        try:
+            candidate: object = construct(
+                descriptor,
+                seed=self._seed,
+                red_variant=red_variant,
+            )
+            return candidate
+        except Exception:
+            return None
 
     def execute_turn(self, selection: object) -> object:
         """Execute at most one aggregate native turn under the session lock."""

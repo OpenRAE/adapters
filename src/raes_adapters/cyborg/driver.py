@@ -14,7 +14,7 @@ from contextlib import suppress
 from importlib import import_module, invalidate_caches
 from importlib.machinery import PathFinder
 from pathlib import Path
-from typing import Any, NamedTuple, Protocol, TypeGuard, cast
+from typing import NamedTuple, Protocol, TypeGuard, cast
 
 from raes_contracts.participant_action_arguments import (  # type: ignore[import-untyped]
     ParticipantValidatedActionSelection,
@@ -28,6 +28,12 @@ _NATIVE_RANDOM_LOCK = threading.Lock()
 _BLUE = "participant.behavior.blue"
 _GREEN = "participant.behavior.green"
 _RED = "participant.behavior.red"
+
+_SLEEP = "participant.action-contract.sleep"
+_MONITOR = "participant.action-contract.monitor"
+_ANALYSE = "participant.action-contract.analyse"
+_REMOVE = "participant.action-contract.remove"
+_RESTORE = "participant.action-contract.restore"
 
 
 class _NativeParticipantOccurrence(NamedTuple):
@@ -46,11 +52,11 @@ class _NativeTurnResult(NamedTuple):
 
 
 _ACTION_ARGUMENTS: dict[str, frozenset[str]] = {
-    "participant.action-contract.sleep": frozenset(),
-    "participant.action-contract.monitor": frozenset({"session"}),
-    "participant.action-contract.analyse": frozenset({"hostname", "session"}),
-    "participant.action-contract.remove": frozenset({"hostname", "session"}),
-    "participant.action-contract.restore": frozenset({"hostname", "session"}),
+    _SLEEP: frozenset(),
+    _MONITOR: frozenset({"session"}),
+    _ANALYSE: frozenset({"hostname", "session"}),
+    _REMOVE: frozenset({"hostname", "session"}),
+    _RESTORE: frozenset({"hostname", "session"}),
 }
 
 
@@ -119,6 +125,24 @@ class _NativePackage(Protocol):
     CYBORG_VERSION: object
     CybORG: _NativeCyborgType
     __file__: str
+
+
+class _NativeActionTypes(Protocol):
+    """Selected native action classes used only for exact-type projection."""
+
+    Sleep: type[object]
+    Monitor: type[object]
+    Analyse: type[object]
+    Remove: type[object]
+    Restore: type[object]
+    GreenPingSweep: type[object]
+    GreenPortScan: type[object]
+    GreenConnection: type[object]
+    DiscoverRemoteSystems: type[object]
+    DiscoverNetworkServices: type[object]
+    ExploitRemoteService: type[object]
+    PrivilegeEscalate: type[object]
+    Impact: type[object]
 
 
 class CyborgDriver(Protocol):
@@ -281,23 +305,25 @@ class SourceInstalledCyborgDriver(CyborgDriver):
         actions = import_module("CybORG.Shared.Actions")
         values = selection.argument_map
         address = selection.action_contract_address
-        if address == "participant.action-contract.sleep":
-            return actions.Sleep()
-        if address == "participant.action-contract.monitor":
-            return actions.Monitor(session=values["session"], agent="Blue")
-        if address == "participant.action-contract.analyse":
-            return actions.Analyse(
+        if address == _SLEEP:
+            action = actions.Sleep()
+        elif address == _MONITOR:
+            action = actions.Monitor(session=values["session"], agent="Blue")
+        elif address == _ANALYSE:
+            action = actions.Analyse(
                 session=values["session"], agent="Blue", hostname=values["hostname"]
             )
-        if address == "participant.action-contract.remove":
-            return actions.Remove(
+        elif address == _REMOVE:
+            action = actions.Remove(
                 session=values["session"], agent="Blue", hostname=values["hostname"]
             )
-        if address == "participant.action-contract.restore":
-            return actions.Restore(
+        elif address == _RESTORE:
+            action = actions.Restore(
                 session=values["session"], agent="Blue", hostname=values["hostname"]
             )
-        raise ValueError
+        else:
+            raise ValueError
+        return action
 
     @staticmethod
     def _project_turn(
@@ -308,7 +334,7 @@ class SourceInstalledCyborgDriver(CyborgDriver):
         """Map only source types and bounded terminal facts into portable identities."""
 
         shared = import_module("CybORG.Shared")
-        actions = import_module("CybORG.Shared.Actions")
+        actions = cast(_NativeActionTypes, import_module("CybORG.Shared.Actions"))
         enums = import_module("CybORG.Shared.Enums")
         if type(result) is not shared.Results:
             raise ValueError
@@ -500,15 +526,15 @@ class SourceInstalledCyborgDriver(CyborgDriver):
             )
 
 
-def _project_native_action(action: object, actions: Any) -> str:
+def _project_native_action(action: object, actions: _NativeActionTypes) -> str:
     """Project a fixed selected-source action type without rendering native data."""
 
     bindings = (
-        (actions.Sleep, "participant.action-contract.sleep"),
-        (actions.Monitor, "participant.action-contract.monitor"),
-        (actions.Analyse, "participant.action-contract.analyse"),
-        (actions.Remove, "participant.action-contract.remove"),
-        (actions.Restore, "participant.action-contract.restore"),
+        (actions.Sleep, _SLEEP),
+        (actions.Monitor, _MONITOR),
+        (actions.Analyse, _ANALYSE),
+        (actions.Remove, _REMOVE),
+        (actions.Restore, _RESTORE),
         (actions.GreenPingSweep, "participant.action-contract.green-ping-sweep"),
         (actions.GreenPortScan, "participant.action-contract.green-port-scan"),
         (actions.GreenConnection, "participant.action-contract.green-connection"),

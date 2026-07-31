@@ -914,12 +914,10 @@ def test_source_driver_rejects_invalid_native_turn_outputs(
     for result in invalid_results:
         with pytest.raises(ValueError):
             SourceInstalledCyborgDriver._project_turn(valid_handle, result, _SLEEP)
+    invalid_handle = NativeHandle(object())
+    valid_result = shared.Results()
     with pytest.raises(ValueError):
-        SourceInstalledCyborgDriver._project_turn(
-            NativeHandle(object()),
-            shared.Results(),
-            _SLEEP,
-        )
+        SourceInstalledCyborgDriver._project_turn(invalid_handle, valid_result, _SLEEP)
 
 
 @pytest.mark.parametrize(

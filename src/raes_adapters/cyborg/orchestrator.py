@@ -30,18 +30,31 @@ _VARIANTS = frozenset({"b-line", "meander", "sleep"})
 
 
 def _now_iso() -> str:
+    """Return one portable UTC timestamp."""
+
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 @dataclass(frozen=True)
-class _ExecutionPolicy:
+class _ExecutionPolicy(object):
+    """Closed execution controls admitted from one workflow declaration."""
+
     workflow_address: str
     clock_address: str
     max_steps: int
     red_variant: str
 
 
-class CyborgExecutionControl:
+class _AdmissionError(Exception):
+    """Bounded internal failure used while parsing orchestration input."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+class CyborgExecutionControl(object):
     """Small shared policy latch; portable progress remains in the snapshot."""
 
     def __init__(self) -> None:
@@ -50,24 +63,34 @@ class CyborgExecutionControl:
         self._source_terminal = False
 
     def activate(self, policy: _ExecutionPolicy) -> None:
+        """Activate one admitted execution policy."""
+
         with self._lock:
             self._policy = policy
             self._source_terminal = False
 
     def clear(self) -> None:
+        """Clear all active execution controls."""
+
         with self._lock:
             self._policy = None
             self._source_terminal = False
 
     def policy(self) -> _ExecutionPolicy | None:
+        """Return the currently admitted policy, if any."""
+
         with self._lock:
             return self._policy
 
     def is_source_terminal(self) -> bool:
+        """Report whether the native source declared a terminal state."""
+
         with self._lock:
             return self._source_terminal
 
     def mark_source_terminal(self) -> None:
+        """Latch a source-native terminal signal."""
+
         with self._lock:
             self._source_terminal = True
 
@@ -78,7 +101,7 @@ class CyborgExecutionControl:
             self._source_terminal = False
 
 
-class CyborgOrchestrator:
+class CyborgOrchestrator(object):
     """Admit one CAGE-2 workflow and bind its declared control policy."""
 
     def __init__(self, provisioner: CyborgProvisioner, control: CyborgExecutionControl) -> None:
@@ -98,6 +121,8 @@ class CyborgOrchestrator:
         plan: OrchestrationPlan,
         snapshot: RuntimeSnapshot,
     ) -> ApplyResult:
+        """Start an admitted session while the shared transaction lock is held."""
+
         admitted = self._admit(plan, snapshot)
         if isinstance(admitted, ApplyResult):
             return admitted
@@ -159,67 +184,38 @@ class CyborgOrchestrator:
             changed_addresses=[operation.address],
         )
 
+    @staticmethod
     def _admit(
-        self,
         plan: object,
         snapshot: RuntimeSnapshot,
     ) -> tuple[OrchestrationOp, _ExecutionPolicy] | ApplyResult:
-        if not isinstance(plan, OrchestrationPlan):
-            return _failure(
-                snapshot,
-                "cyborg-backend.orchestration.invalid-plan",
-                "A RAES orchestration plan is required.",
-            )
-        workflows = [
-            operation
-            for operation in plan.operations
-            if operation.action != ChangeAction.DELETE and operation.resource_type == "workflow"
-        ]
-        if len(workflows) != 1 or len(plan.resources) != 1:
-            return _failure(
-                snapshot,
-                "cyborg-backend.orchestration.invalid-plan",
-                "Exactly one CAGE-2 workflow is required.",
-            )
-        if snapshot.time_model_state is None or len(snapshot.time_model_state.clocks) != 1:
-            return _failure(
-                snapshot,
-                "cyborg-backend.orchestration.time-unavailable",
-                "Exactly one initialized logical clock is required.",
-            )
-        operation = workflows[0]
+        """Return a closed policy or one bounded admission failure."""
+
         try:
-            episode = ExperimentEpisodeControlModel.model_validate(
-                operation.payload["episode_control"]
+            operation = _workflow_operation(plan)
+            clock_address = _clock_address(snapshot)
+            policy = _execution_policy(operation, clock_address)
+        except _AdmissionError as error:
+            admitted: tuple[OrchestrationOp, _ExecutionPolicy] | ApplyResult = _failure(
+                snapshot, error.code, error.message
             )
-            variant = ExperimentRedVariantSelectionModel.model_validate(
-                operation.payload["red_variant_selection"]
-            )
-            if episode.turn_order != "scenario-defined" or episode.max_steps is None:
-                raise ValueError
-            if variant.variant_id not in _VARIANTS:
-                raise ValueError
-        except (KeyError, TypeError, ValueError):
-            return _failure(
-                snapshot,
-                "cyborg-backend.orchestration.invalid-control",
-                "The workflow control declaration is not supported by CAGE-2.",
-            )
-        clock_address = next(iter(snapshot.time_model_state.clocks))
-        return operation, _ExecutionPolicy(
-            workflow_address=operation.address,
-            clock_address=clock_address,
-            max_steps=episode.max_steps,
-            red_variant=variant.variant_id,
-        )
+        else:
+            admitted = operation, policy
+        return admitted
 
     def status(self) -> dict[str, object]:
+        """Return a bounded status summary without native state."""
+
         return {"running": self._control.policy() is not None, "results": len(self._results)}
 
     def results(self) -> dict[str, dict[str, object]]:
+        """Return defensive copies of portable workflow results."""
+
         return {key: dict(value) for key, value in self._results.items()}
 
     def history(self) -> dict[str, list[dict[str, object]]]:
+        """Return defensive copies of portable workflow history."""
+
         return {key: list(value) for key, value in self._history.items()}
 
     def mark_completed(self, snapshot: RuntimeSnapshot, reason: str) -> RuntimeSnapshot:
@@ -295,6 +291,8 @@ class CyborgOrchestrator:
             return self._stop_transaction(snapshot)
 
     def _stop_transaction(self, snapshot: RuntimeSnapshot) -> ApplyResult:
+        """Clear portable orchestration state while holding the session lock."""
+
         removed = [
             key
             for key, value in snapshot.entries.items()
@@ -313,7 +311,68 @@ class CyborgOrchestrator:
         )
 
 
+def _workflow_operation(plan: object) -> OrchestrationOp:
+    """Extract the sole supported workflow operation."""
+
+    if not isinstance(plan, OrchestrationPlan):
+        raise _AdmissionError(
+            "cyborg-backend.orchestration.invalid-plan",
+            "A RAES orchestration plan is required.",
+        )
+    workflows = [
+        operation
+        for operation in plan.operations
+        if operation.action != ChangeAction.DELETE and operation.resource_type == "workflow"
+    ]
+    if len(workflows) != 1 or len(plan.resources) != 1:
+        raise _AdmissionError(
+            "cyborg-backend.orchestration.invalid-plan",
+            "Exactly one CAGE-2 workflow is required.",
+        )
+    return workflows[0]
+
+
+def _clock_address(snapshot: RuntimeSnapshot) -> str:
+    """Return the sole initialized logical clock address."""
+
+    state = snapshot.time_model_state
+    if state is None or len(state.clocks) != 1:
+        raise _AdmissionError(
+            "cyborg-backend.orchestration.time-unavailable",
+            "Exactly one initialized logical clock is required.",
+        )
+    return str(next(iter(state.clocks)))
+
+
+def _execution_policy(operation: OrchestrationOp, clock_address: str) -> _ExecutionPolicy:
+    """Parse the closed CAGE-2 controls from the workflow payload."""
+
+    try:
+        episode = ExperimentEpisodeControlModel.model_validate(operation.payload["episode_control"])
+        variant = ExperimentRedVariantSelectionModel.model_validate(
+            operation.payload["red_variant_selection"]
+        )
+        variant_id = str(variant.variant_id)
+        if episode.turn_order != "scenario-defined" or episode.max_steps is None:
+            raise ValueError
+        if variant_id not in _VARIANTS:
+            raise ValueError
+    except (KeyError, TypeError, ValueError):
+        raise _AdmissionError(
+            "cyborg-backend.orchestration.invalid-control",
+            "The workflow control declaration is not supported by CAGE-2.",
+        ) from None
+    return _ExecutionPolicy(
+        workflow_address=operation.address,
+        clock_address=clock_address,
+        max_steps=episode.max_steps,
+        red_variant=variant_id,
+    )
+
+
 def _failure(snapshot: RuntimeSnapshot, code: str, message: str) -> ApplyResult:
+    """Build one bounded orchestration diagnostic."""
+
     return ApplyResult(
         success=False,
         snapshot=snapshot,
