@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import copy
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import NamedTuple
 
 from raes_backend_protocols.protocols import Provisioner  # type: ignore[import-untyped]
@@ -24,11 +26,13 @@ from raes_contracts.runtime_state import (  # type: ignore[import-untyped]
 
 from .driver import (
     CyborgDriver,
+    validate_action_selection,
 )
 from .scenario import (
     CYBORG_SCENARIO_MAPPING_VERSION,
     CyborgScenarioDescriptor,
     copied_resource,
+    translate_scenario,
     validate_scenario_resources,
 )
 
@@ -62,6 +66,9 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
         self._seed = seed
         self._active: object | None = None
         self._active_available = False
+        self._active_descriptor: CyborgScenarioDescriptor | None = None
+        self._active_hostnames: frozenset[str] = frozenset()
+        self._execution_generation = 0
         self._pending_cleanup: list[object] = []
         self._lock = threading.RLock()
 
@@ -101,6 +108,8 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
                 if self._cleanup_handle(handle):
                     self._active = None
                     self._active_available = False
+                    self._active_descriptor = None
+                    self._active_hostnames = frozenset()
                 else:
                     self._active_available = False
                     succeeded = False
@@ -134,7 +143,111 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
 
         self._active = candidate
         self._active_available = True
+        self._active_descriptor = descriptor
+        self._active_hostnames = frozenset(translate_scenario(descriptor)["Hosts"])
         return _success(snapshot, reconciliation, self._realization_envelope)
+
+    @contextmanager
+    def execution_transaction(self) -> Iterator[None]:
+        """Serialize one complete native-and-portable session transition."""
+
+        with self._lock:
+            yield
+
+    def configure_execution(self, red_variant: str) -> bool:
+        """Reconstruct the private session with one exact admitted red policy."""
+
+        with self._lock:
+            candidate = self._execution_candidate(red_variant)
+            configured = candidate is not None
+            if (
+                candidate is not None
+                and self._active is not None
+                and not self._cleanup_handle(self._active)
+            ):
+                self._active_available = False
+                if not self._cleanup_handle(candidate):
+                    self._pending_cleanup.append(candidate)
+                configured = False
+            elif candidate is not None:
+                self._active = candidate
+                self._active_available = True
+            return configured
+
+    def _execution_candidate(self, red_variant: str) -> object | None:
+        """Construct a candidate for one exact admitted red policy."""
+
+        descriptor = self._active_descriptor
+        construct = getattr(self._driver, "construct_execution", None)
+        if descriptor is None or not callable(construct):
+            return None
+        try:
+            candidate: object = construct(
+                descriptor,
+                seed=self._seed,
+                red_variant=red_variant,
+            )
+            return candidate
+        except Exception:
+            return None
+
+    def execute_turn(self, selection: object) -> object:
+        """Execute at most one aggregate native turn under the session lock."""
+
+        with self._lock:
+            step = getattr(self._driver, "step", None)
+            if self._active is None or not self._active_available or not callable(step):
+                raise RuntimeError("CybORG execution session is unavailable.")
+            try:
+                result = step(self._active, selection)
+                self._execution_generation += 1
+                return result
+            except Exception:
+                self._active_available = False
+                raise RuntimeError("CybORG aggregate turn failed.") from None
+
+    def quarantine_execution(self) -> None:
+        """Prevent reuse after an unprojectable post-effect native result."""
+
+        with self._lock:
+            self._active_available = False
+
+    def execution_available(self) -> bool:
+        """Report only whether an owned session may safely accept another turn."""
+
+        with self._lock:
+            return self._active is not None and self._active_available
+
+    def execution_generation(self) -> int:
+        """Return a private monotonic marker for completed effectful calls."""
+
+        with self._lock:
+            return self._execution_generation
+
+    def selection_targets_are_realized(self, selection: object) -> bool:
+        """Require target-bearing bindings to resolve in the active host closure."""
+
+        with self._lock:
+            if not validate_action_selection(selection):
+                return False
+            arguments = selection.argument_map
+            hostname = arguments.get("hostname")
+            return hostname is None or hostname in self._active_hostnames
+
+    def reset_execution(self) -> bool:
+        """Reset the owned aggregate session exactly once for a coordinated reset."""
+
+        with self._lock:
+            reset = getattr(self._driver, "reset", None)
+            if self._active is None or not self._active_available or not callable(reset):
+                return False
+            try:
+                succeeded = reset(self._active, seed=self._seed) is True
+            except Exception:
+                succeeded = False
+            if not succeeded:
+                self._active_available = False
+            return succeeded
 
     def _descriptor(self, plan: ProvisioningPlan) -> CyborgScenarioDescriptor:
         """Copy the complete desired state into a private driver descriptor."""

@@ -1,8 +1,8 @@
 """Selected CybORG/CAGE-2 backend adapter and source evidence.
 
 Issue #12 binds one immutable CAGE-2 source closure and its qualification
-outcome here. Issue #15 adds the RAES Provisioner, conservative backend
-manifest, and target construction for that selected backend.
+outcome here. Issues #15 and #16 add construction and aggregate logical-turn
+execution through published RAES runtime contracts.
 
 The native backend is deliberately imported only when the default construction
 driver is used. Base-only installations therefore remain independent, while a
@@ -24,6 +24,8 @@ from .manifest import (
     create_cyborg_manifest,
     create_cyborg_realization_envelope,
 )
+from .orchestrator import CyborgOrchestrator
+from .participant_runtime import CyborgParticipantRuntime
 from .provisioner import CyborgProvisioner
 from .qualification import load_qualification, read_compatibility_patch
 from .scenario import (
@@ -45,6 +47,8 @@ __all__ = [
     "CYBORG_PROFILE_ID",
     "CYBORG_SCENARIO_MAPPING_VERSION",
     "CyborgDriver",
+    "CyborgOrchestrator",
+    "CyborgParticipantRuntime",
     "CyborgProvisioner",
     "CyborgScenarioDescriptor",
     "CyborgScenarioResource",

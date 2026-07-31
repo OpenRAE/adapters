@@ -9,6 +9,7 @@ from raes_backend_protocols.capabilities import (  # type: ignore[import-untyped
 )
 from raes_runtime.registry import (  # type: ignore[import-untyped]
     BackendRegistry,
+    ReferenceTimeRuntime,
     RuntimeTarget,
     RuntimeTargetComponents,
 )
@@ -17,6 +18,8 @@ from raes_adapters.base import build_runtime_target
 
 from .driver import CyborgDriver, SourceInstalledCyborgDriver
 from .manifest import CYBORG_BACKEND_NAME, create_cyborg_manifest
+from .orchestrator import CyborgExecutionControl, CyborgOrchestrator
+from .participant_runtime import CyborgParticipantRuntime
 from .provisioner import CyborgProvisioner
 from .qualification import load_qualification
 from .source_ledger import CAGE2_SOURCE_26CE1C1
@@ -105,11 +108,19 @@ def create_cyborg_components(
     manifest: BackendManifest,
     **config: object,
 ) -> RuntimeTargetComponents:
-    """Build the Provisioner component for one selected backend."""
+    """Build the aggregate execution components for one selected backend."""
 
     normalized = _normalized_config(config)
-    if manifest.has_orchestrator or manifest.has_evaluator or manifest.has_participant_runtime:
-        raise ValueError("Issue #15 CybORG target is provisioning-only.")
+    if (
+        not manifest.has_orchestrator
+        or not manifest.has_participant_runtime
+        or not manifest.has_time
+    ):
+        raise ValueError(
+            "CybORG execution components require orchestration, participant, and time claims."
+        )
+    if manifest.has_evaluator:
+        raise ValueError("CybORG evaluation is not implemented by this target.")
     if manifest.realization_envelope is None:
         raise ValueError("CybORG manifest requires a realization envelope.")
     expected = create_cyborg_manifest(seed=normalized["seed"])
@@ -121,14 +132,27 @@ def create_cyborg_components(
         if raw_driver is not None
         else SourceInstalledCyborgDriver(expected_version=str(normalized["simulator_version"]))
     )
+    provisioner = CyborgProvisioner(
+        driver,
+        realization_envelope=manifest.realization_envelope.identity,
+        profile_id=str(normalized["qualification_profile_id"]),
+        source_commit=str(normalized["source_commit"]),
+        seed=normalized["seed"] if isinstance(normalized["seed"], int) else None,
+    )
+    time_runtime = ReferenceTimeRuntime()
+    control = CyborgExecutionControl()
+    orchestrator = CyborgOrchestrator(provisioner, control)
+    participant_runtime = CyborgParticipantRuntime(
+        provisioner,
+        control,
+        orchestrator,
+        time_runtime,
+    )
     return RuntimeTargetComponents(
-        provisioner=CyborgProvisioner(
-            driver,
-            realization_envelope=manifest.realization_envelope.identity,
-            profile_id=str(normalized["qualification_profile_id"]),
-            source_commit=str(normalized["source_commit"]),
-            seed=normalized["seed"] if isinstance(normalized["seed"], int) else None,
-        )
+        provisioner=provisioner,
+        orchestrator=orchestrator,
+        participant_runtime=participant_runtime,
+        time_runtime=time_runtime,
     )
 
 

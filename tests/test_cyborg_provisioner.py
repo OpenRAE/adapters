@@ -173,11 +173,11 @@ def test_manifest_is_valid_and_discloses_the_actual_projection() -> None:
     assert model.identity.name == "cyborg-cage2"
     assert model.capabilities.provisioner.name == "cyborg-cage2-provisioner"
     assert manifest.realization_envelope is not None
-    assert manifest.has_orchestrator is False
+    assert manifest.has_orchestrator is True
     assert manifest.has_evaluator is False
-    assert manifest.has_participant_runtime is False
+    assert manifest.has_participant_runtime is True
     assert manifest.has_observation is False
-    assert manifest.has_time is False
+    assert manifest.has_time is True
     configuration = manifest.realization_envelope.configuration
     assert configuration.mode == "raes-scenario-projection"
     assert configuration.supported_node_types == ["switch", "vm"]
