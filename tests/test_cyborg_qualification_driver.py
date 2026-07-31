@@ -8,7 +8,9 @@ from pathlib import Path
 
 from tools.verify_cyborg_qualification import (
     normalized_wheel_sha256,
+    python_source_tree_identity,
     sanitized_subprocess_env,
+    validate_adapter_smoke,
     validate_reproducer_runtime,
     validate_smoke,
 )
@@ -32,6 +34,25 @@ class NormalizedWheelDigestTests(unittest.TestCase):
                 normalized_wheel_sha256(first),
                 normalized_wheel_sha256(second),
             )
+
+
+class PythonSourceTreeIdentityTests(unittest.TestCase):
+    def test_initializer_and_nested_runtime_sources_are_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "__init__.py").write_text("VERSION = '2.1'\n", encoding="utf-8")
+            nested = root / "Agents"
+            nested.mkdir()
+            runtime = nested / "runtime.py"
+            runtime.write_text("ACTIVE = True\n", encoding="utf-8")
+
+            count, original = python_source_tree_identity(root)
+            runtime.write_text("ACTIVE = False\n", encoding="utf-8")
+            changed_count, changed = python_source_tree_identity(root)
+
+            self.assertEqual(count, 2)
+            self.assertEqual(changed_count, 2)
+            self.assertNotEqual(original, changed)
 
 
 class SanitizedEnvironmentTests(unittest.TestCase):
@@ -73,6 +94,23 @@ class SmokeValidationTests(unittest.TestCase):
             validate_smoke({"seed": 3, "step_count": 2, "native_state": {}}, expected)
         with self.assertRaisesRegex(RuntimeError, "smoke result"):
             validate_smoke({"seed": 3, "step_count": 3}, expected)
+
+    def test_adapter_smoke_accepts_only_bounded_construction_and_cleanup(self) -> None:
+        expected = {
+            "backend": "cyborg-cage2",
+            "constructed": True,
+            "cleaned": True,
+            "recorded_resources": 2,
+            "realization_recorded": True,
+        }
+
+        validate_adapter_smoke(dict(expected), expected)
+
+        with self.assertRaisesRegex(RuntimeError, "adapter smoke"):
+            validate_adapter_smoke(
+                {**expected, "native_handle": "must-not-cross"},
+                expected,
+            )
 
 
 class RuntimeValidationTests(unittest.TestCase):

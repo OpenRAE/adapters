@@ -2,8 +2,10 @@
 
 This backend-local evidence bridges the source closure qualified by issue #12
 to the published RAES surfaces that can carry each CAGE-2 fact. It does not
-author an SDL scenario or experiment, implement a backend, change the
-qualification's source evidence or claim strength, or establish equivalence.
+author an SDL scenario or experiment, change the qualification's source
+evidence or claim strength, or establish equivalence. Maintainer selection
+admits the backend; this ledger grades what RAES can record and what remains
+lossy.
 
 Per RAES ADR-069 §2 and `docs/decisions/cage-2-replication-design.md`, the
 mapping from upstream CAGE-2/CybORG source facts to portable RAES artifacts is a

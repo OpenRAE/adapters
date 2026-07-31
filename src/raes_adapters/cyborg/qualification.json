@@ -263,6 +263,11 @@
     "pythonpath": "cleared",
     "python_safe_path": true,
     "network_after_install": "not-required",
+    "integrity": {
+      "algorithm": "sha256(relative-posix-path + NUL + sha256(source-bytes))",
+      "python_source_count": 337,
+      "python_source_tree_sha256": "f74427419b587b95e2f083c69f230a28a54871977fb4432644120e7f555d2212"
+    },
     "smoke": {
       "seed": 3,
       "scenario_exists": true,
@@ -295,6 +300,14 @@
           "GreenPortScan"
         ]
       }
+    },
+    "adapter_smoke": {
+      "backend": "cyborg-cage2",
+      "constructed": true,
+      "cleaned": true,
+      "native_projection_matches": true,
+      "recorded_resources": 2,
+      "realization_recorded": true
     }
   },
   "dependency_resolution": {
@@ -472,7 +485,7 @@
   "admission": {
     "decision": "admitted",
     "authority": "maintainer-selection",
-    "scope": "published raes-adapters[cyborg] runtime",
+    "scope": "maintainer-selected-cyborg-backend",
     "limitations": [
       "no-governed-public-patched-artifact",
       "declared-python-range-not-qualified",
@@ -486,6 +499,7 @@
       "outcome_reproduction": "stochastic-bounded"
     },
     "extra_disposition": "keep the cyborg extra dependency-light rather than publish a local path, editable checkout, install-time clone, or ungoverned wheel",
-    "interpretation": "The maintainer-selected profile is admitted for adapter realization. Artifact and platform coverage gaps bound installability and reproducibility claims; they do not veto the simulator."
+    "interpretation": "The maintainer-selected profile is admitted for adapter realization. Artifact and platform coverage gaps bound installability and reproducibility claims; they do not veto the simulator.",
+    "requalification_trigger": "an immutable governed artifact that contains the packaging-only fix and is qualified across the declared Python and platform support boundary"
   }
 }

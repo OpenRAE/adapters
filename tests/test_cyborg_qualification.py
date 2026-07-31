@@ -1,4 +1,4 @@
-"""Qualification evidence for the selected CybORG/CAGE-2 runtime profile."""
+"""Qualification evidence for the selected CybORG/CAGE-2 backend profile."""
 
 from __future__ import annotations
 
@@ -15,7 +15,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 def test_resources_bind_one_immutable_cage2_source_closure() -> None:
     record = cyborg.load_qualification()
 
-    assert cyborg.__all__ == ["load_qualification", "read_compatibility_patch"]
+    assert {
+        "CyborgProvisioner",
+        "SourceInstalledCyborgDriver",
+        "create_cyborg_manifest",
+        "create_cyborg_target",
+        "load_qualification",
+        "read_compatibility_patch",
+    } <= set(cyborg.__all__)
     assert record["profile_id"] == "cage2-cyborg-2.1-source-26ce1c1"
     assert record["source"] == {
         "repository": "https://github.com/cage-challenge/cage-challenge-2",
@@ -109,6 +116,13 @@ def test_clean_patched_wheel_smoke_is_bounded_and_covers_all_roles() -> None:
     assert runtime["pythonpath"] == "cleared"
     assert runtime["python_safe_path"] is True
     assert runtime["network_after_install"] == "not-required"
+    assert runtime["integrity"] == {
+        "algorithm": "sha256(relative-posix-path + NUL + sha256(source-bytes))",
+        "python_source_count": 337,
+        "python_source_tree_sha256": (
+            "f74427419b587b95e2f083c69f230a28a54871977fb4432644120e7f555d2212"
+        ),
+    }
     assert smoke == {
         "seed": 3,
         "scenario_exists": True,
@@ -130,6 +144,19 @@ def test_clean_patched_wheel_smoke_is_bounded_and_covers_all_roles() -> None:
     assert "reward_vector" not in serialized
     assert "action_id" not in serialized
     assert "native_state" not in serialized
+
+
+def test_raes_adapter_smoke_constructs_and_cleans_the_selected_backend() -> None:
+    smoke = cyborg.load_qualification()["runtime"]["adapter_smoke"]
+
+    assert smoke == {
+        "backend": "cyborg-cage2",
+        "constructed": True,
+        "cleaned": True,
+        "native_projection_matches": True,
+        "recorded_resources": 2,
+        "realization_recorded": True,
+    }
 
 
 def test_selection_dependencies_and_stochastic_sources_are_explicit() -> None:
@@ -206,6 +233,7 @@ def test_legal_defect_and_claim_bounded_packaging_decisions_are_explicit() -> No
         "declared-python-range-not-qualified",
         "declared-platform-range-not-qualified",
     }
+    assert record["admission"]["scope"] == "maintainer-selected-cyborg-backend"
     assert record["admission"]["claim_strength"] == {
         "source_identity": "attested",
         "protocol_configuration": "attested",

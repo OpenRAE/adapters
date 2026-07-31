@@ -4,7 +4,8 @@ These disclosures accompany the source selection
 `cage2-cyborg-2.1-source-26ce1c1`. Each heading is a stable ledger reference;
 the machine-readable tier line binds the precise ADR-069 claim tiers weakened.
 A disclosure permits a bounded claim with the stated weakness. It does not
-erase a qualification limitation or establish any equivalence tier.
+erase a qualification limitation, prevent use of the selected backend, or
+establish any equivalence tier.
 
 ## loss-scenario-user3-port-mismatch
 

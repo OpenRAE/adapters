@@ -206,8 +206,10 @@ contract catalog.
   Any affected mapped fact must retain a source row and an appropriately tiered
   loss.
 - Do not let a mapped row, a complete ledger, a green validator, or a source
-  digest erase a recorded qualification limitation or imply dependency
-  installability, deterministic replay, or outcome equivalence.
+  digest erase a recorded qualification limitation or imply an installable
+  extra, implemented backend capability,
+  deterministic replay, or outcome equivalence. Backend admission comes from
+  maintainer selection; each stronger claim still requires its own evidence.
 - Do not put semantic values into free-form metadata, `mapping_rule`,
   `verification`, comments, logs, or Markdown because the intended RAES target
   is inconvenient.
