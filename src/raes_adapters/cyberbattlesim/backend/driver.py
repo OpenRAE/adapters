@@ -5,13 +5,13 @@ from __future__ import annotations
 import hashlib
 import importlib
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from importlib.metadata import Distribution, PackageNotFoundError, distribution
 from importlib.util import find_spec
 from pathlib import Path, PurePosixPath
 from threading import RLock
-from typing import Any, Protocol, cast
+from typing import Protocol, TypedDict, cast
 
 from raes_adapters.cyberbattlesim import load_qualification
 
@@ -34,10 +34,105 @@ _RUNTIME_SOURCE_PATHS = (
     "cyberbattle/_env/cyberbattle_chain.py",
     "cyberbattle/samples/chainpattern/chainpattern.py",
 )
+_QUALIFICATION_INVALID = "selected simulator qualification is invalid"
+_SOURCE_IDENTITY_INVALID = "selected simulator source identity could not be verified"
+_DEPENDENCY_IDENTITY_INVALID = "selected simulator dependency identity could not be verified"
+
+
+class _ActionSpace(Protocol):
+    """Native action-space methods used by the driver."""
+
+    def seed(self, seed: int) -> None: ...
+
+
+class _NativeEnvironment(Protocol):
+    """Selected native environment surface kept behind the driver."""
+
+    action_space: _ActionSpace
+
+    def reset(self, *, seed: int | None) -> object: ...
+
+    def step(self, action: dict[str, object]) -> object: ...
+
+    def close(self) -> None: ...
+
+
+class _EnvironmentWrapper(Protocol):
+    """Gymnasium wrapper surface used to obtain the native environment."""
+
+    unwrapped: _NativeEnvironment
+
+
+class _GymnasiumModule(Protocol):
+    """Gymnasium module surface used by the selected construction path."""
+
+    def make(self, gym_id: str, **kwargs: object) -> _EnvironmentWrapper: ...
+
+
+class _NumpyModule(Protocol):
+    """NumPy operations needed for private action-mask selection."""
+
+    int32: object
+
+    def argwhere(self, mask: object) -> Sequence[object]: ...
+
+    def asarray(self, value: object, *, dtype: object) -> object: ...
+
+
+class _SourceEnvironmentModule(Protocol):
+    """Selected source environment constructors used by the driver."""
+
+    AttackerGoal: Callable[..., object]
+    DefenderConstraint: Callable[..., object]
+
+
+class _DefenderModule(Protocol):
+    """Selected source defender constructor used by the driver."""
+
+    ScanAndReimageCompromisedMachines: Callable[..., object]
+
+
+class _SelectedSource(TypedDict):
+    """Normalized selected source identity."""
+
+    package: str
+    version: str
+
+
+class _ScenarioSelection(TypedDict):
+    """Normalized scenario construction values."""
+
+    gym_id: str
+    size: int
+
+
+class _TerminationSelection(TypedDict):
+    """Normalized termination and evaluator-cutoff values."""
+
+    attacker_own_atleast: int
+    attacker_own_atleast_percent: int | float
+    defender_maintain_sla: int | float
+    evaluator_cutoff_steps: int
+
+
+class _DefenderSelection(TypedDict):
+    """Normalized defender construction values."""
+
+    probability: int | float
+    scan_capacity: int
+    scan_frequency: int
+
+
+class _Selection(TypedDict):
+    """Normalized selected native protocol configuration."""
+
+    scenario: _ScenarioSelection
+    termination: _TerminationSelection
+    defender: _DefenderSelection
 
 
 @dataclass(frozen=True)
-class DriverResetReport:
+class DriverResetReport(object):  # noqa: UP004
     """Sanitized reset and stochastic-control dispositions."""
 
     operation_ref: str
@@ -46,7 +141,7 @@ class DriverResetReport:
 
 
 @dataclass(frozen=True)
-class DriverStep:
+class DriverStep(object):  # noqa: UP004
     """Sanitized facts from at most one source transition."""
 
     operation_ref: str
@@ -60,7 +155,7 @@ class DriverStep:
 
 
 @dataclass(frozen=True)
-class DriverEvaluation:
+class DriverEvaluation(object):  # noqa: UP004
     """Evaluator-only source facts; never a participant result."""
 
     step_count: int
@@ -73,7 +168,7 @@ class DriverEvaluation:
 
 
 @dataclass(frozen=True)
-class DriverCleanupReport:
+class DriverCleanupReport(object):  # noqa: UP004
     """Sanitized close and verification facts."""
 
     operation_ref: str
@@ -98,7 +193,7 @@ class CyberBattleSimDriverProtocol(Protocol):
     def verify_closed(self) -> bool: ...
 
 
-class CyberBattleSimDriver:
+class CyberBattleSimDriver(object):  # noqa: UP004
     """Lazy in-process driver for the selected public chain profile.
 
     Native objects never leave this class. The portable action selects one
@@ -110,8 +205,8 @@ class CyberBattleSimDriver:
     def __init__(self) -> None:
         self._max_steps: int | None = None
         self._lock = RLock()
-        self._environment: Any | None = None
-        self._numpy: Any | None = None
+        self._environment: _NativeEnvironment | None = None
+        self._numpy: _NumpyModule | None = None
         self._last_observation: object | None = None
         self._step_count = 0
         self._operation_count = 0
@@ -161,8 +256,8 @@ class CyberBattleSimDriver:
                 )
             # Importing ``cyberbattle`` registers CyberBattleChain-v0.
             importlib.import_module("cyberbattle")
-            gymnasium: Any = importlib.import_module("gymnasium")
-            numpy: Any = importlib.import_module("numpy")
+            gymnasium = cast(_GymnasiumModule, importlib.import_module("gymnasium"))
+            numpy = cast(_NumpyModule, importlib.import_module("numpy"))
             self._verify_package_origin(
                 "cyberbattle._env.cyberbattle_env",
                 selected_distribution,
@@ -174,8 +269,14 @@ class CyberBattleSimDriver:
                 "cyberbattle/_env/defender.py",
             )
             self._artifacts_verified = True
-            source_environment: Any = importlib.import_module("cyberbattle._env.cyberbattle_env")
-            defender: Any = importlib.import_module("cyberbattle._env.defender")
+            source_environment = cast(
+                _SourceEnvironmentModule,
+                importlib.import_module("cyberbattle._env.cyberbattle_env"),
+            )
+            defender = cast(
+                _DefenderModule,
+                importlib.import_module("cyberbattle._env.defender"),
+            )
             termination = selection["termination"]
             defender_selection = selection["defender"]
             attacker_goal = source_environment.AttackerGoal(
@@ -346,7 +447,7 @@ class CyberBattleSimDriver:
         selected = numpy.asarray(coordinates[0], dtype=numpy.int32)
         return {native_kind: selected}
 
-    def _require_environment(self) -> Any:
+    def _require_environment(self) -> _NativeEnvironment:
         if self._environment is None or self._closed:
             raise RuntimeError("selected simulator environment is not constructed")
         return self._environment
@@ -357,62 +458,110 @@ class CyberBattleSimDriver:
         return self._max_steps
 
     @staticmethod
-    def _selected_configuration() -> tuple[dict[str, Any], dict[str, str], dict[str, Any]]:
-        qualification = load_qualification()
+    def _selected_configuration() -> tuple[dict[str, object], _SelectedSource, _Selection]:
+        """Load and normalize the maintainer-selected native configuration."""
+
+        qualification = cast(dict[str, object], load_qualification())
         source = qualification.get("source")
         protocol = qualification.get("protocol")
-        selection = protocol.get("selection") if isinstance(protocol, dict) else None
-        if (
-            not isinstance(source, dict)
-            or not isinstance(selection, dict)
-            or not isinstance(source.get("package"), str)
-            or not isinstance(source.get("version"), str)
-        ):
-            raise RuntimeError("selected simulator qualification is invalid")
-        try:
-            scenario = selection["scenario"]
-            termination = selection["termination"]
-            defender = selection["defender"]
-            valid = (
-                isinstance(scenario, dict)
-                and isinstance(scenario["gym_id"], str)
-                and isinstance(scenario["size"], int)
-                and isinstance(termination, dict)
-                and isinstance(termination["attacker_own_atleast"], int)
-                and isinstance(termination["attacker_own_atleast_percent"], (int, float))
-                and isinstance(termination["defender_maintain_sla"], (int, float))
-                and isinstance(termination["evaluator_cutoff_steps"], int)
-                and termination["evaluator_cutoff_steps"] > 0
-                and isinstance(defender, dict)
-                and isinstance(defender["probability"], (int, float))
-                and isinstance(defender["scan_capacity"], int)
-                and isinstance(defender["scan_frequency"], int)
-            )
-        except KeyError as exc:
-            raise RuntimeError("selected simulator qualification is invalid") from exc
-        if not valid:
-            raise RuntimeError("selected simulator qualification is invalid")
+        if not isinstance(source, dict) or not isinstance(protocol, dict):
+            raise RuntimeError(_QUALIFICATION_INVALID)
+        package = source.get("package")
+        version = source.get("version")
+        selection = protocol.get("selection")
+        if not isinstance(package, str) or not isinstance(version, str):
+            raise RuntimeError(_QUALIFICATION_INVALID)
+        if not isinstance(selection, dict):
+            raise RuntimeError(_QUALIFICATION_INVALID)
         return (
             qualification,
-            {
-                "package": source["package"],
-                "version": source["version"],
-            },
-            selection,
+            {"package": package, "version": version},
+            CyberBattleSimDriver._normalize_selection(selection),
         )
 
     @staticmethod
+    def _normalize_selection(selection: dict[object, object]) -> _Selection:
+        """Validate the three selected construction sections independently."""
+
+        scenario = selection.get("scenario")
+        termination = selection.get("termination")
+        defender = selection.get("defender")
+        if not all(isinstance(section, dict) for section in (scenario, termination, defender)):
+            raise RuntimeError(_QUALIFICATION_INVALID)
+        return {
+            "scenario": CyberBattleSimDriver._normalize_scenario(
+                cast(dict[object, object], scenario)
+            ),
+            "termination": CyberBattleSimDriver._normalize_termination(
+                cast(dict[object, object], termination)
+            ),
+            "defender": CyberBattleSimDriver._normalize_defender(
+                cast(dict[object, object], defender)
+            ),
+        }
+
+    @staticmethod
+    def _normalize_scenario(section: dict[object, object]) -> _ScenarioSelection:
+        """Validate and normalize the selected scenario."""
+
+        gym_id = section.get("gym_id")
+        size = section.get("size")
+        if not isinstance(gym_id, str) or not isinstance(size, int):
+            raise RuntimeError(_QUALIFICATION_INVALID)
+        return {"gym_id": gym_id, "size": size}
+
+    @staticmethod
+    def _normalize_termination(section: dict[object, object]) -> _TerminationSelection:
+        """Validate and normalize selected termination controls."""
+
+        own_atleast = section.get("attacker_own_atleast")
+        own_percent = section.get("attacker_own_atleast_percent")
+        maintain_sla = section.get("defender_maintain_sla")
+        cutoff = section.get("evaluator_cutoff_steps")
+        if not isinstance(own_atleast, int) or not isinstance(own_percent, (int, float)):
+            raise RuntimeError(_QUALIFICATION_INVALID)
+        if not isinstance(maintain_sla, (int, float)):
+            raise RuntimeError(_QUALIFICATION_INVALID)
+        if not isinstance(cutoff, int) or cutoff <= 0:
+            raise RuntimeError(_QUALIFICATION_INVALID)
+        return {
+            "attacker_own_atleast": own_atleast,
+            "attacker_own_atleast_percent": own_percent,
+            "defender_maintain_sla": maintain_sla,
+            "evaluator_cutoff_steps": cutoff,
+        }
+
+    @staticmethod
+    def _normalize_defender(section: dict[object, object]) -> _DefenderSelection:
+        """Validate and normalize selected defender controls."""
+
+        probability = section.get("probability")
+        scan_capacity = section.get("scan_capacity")
+        scan_frequency = section.get("scan_frequency")
+        if not isinstance(probability, (int, float)):
+            raise RuntimeError(_QUALIFICATION_INVALID)
+        if not isinstance(scan_capacity, int) or not isinstance(scan_frequency, int):
+            raise RuntimeError(_QUALIFICATION_INVALID)
+        return {
+            "probability": probability,
+            "scan_capacity": scan_capacity,
+            "scan_frequency": scan_frequency,
+        }
+
+    @staticmethod
     def _verify_selected_source(
-        qualification: dict[str, Any],
+        qualification: dict[str, object],
         selected_distribution: Distribution,
     ) -> None:
+        """Verify selected source records and the complete runtime tree."""
+
         CyberBattleSimDriver._verify_runtime_source_tree(
             qualification,
             selected_distribution,
         )
         source_files = qualification.get("source_files")
         if not isinstance(source_files, list):
-            raise RuntimeError("selected simulator source identity could not be verified")
+            raise RuntimeError(_SOURCE_IDENTITY_INVALID)
         expected: dict[str, str] = {}
         for entry in source_files:
             if not isinstance(entry, dict):
@@ -430,64 +579,105 @@ class CyberBattleSimDriver:
                 )
                 content = installed_source.read_bytes()
                 if hashlib.sha256(content).hexdigest() != expected_digest:
-                    raise RuntimeError("selected simulator source identity could not be verified")
+                    raise RuntimeError(_SOURCE_IDENTITY_INVALID)
         except (KeyError, OSError) as exc:
-            raise RuntimeError("selected simulator source identity could not be verified") from exc
+            raise RuntimeError(_SOURCE_IDENTITY_INVALID) from exc
 
     @staticmethod
     def _verify_runtime_source_tree(
-        qualification: dict[str, Any],
+        qualification: dict[str, object],
         selected_distribution: Distribution,
     ) -> None:
+        """Verify every installed file under the selected source import root."""
+
         tree = qualification.get("runtime_source_tree")
         distribution_files = selected_distribution.files
         if not isinstance(tree, dict) or distribution_files is None:
-            raise RuntimeError("selected simulator source identity could not be verified")
+            raise RuntimeError(_SOURCE_IDENTITY_INVALID)
         expected_digest = tree.get("sha256")
         expected_count = tree.get("file_count")
         if not isinstance(expected_digest, str) or not isinstance(expected_count, int):
-            raise RuntimeError("selected simulator source identity could not be verified")
+            raise RuntimeError(_SOURCE_IDENTITY_INVALID)
         paths = CyberBattleSimDriver._runtime_root_paths(
             selected_distribution,
             "cyberbattle",
+            _SOURCE_IDENTITY_INVALID,
         )
         if len(paths) != expected_count:
-            raise RuntimeError("selected simulator source identity could not be verified")
-        digest = hashlib.sha256()
+            raise RuntimeError(_SOURCE_IDENTITY_INVALID)
         package_root = cast(
             Path,
             selected_distribution.locate_file("cyberbattle"),
         ).resolve()
+        observed_digest = CyberBattleSimDriver._installed_tree_digest(
+            selected_distribution,
+            paths,
+            _SOURCE_IDENTITY_INVALID,
+            package_root=package_root,
+        )
+        if observed_digest != expected_digest:
+            raise RuntimeError(_SOURCE_IDENTITY_INVALID)
+
+    @staticmethod
+    def _installed_tree_digest(
+        selected_distribution: Distribution,
+        paths: Sequence[str],
+        identity_error: str,
+        *,
+        package_root: Path | None = None,
+    ) -> str:
+        """Hash sorted installed paths and contents into a portable tree identity."""
+
+        digest = hashlib.sha256()
         try:
-            for source_path in paths:
-                portable_path = PurePosixPath(source_path)
+            for artifact_path in paths:
+                portable_path = PurePosixPath(artifact_path)
                 if portable_path.is_absolute() or ".." in portable_path.parts:
-                    raise RuntimeError("selected simulator source identity could not be verified")
-                installed_source = cast(
+                    raise RuntimeError(identity_error)
+                installed_path = cast(
                     Path,
-                    selected_distribution.locate_file(source_path),
+                    selected_distribution.locate_file(artifact_path),
                 ).resolve()
-                if not installed_source.is_relative_to(package_root):
-                    raise RuntimeError("selected simulator source identity could not be verified")
-                content_digest = hashlib.sha256(installed_source.read_bytes()).hexdigest()
-                digest.update(source_path.encode("utf-8"))
+                if package_root is not None and not installed_path.is_relative_to(package_root):
+                    raise RuntimeError(identity_error)
+                content_digest = hashlib.sha256(installed_path.read_bytes()).hexdigest()
+                digest.update(artifact_path.encode("utf-8"))
                 digest.update(b"\0")
                 digest.update(content_digest.encode("ascii"))
                 digest.update(b"\n")
         except OSError as exc:
-            raise RuntimeError("selected simulator source identity could not be verified") from exc
-        if digest.hexdigest() != expected_digest:
-            raise RuntimeError("selected simulator source identity could not be verified")
+            raise RuntimeError(identity_error) from exc
+        return digest.hexdigest()
 
     @staticmethod
     def _verify_runtime_artifacts(
-        qualification: dict[str, Any],
+        qualification: dict[str, object],
         selected_distribution: Distribution,
     ) -> dict[str, Distribution]:
+        """Verify the complete selected runtime artifact set."""
+
+        selected_versions, records = CyberBattleSimDriver._artifact_maps(qualification)
+        verified: dict[str, Distribution] = {"cyberbattlesim": selected_distribution}
+        for package_name, record in records.items():
+            dependency = CyberBattleSimDriver._verify_runtime_artifact(
+                package_name,
+                record,
+                selected_versions,
+                verified,
+            )
+            verified[package_name] = dependency
+        return verified
+
+    @staticmethod
+    def _artifact_maps(
+        qualification: dict[str, object],
+    ) -> tuple[dict[str, str], dict[str, dict[object, object]]]:
+        """Index selected dependency versions and runtime artifact records."""
+
         artifacts = qualification.get("runtime_artifacts")
         dependencies = qualification.get("dependencies")
         if not isinstance(artifacts, list) or not isinstance(dependencies, list):
-            raise RuntimeError("selected simulator dependency identity could not be verified")
+            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
         selected_versions = {
             str(entry["name"]).casefold(): entry["version"]
             for entry in dependencies
@@ -501,51 +691,75 @@ class CyberBattleSimDriver:
             if isinstance(entry, dict) and isinstance(entry.get("name"), str)
         }
         if set(records) != {"cyberbattlesim", "gymnasium", "numpy"}:
-            raise RuntimeError("selected simulator dependency identity could not be verified")
-        verified: dict[str, Distribution] = {"cyberbattlesim": selected_distribution}
-        for package_name, record in records.items():
-            expected_version = record.get("version")
-            artifact = record.get("artifact")
-            artifact_filename = artifact.get("filename") if isinstance(artifact, dict) else None
-            artifact_digest = artifact.get("sha256") if isinstance(artifact, dict) else None
-            archive_digest_required = (
-                artifact.get("require_direct_archive_sha256")
-                if isinstance(artifact, dict)
-                else None
-            )
-            runtime_identity = (
-                artifact.get("runtime_identity") if isinstance(artifact, dict) else None
-            )
-            dependency_version = selected_versions.get(package_name)
-            if (
-                not isinstance(expected_version, str)
-                or not isinstance(artifact_filename, str)
-                or not CyberBattleSimDriver._is_sha256(artifact_digest)
-                or not isinstance(archive_digest_required, bool)
-                or runtime_identity != "complete-root-tree"
-                or dependency_version != expected_version
-            ):
-                raise RuntimeError("selected simulator dependency identity could not be verified")
-            dependency = verified.get(package_name)
-            if dependency is None:
-                try:
-                    dependency = distribution(package_name)
-                except PackageNotFoundError as exc:
-                    raise RuntimeError(
-                        "selected simulator dependency identity could not be verified"
-                    ) from exc
-            if dependency.version != expected_version:
-                raise RuntimeError("selected simulator dependency identity could not be verified")
-            CyberBattleSimDriver._verify_direct_installation(record, dependency)
-            CyberBattleSimDriver._verify_artifact_roots(record, dependency)
-            verified[package_name] = dependency
-        return verified
+            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
+        return selected_versions, records
+
+    @staticmethod
+    def _verify_runtime_artifact(
+        package_name: str,
+        record: dict[object, object],
+        selected_versions: dict[str, str],
+        verified: dict[str, Distribution],
+    ) -> Distribution:
+        """Verify one selected artifact record and installed distribution."""
+
+        expected_version = CyberBattleSimDriver._validate_artifact_identity(
+            package_name,
+            record,
+            selected_versions,
+        )
+        dependency = CyberBattleSimDriver._resolve_distribution(package_name, verified)
+        if dependency.version != expected_version:
+            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
+        CyberBattleSimDriver._verify_direct_installation(record, dependency)
+        CyberBattleSimDriver._verify_artifact_roots(record, dependency)
+        return dependency
+
+    @staticmethod
+    def _validate_artifact_identity(
+        package_name: str,
+        record: dict[object, object],
+        selected_versions: dict[str, str],
+    ) -> str:
+        """Validate one artifact's declared version and identity policy."""
+
+        expected_version = record.get("version")
+        artifact = record.get("artifact")
+        if not isinstance(expected_version, str) or not isinstance(artifact, dict):
+            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
+        valid = (
+            isinstance(artifact.get("filename"), str)
+            and CyberBattleSimDriver._is_sha256(artifact.get("sha256"))
+            and isinstance(artifact.get("require_direct_archive_sha256"), bool)
+            and artifact.get("runtime_identity") == "complete-root-tree"
+            and selected_versions.get(package_name) == expected_version
+        )
+        if not valid:
+            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
+        return expected_version
+
+    @staticmethod
+    def _resolve_distribution(
+        package_name: str,
+        verified: dict[str, Distribution],
+    ) -> Distribution:
+        """Resolve an installed distribution without leaking package metadata."""
+
+        dependency = verified.get(package_name)
+        if dependency is not None:
+            return dependency
+        try:
+            return distribution(package_name)
+        except PackageNotFoundError as exc:
+            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID) from exc
 
     @staticmethod
     def _verify_direct_installation(
-        record: dict[str, Any],
+        record: dict[object, object],
         selected_distribution: Distribution,
     ) -> None:
+        """Reject unverifiable editable/VCS installs and check archive identity."""
+
         read_text = getattr(selected_distribution, "read_text", None)
         if not callable(read_text):
             return
@@ -558,15 +772,30 @@ class CyberBattleSimDriver:
             artifact.get("require_direct_archive_sha256") if isinstance(artifact, dict) else None
         )
         if not isinstance(expected_digest, str) or not isinstance(require_archive_digest, bool):
-            raise RuntimeError("selected simulator dependency identity could not be verified")
+            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
+        direct_url = CyberBattleSimDriver._load_direct_url(direct_url_text)
+        if not isinstance(direct_url, dict) or "dir_info" in direct_url or "vcs_info" in direct_url:
+            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
+        observed_digest = CyberBattleSimDriver._archive_sha256(direct_url)
+        if require_archive_digest and observed_digest != expected_digest:
+            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
+
+    @staticmethod
+    def _load_direct_url(direct_url_text: str) -> dict[object, object]:
+        """Decode a direct-install provenance record as a JSON object."""
+
         try:
             direct_url = json.loads(direct_url_text)
         except (TypeError, json.JSONDecodeError) as exc:
-            raise RuntimeError(
-                "selected simulator dependency identity could not be verified"
-            ) from exc
-        if not isinstance(direct_url, dict) or "dir_info" in direct_url or "vcs_info" in direct_url:
-            raise RuntimeError("selected simulator dependency identity could not be verified")
+            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID) from exc
+        if not isinstance(direct_url, dict):
+            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
+        return direct_url
+
+    @staticmethod
+    def _archive_sha256(direct_url: dict[object, object]) -> object:
+        """Read modern or legacy SHA-256 metadata from a direct archive."""
+
         archive_info = direct_url.get("archive_info")
         hashes = archive_info.get("hashes") if isinstance(archive_info, dict) else None
         legacy_hash = archive_info.get("hash") if isinstance(archive_info, dict) else None
@@ -575,91 +804,88 @@ class CyberBattleSimDriver:
             algorithm, separator, digest = legacy_hash.partition("=")
             if algorithm == "sha256" and separator:
                 observed_digest = digest
-        if require_archive_digest and observed_digest != expected_digest:
-            raise RuntimeError("selected simulator dependency identity could not be verified")
+        return observed_digest
 
     @staticmethod
     def _verify_artifact_roots(
-        record: dict[str, Any],
+        record: dict[object, object],
         selected_distribution: Distribution,
     ) -> None:
+        """Verify every declared import root for one runtime artifact."""
+
         roots = record.get("roots")
         if not isinstance(roots, list) or not roots:
-            raise RuntimeError("selected simulator dependency identity could not be verified")
+            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
         for root in roots:
             if not isinstance(root, dict):
-                raise RuntimeError("selected simulator dependency identity could not be verified")
-            root_path = root.get("path")
-            expected_count = root.get("file_count")
-            expected_digest = root.get("sha256")
-            if (
-                not isinstance(root_path, str)
-                or not isinstance(expected_count, int)
-                or not CyberBattleSimDriver._is_sha256(expected_digest)
-            ):
-                raise RuntimeError("selected simulator dependency identity could not be verified")
-            paths = CyberBattleSimDriver._runtime_root_paths(
-                selected_distribution,
-                root_path,
-            )
-            if len(paths) != expected_count:
-                raise RuntimeError("selected simulator dependency identity could not be verified")
-            digest = hashlib.sha256()
-            try:
-                for artifact_path in paths:
-                    installed_path = cast(
-                        Path,
-                        selected_distribution.locate_file(artifact_path),
-                    )
-                    content_digest = hashlib.sha256(installed_path.read_bytes()).hexdigest()
-                    digest.update(artifact_path.encode("utf-8"))
-                    digest.update(b"\0")
-                    digest.update(content_digest.encode("ascii"))
-                    digest.update(b"\n")
-            except OSError as exc:
-                raise RuntimeError(
-                    "selected simulator dependency identity could not be verified"
-                ) from exc
-            if digest.hexdigest() != expected_digest:
-                raise RuntimeError("selected simulator dependency identity could not be verified")
+                raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
+            CyberBattleSimDriver._verify_artifact_root(root, selected_distribution)
+
+    @staticmethod
+    def _verify_artifact_root(
+        root: dict[object, object],
+        selected_distribution: Distribution,
+    ) -> None:
+        """Verify one complete installed import-root tree."""
+
+        root_path = root.get("path")
+        expected_count = root.get("file_count")
+        expected_digest = root.get("sha256")
+        if not isinstance(root_path, str) or not isinstance(expected_count, int):
+            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
+        if not CyberBattleSimDriver._is_sha256(expected_digest):
+            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
+        paths = CyberBattleSimDriver._runtime_root_paths(
+            selected_distribution,
+            root_path,
+            _DEPENDENCY_IDENTITY_INVALID,
+        )
+        if len(paths) != expected_count:
+            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
+        observed_digest = CyberBattleSimDriver._installed_tree_digest(
+            selected_distribution,
+            paths,
+            _DEPENDENCY_IDENTITY_INVALID,
+        )
+        if observed_digest != expected_digest:
+            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
 
     @staticmethod
     def _runtime_root_paths(
         selected_distribution: Distribution,
         root_path: str,
+        identity_error: str = _DEPENDENCY_IDENTITY_INVALID,
     ) -> list[str]:
+        """Enumerate a real, symlink-free installed import-root tree."""
+
         portable_root = PurePosixPath(root_path)
         if portable_root.is_absolute() or ".." in portable_root.parts:
-            raise RuntimeError("selected simulator dependency identity could not be verified")
+            raise RuntimeError(identity_error)
         installed_root = cast(
             Path,
             selected_distribution.locate_file(root_path),
         )
         if installed_root.is_symlink() or not installed_root.is_dir():
-            raise RuntimeError("selected simulator dependency identity could not be verified")
+            raise RuntimeError(identity_error)
         paths: list[str] = []
         try:
             for installed_path in installed_root.rglob("*"):
                 if installed_path.is_symlink():
-                    raise RuntimeError(
-                        "selected simulator dependency identity could not be verified"
-                    )
+                    raise RuntimeError(identity_error)
                 if installed_path.is_dir():
                     continue
                 if not installed_path.is_file():
-                    raise RuntimeError(
-                        "selected simulator dependency identity could not be verified"
-                    )
+                    raise RuntimeError(identity_error)
                 relative_path = installed_path.relative_to(installed_root)
                 paths.append(str(portable_root / PurePosixPath(relative_path.as_posix())))
         except OSError as exc:
-            raise RuntimeError(
-                "selected simulator dependency identity could not be verified"
-            ) from exc
+            raise RuntimeError(identity_error) from exc
         return sorted(paths)
 
     @staticmethod
     def _is_sha256(value: object) -> bool:
+        """Return whether a value is a lowercase SHA-256 digest."""
+
         return (
             isinstance(value, str)
             and len(value) == 64

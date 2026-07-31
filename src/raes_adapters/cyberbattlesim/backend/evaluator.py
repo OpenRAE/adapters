@@ -63,17 +63,21 @@ _SUPPORTED_RESOURCE_TYPES = frozenset(
 
 
 def _now_iso() -> str:
+    """Return a portable UTC timestamp."""
+
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _scoped_id(base: str, projection_ref: str) -> str:
+    """Scope an artifact identity to one evaluator projection."""
+
     if not projection_ref:
         raise RuntimeError("CyberBattleSim evaluation projection identity is unavailable")
     identity_digest = hashlib.sha256(projection_ref.encode("utf-8")).hexdigest()
     return f"{base}.{identity_digest}"
 
 
-class CyberBattleSimEvaluator:
+class CyberBattleSimEvaluator(object):  # noqa: UP004
     """Read evaluator-owned facts without advancing the source environment."""
 
     def __init__(self, driver: CyberBattleSimDriverProtocol) -> None:
@@ -91,39 +95,115 @@ class CyberBattleSimEvaluator:
         plan: EvaluationPlan,
         snapshot: RuntimeSnapshot,
     ) -> ApplyResult:
-        unsupported = [
-            operation
-            for operation in plan.operations
-            if operation.resource_type not in _SUPPORTED_RESOURCE_TYPES
-        ]
-        if unsupported:
-            operation = unsupported[0]
-            return ApplyResult(
-                success=False,
-                snapshot=snapshot,
-                diagnostics=[
-                    Diagnostic(
-                        code="cyberbattlesim.evaluation.unsupported-resource",
-                        domain="evaluation",
-                        address=operation.address,
-                        message=(
-                            "The selected CyberBattleSim profile does not support "
-                            "this evaluation resource type."
-                        ),
-                    )
-                ],
-            )
-        mutating_operations = [
-            operation for operation in plan.operations if operation.action != ChangeAction.UNCHANGED
-        ]
-        if not mutating_operations:
+        """Apply an evaluation plan and project evaluator-owned source facts."""
+
+        terminal_result = self._terminal_result(plan, snapshot)
+        if terminal_result is not None:
+            return terminal_result
+        evaluation, projection_failure = self._evaluation_projection(plan, snapshot)
+        if projection_failure is not None:
+            return projection_failure
+        return self._apply_projection(plan, snapshot, evaluation)
+
+    @staticmethod
+    def _terminal_result(
+        plan: EvaluationPlan,
+        snapshot: RuntimeSnapshot,
+    ) -> ApplyResult | None:
+        """Return an unsupported failure or unchanged-plan success when terminal."""
+
+        unsupported = CyberBattleSimEvaluator._unsupported_result(plan, snapshot)
+        if unsupported is not None:
+            return unsupported
+        if not CyberBattleSimEvaluator._has_mutations(plan):
             return ApplyResult(success=True, snapshot=snapshot)
-        needs_projection = any(
+        return None
+
+    @staticmethod
+    def _unsupported_result(
+        plan: EvaluationPlan,
+        snapshot: RuntimeSnapshot,
+    ) -> ApplyResult | None:
+        """Return a portable failure for the first unsupported resource."""
+
+        operation = next(
+            (
+                item
+                for item in plan.operations
+                if item.resource_type not in _SUPPORTED_RESOURCE_TYPES
+            ),
+            None,
+        )
+        if operation is None:
+            return None
+        return ApplyResult(
+            success=False,
+            snapshot=snapshot,
+            diagnostics=[
+                Diagnostic(
+                    code="cyberbattlesim.evaluation.unsupported-resource",
+                    domain="evaluation",
+                    address=operation.address,
+                    message=(
+                        "The selected CyberBattleSim profile does not support "
+                        "this evaluation resource type."
+                    ),
+                )
+            ],
+        )
+
+    @staticmethod
+    def _has_mutations(plan: EvaluationPlan) -> bool:
+        """Return whether a plan changes evaluator-owned state."""
+
+        return any(operation.action != ChangeAction.UNCHANGED for operation in plan.operations)
+
+    @staticmethod
+    def _needs_projection(plan: EvaluationPlan) -> bool:
+        """Return whether source facts are required by this plan."""
+
+        return any(
             operation.action in {ChangeAction.CREATE, ChangeAction.UPDATE}
             and operation.resource_type in {"condition-binding", "objective"}
             for operation in plan.operations
         )
-        evaluation = DriverEvaluation(
+
+    def _evaluation_projection(
+        self,
+        plan: EvaluationPlan,
+        snapshot: RuntimeSnapshot,
+    ) -> tuple[DriverEvaluation, ApplyResult | None]:
+        """Read and record one evaluator projection when the plan requires it."""
+
+        if not self._needs_projection(plan):
+            self._clear_evidence()
+            return self._empty_evaluation(), None
+        try:
+            evaluation = self._driver.evaluate()
+        except Exception:
+            return self._empty_evaluation(), self._projection_failure(snapshot)
+        captured_at = _now_iso()
+        self._capture_spec = self._capture_specification(evaluation, captured_at)
+        evidence_record, derived_measure = self._experiment_evidence(
+            evaluation,
+            captured_at,
+        )
+        self._evidence_records = (evidence_record,)
+        self._derived_measures = (derived_measure,)
+        return evaluation, None
+
+    def _clear_evidence(self) -> None:
+        """Clear evaluator evidence when no source projection is needed."""
+
+        self._capture_spec = None
+        self._evidence_records = ()
+        self._derived_measures = ()
+
+    @staticmethod
+    def _empty_evaluation() -> DriverEvaluation:
+        """Return the non-source placeholder used for metadata-only changes."""
+
+        return DriverEvaluation(
             execution_ref="cyberbattlesim.no-execution",
             projection_ref="cyberbattlesim.no-projection",
             step_count=0,
@@ -132,133 +212,47 @@ class CyberBattleSimEvaluator:
             truncated=False,
             terminal_cause=None,
         )
-        if needs_projection:
-            try:
-                evaluation = self._driver.evaluate()
-            except Exception:
-                return ApplyResult(
-                    success=False,
-                    snapshot=snapshot,
-                    diagnostics=[
-                        Diagnostic(
-                            code="cyberbattlesim.evaluation.projection-failed",
-                            domain="evaluation",
-                            address="evaluation.cyberbattlesim.selected-profile",
-                            message=(
-                                "The CyberBattleSim evaluator could not project "
-                                "the selected run facts."
-                            ),
-                        )
-                    ],
-                )
-            captured_at = _now_iso()
-            self._capture_spec = self._capture_specification(evaluation, captured_at)
-            evidence_record, derived_measure = self._experiment_evidence(
-                evaluation,
-                captured_at,
-            )
-            self._evidence_records = (evidence_record,)
-            self._derived_measures = (derived_measure,)
-        else:
-            self._capture_spec = None
-            self._evidence_records = ()
-            self._derived_measures = ()
 
-        entries = dict(snapshot.entries)
-        results = dict(snapshot.evaluation_results)
-        history = {address: list(events) for address, events in snapshot.evaluation_history.items()}
-        truth_results = dict(snapshot.proposition_truth_results)
-        changed_addresses: list[str] = []
-        now = _now_iso()
-        evaluation_evidence_ref = (
+    @staticmethod
+    def _projection_failure(snapshot: RuntimeSnapshot) -> ApplyResult:
+        """Return a bounded source-projection failure."""
+
+        return ApplyResult(
+            success=False,
+            snapshot=snapshot,
+            diagnostics=[
+                Diagnostic(
+                    code="cyberbattlesim.evaluation.projection-failed",
+                    domain="evaluation",
+                    address="evaluation.cyberbattlesim.selected-profile",
+                    message=(
+                        "The CyberBattleSim evaluator could not project the selected run facts."
+                    ),
+                )
+            ],
+        )
+
+    def _apply_projection(
+        self,
+        plan: EvaluationPlan,
+        snapshot: RuntimeSnapshot,
+        evaluation: DriverEvaluation,
+    ) -> ApplyResult:
+        """Apply normalized evaluator state and truth projections."""
+
+        needs_projection = self._needs_projection(plan)
+        evidence_ref = (
             _scoped_id(EVALUATION_EVIDENCE_REF, evaluation.projection_ref)
             if needs_projection
             else None
         )
-        for operation in plan.operations:
-            if operation.action == ChangeAction.UNCHANGED:
-                continue
-            if operation.action == ChangeAction.DELETE:
-                entries.pop(operation.address, None)
-                results.pop(operation.address, None)
-                history.pop(operation.address, None)
-                truth_results.pop(operation.address, None)
-                changed_addresses.append(operation.address)
-                continue
-            status = (
-                "admitted"
-                if operation.resource_type in {"proposition", "assertion"}
-                else "evaluating"
-            )
-            entries[operation.address] = SnapshotEntry(
-                address=operation.address,
-                domain=RuntimeDomain.EVALUATION,
-                resource_type=operation.resource_type,
-                payload=operation.payload,
-                ordering_dependencies=operation.ordering_dependencies,
-                refresh_dependencies=operation.refresh_dependencies,
-                status=status,
-            )
-            if operation.resource_type not in {"proposition", "assertion"}:
-                result_state = self._result_state(
-                    operation,
-                    evaluation,
-                    now,
-                    evaluation_evidence_ref,
-                )
-                result_payload = result_state.model_dump(mode="json")
-                results[operation.address] = result_payload
-                history[operation.address] = [
-                    event.model_dump(mode="json")
-                    for event in self._history_events(result_state, now)
-                ]
-            changed_addresses.append(operation.address)
-
-        proposition_bases = {
-            operation.address: operation.payload.get("evaluation_basis")
-            for operation in plan.operations
-            if operation.resource_type == "proposition"
-        }
-        for operation in plan.operations:
-            if (
-                operation.action in {ChangeAction.DELETE, ChangeAction.UNCHANGED}
-                or operation.resource_type != "assertion"
-            ):
-                continue
-            proposition_address = operation.payload.get("proposition_address")
-            polarity = operation.payload.get("polarity")
-            evaluation_basis = (
-                proposition_bases.get(proposition_address)
-                if isinstance(proposition_address, str)
-                else None
-            )
-            if (
-                not isinstance(proposition_address, str)
-                or polarity not in {"positive", "negative"}
-                or evaluation_basis not in {"declared_state", "observed_state"}
-            ):
-                continue
-            truth_result = PropositionTruthResultModel(
-                result_id=f"truth.{operation.address}",
-                proposition_address=proposition_address,
-                assertion_address=operation.address,
-                assertion_polarity=polarity,
-                proposition_outcome="unknown",
-                assertion_outcome="unknown",
-                evaluation_basis=evaluation_basis,
-                indeterminacy_reason=("lossy_evidence" if needs_projection else "missing_evidence"),
-                evidence_refs=(
-                    [evaluation_evidence_ref] if evaluation_evidence_ref is not None else []
-                ),
-                loss_disclosures=[
-                    PropositionLossDisclosureModel(
-                        kind="lossy",
-                        within_admissible_bound=True,
-                    )
-                ],
-            )
-            truth_results[operation.address] = truth_result.model_dump(mode="json")
-
+        entries, results, history, truth_results, changed = self._apply_operations(
+            plan,
+            snapshot,
+            evaluation,
+            evidence_ref,
+        )
+        self._apply_truth_results(plan, truth_results, evidence_ref, needs_projection)
         self._running = bool(plan.resources or plan.operations)
         self._startup_order = list(plan.startup_order)
         self._results = results
@@ -271,7 +265,157 @@ class CyberBattleSimEvaluator:
                 evaluation_history=history,
                 proposition_truth_results=truth_results,
             ),
-            changed_addresses=changed_addresses,
+            changed_addresses=changed,
+        )
+
+    def _apply_operations(
+        self,
+        plan: EvaluationPlan,
+        snapshot: RuntimeSnapshot,
+        evaluation: DriverEvaluation,
+        evidence_ref: str | None,
+    ) -> tuple[
+        dict[str, SnapshotEntry],
+        dict[str, dict[str, object]],
+        dict[str, list[dict[str, object]]],
+        dict[str, dict[str, object]],
+        list[str],
+    ]:
+        """Apply create, update, and delete operations to copied state maps."""
+
+        entries = dict(snapshot.entries)
+        results = dict(snapshot.evaluation_results)
+        history = {address: list(events) for address, events in snapshot.evaluation_history.items()}
+        truth_results = dict(snapshot.proposition_truth_results)
+        changed: list[str] = []
+        now = _now_iso()
+        for operation in plan.operations:
+            if operation.action == ChangeAction.UNCHANGED:
+                continue
+            if operation.action == ChangeAction.DELETE:
+                self._delete_operation(operation, entries, results, history, truth_results)
+            else:
+                self._upsert_operation(
+                    operation,
+                    entries,
+                    results,
+                    history,
+                    evaluation,
+                    now,
+                    evidence_ref,
+                )
+            changed.append(operation.address)
+        return entries, results, history, truth_results, changed
+
+    @staticmethod
+    def _delete_operation(
+        operation: EvaluationOp,
+        entries: dict[str, SnapshotEntry],
+        results: dict[str, dict[str, object]],
+        history: dict[str, list[dict[str, object]]],
+        truth_results: dict[str, dict[str, object]],
+    ) -> None:
+        """Delete one evaluator resource and all owned result state."""
+
+        entries.pop(operation.address, None)
+        results.pop(operation.address, None)
+        history.pop(operation.address, None)
+        truth_results.pop(operation.address, None)
+
+    def _upsert_operation(
+        self,
+        operation: EvaluationOp,
+        entries: dict[str, SnapshotEntry],
+        results: dict[str, dict[str, object]],
+        history: dict[str, list[dict[str, object]]],
+        evaluation: DriverEvaluation,
+        now: str,
+        evidence_ref: str | None,
+    ) -> None:
+        """Create or update one evaluator resource and typed result state."""
+
+        is_truth_resource = operation.resource_type in {"proposition", "assertion"}
+        entries[operation.address] = SnapshotEntry(
+            address=operation.address,
+            domain=RuntimeDomain.EVALUATION,
+            resource_type=operation.resource_type,
+            payload=operation.payload,
+            ordering_dependencies=operation.ordering_dependencies,
+            refresh_dependencies=operation.refresh_dependencies,
+            status="admitted" if is_truth_resource else "evaluating",
+        )
+        if is_truth_resource:
+            return
+        result_state = self._result_state(operation, evaluation, now, evidence_ref)
+        results[operation.address] = result_state.model_dump(mode="json")
+        history[operation.address] = [
+            event.model_dump(mode="json") for event in self._history_events(result_state, now)
+        ]
+
+    @staticmethod
+    def _apply_truth_results(
+        plan: EvaluationPlan,
+        truth_results: dict[str, dict[str, object]],
+        evidence_ref: str | None,
+        needs_projection: bool,
+    ) -> None:
+        """Project admitted assertions as bounded unknown truth outcomes."""
+
+        proposition_bases = {
+            operation.address: operation.payload.get("evaluation_basis")
+            for operation in plan.operations
+            if operation.resource_type == "proposition"
+        }
+        for operation in plan.operations:
+            truth_result = CyberBattleSimEvaluator._truth_result(
+                operation,
+                proposition_bases,
+                evidence_ref,
+                needs_projection,
+            )
+            if truth_result is not None:
+                truth_results[operation.address] = truth_result.model_dump(mode="json")
+
+    @staticmethod
+    def _truth_result(
+        operation: EvaluationOp,
+        proposition_bases: dict[str, object],
+        evidence_ref: str | None,
+        needs_projection: bool,
+    ) -> PropositionTruthResultModel | None:
+        """Build one bounded truth result when an assertion is well formed."""
+
+        if (
+            operation.action in {ChangeAction.DELETE, ChangeAction.UNCHANGED}
+            or operation.resource_type != "assertion"
+        ):
+            return None
+        proposition_address = operation.payload.get("proposition_address")
+        polarity = operation.payload.get("polarity")
+        evaluation_basis = proposition_bases.get(str(proposition_address))
+        valid = (
+            isinstance(proposition_address, str)
+            and polarity in {"positive", "negative"}
+            and evaluation_basis in {"declared_state", "observed_state"}
+        )
+        if not valid:
+            return None
+        return PropositionTruthResultModel(
+            result_id=f"truth.{operation.address}",
+            proposition_address=proposition_address,
+            assertion_address=operation.address,
+            assertion_polarity=polarity,
+            proposition_outcome="unknown",
+            assertion_outcome="unknown",
+            evaluation_basis=evaluation_basis,
+            indeterminacy_reason=("lossy_evidence" if needs_projection else "missing_evidence"),
+            evidence_refs=[evidence_ref] if evidence_ref is not None else [],
+            loss_disclosures=[
+                PropositionLossDisclosureModel(
+                    kind="lossy",
+                    within_admissible_bound=True,
+                )
+            ],
         )
 
     @staticmethod
@@ -410,31 +554,58 @@ class CyberBattleSimEvaluator:
         evaluation: DriverEvaluation,
         now: str,
     ) -> tuple[ExperimentEvidenceRecordModel, ExperimentDerivedMeasureModel]:
+        """Build projection-scoped evidence and its derived reward measure."""
+
+        source_revision = CyberBattleSimEvaluator._source_revision()
+        evidence_record_id = _scoped_id(
+            EVALUATION_EVIDENCE_REF,
+            evaluation.projection_ref,
+        )
+        evidence_record = CyberBattleSimEvaluator._evidence_record(
+            evaluation,
+            now,
+            source_revision,
+            evidence_record_id,
+        )
+        derived_measure = CyberBattleSimEvaluator._derived_measure(
+            evaluation,
+            now,
+            evidence_record_id,
+        )
+        return evidence_record, derived_measure
+
+    @staticmethod
+    def _source_revision() -> str:
+        """Read the selected source revision used in evidence provenance."""
+
         qualification = load_qualification()
         source = qualification.get("source")
         source_revision = source.get("commit") if isinstance(source, dict) else None
         if not isinstance(source_revision, str):
             raise RuntimeError("selected simulator qualification is invalid")
-        evidence_record_id = _scoped_id(
-            EVALUATION_EVIDENCE_REF,
-            evaluation.projection_ref,
-        )
+        return source_revision
+
+    @staticmethod
+    def _evidence_record(
+        evaluation: DriverEvaluation,
+        now: str,
+        source_revision: str,
+        evidence_record_id: str,
+    ) -> ExperimentEvidenceRecordModel:
+        """Build one redacted, checksummed evaluator evidence record."""
+
         capture_spec_id = _scoped_id(_CAPTURE_SPEC_ID, evaluation.projection_ref)
         capture_requirement_id = _scoped_id(
             _CAPTURE_REQUIREMENT_ID,
             evaluation.projection_ref,
         )
         capture_window_id = _scoped_id(_CAPTURE_WINDOW_ID, evaluation.projection_ref)
-        derived_measure_id = _scoped_id(
-            "measure.cyberbattlesim.cumulative-attacker-reward",
-            evaluation.projection_ref,
-        )
         payload_summary = (
             "Sanitized evaluator summary: "
             f"{evaluation.step_count} source transitions and cumulative "
             f"reward {evaluation.cumulative_reward:.17g}."
         )
-        evidence_record = ExperimentEvidenceRecordModel(
+        return ExperimentEvidenceRecordModel(
             schema_version="experiment-evidence-record/v1",
             evidence_record_id=evidence_record_id,
             record_version=_EVIDENCE_RECORD_VERSION,
@@ -486,7 +657,20 @@ class CyberBattleSimEvaluator:
                 )
             ],
         )
-        derived_measure = ExperimentDerivedMeasureModel(
+
+    @staticmethod
+    def _derived_measure(
+        evaluation: DriverEvaluation,
+        now: str,
+        evidence_record_id: str,
+    ) -> ExperimentDerivedMeasureModel:
+        """Build the bounded cumulative-reward derived measure."""
+
+        derived_measure_id = _scoped_id(
+            "measure.cyberbattlesim.cumulative-attacker-reward",
+            evaluation.projection_ref,
+        )
+        return ExperimentDerivedMeasureModel(
             schema_version="experiment-derived-measure/v1",
             derived_measure_id=derived_measure_id,
             measure_version="1.0.0",
@@ -534,13 +718,14 @@ class CyberBattleSimEvaluator:
                 )
             ],
         )
-        return evidence_record, derived_measure
 
     @staticmethod
     def _capture_specification(
         evaluation: DriverEvaluation,
         now: str,
     ) -> ExperimentCaptureSpecModel:
+        """Build the projection-scoped evaluator capture specification."""
+
         capture_spec_id = _scoped_id(_CAPTURE_SPEC_ID, evaluation.projection_ref)
         capture_requirement_id = _scoped_id(
             _CAPTURE_REQUIREMENT_ID,

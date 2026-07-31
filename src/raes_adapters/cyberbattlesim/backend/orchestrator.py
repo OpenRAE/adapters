@@ -31,10 +31,12 @@ _SUPPORTED_RESOURCE_TYPES = frozenset({"event", "workflow"})
 
 
 def _now_iso() -> str:
+    """Return a portable UTC timestamp."""
+
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
-class CyberBattleSimOrchestrator:
+class CyberBattleSimOrchestrator(object):  # noqa: UP004
     """Own workflow lifecycle only; participant runtime owns source steps."""
 
     def __init__(self) -> None:

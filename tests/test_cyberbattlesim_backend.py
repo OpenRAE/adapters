@@ -382,7 +382,8 @@ def test_provisioner_reconciles_live_driver_and_orchestrator_never_steps_driver(
     applied = provisioner.apply(plan, snapshot)
     repeated = provisioner.apply(plan, applied.snapshot)
 
-    assert applied.success and repeated.success
+    assert applied.success
+    assert repeated.success
     assert driver.construct_calls == 2
     assert applied.snapshot.entries["provision.node.entry-client"].status == "applied"
 
@@ -1310,53 +1311,60 @@ def test_live_driver_is_lazy_seed_bounded_and_performs_exactly_one_native_step(
     assert environment.action_space_seeds == [20260729]
     assert len(environment.native_steps) == 1
     assert tuple(environment.native_steps[0]) == ("local_vulnerability",)
-    assert step.source_transition and step.processed
+    assert step.source_transition
+    assert step.processed
     assert step.step_number == 1
     assert step.terminal_cause == "evaluator-cutoff"
     assert evaluation.cumulative_reward == -3.5
     assert evaluation.terminal_cause == "evaluator-cutoff"
     assert evaluation.execution_ref == reset.operation_ref
     assert evaluation.projection_ref == f"{reset.operation_ref}.evaluation.1"
-    assert first_close.verified and not first_close.already_closed
-    assert second_close.verified and second_close.already_closed
+    assert first_close.verified
+    assert not first_close.already_closed
+    assert second_close.verified
+    assert second_close.already_closed
     assert environment.close_calls == 1
 
     imported_modules.clear()
     transitive_source = source_root / "cyberbattle/simulation/model.py"
     transitive_source.write_bytes(b"tampered transitive runtime module")
+    tampered_driver = CyberBattleSimDriver()
     with pytest.raises(
         RuntimeError,
         match="selected simulator dependency identity could not be verified",
     ):
-        CyberBattleSimDriver().construct()
+        tampered_driver.construct()
     assert imported_modules == []
 
     transitive_source.write_bytes(source_content["cyberbattle/simulation/model.py"])
     injected_extension = source_root / "cyberbattle/_env/cyberbattle_env.so"
     injected_extension.write_bytes(b"unqualified native extension")
+    injected_driver = CyberBattleSimDriver()
     with pytest.raises(
         RuntimeError,
         match="selected simulator dependency identity could not be verified",
     ):
-        CyberBattleSimDriver().construct()
+        injected_driver.construct()
     assert imported_modules == []
 
     injected_extension.unlink()
     distributions[
         "cyberbattlesim"
     ].direct_url_text = '{"dir_info":{"editable":true},"url":"file:///unqualified/source"}'
+    editable_driver = CyberBattleSimDriver()
     with pytest.raises(
         RuntimeError,
         match="selected simulator dependency identity could not be verified",
     ):
-        CyberBattleSimDriver().construct()
+        editable_driver.construct()
     assert imported_modules == []
 
     distributions["cyberbattlesim"].direct_url_text = None
     module_origins["cyberbattle"] = tmp_path / "unselected/cyberbattle/__init__.py"
+    unselected_driver = CyberBattleSimDriver()
     with pytest.raises(
         RuntimeError,
         match="selected simulator module origin could not be verified",
     ):
-        CyberBattleSimDriver().construct()
+        unselected_driver.construct()
     assert imported_modules == []

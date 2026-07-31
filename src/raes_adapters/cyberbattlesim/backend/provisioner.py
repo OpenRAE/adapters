@@ -25,7 +25,7 @@ _SUPPORTED_RESOURCE_TYPES = frozenset(
 )
 
 
-class CyberBattleSimProvisioner:
+class CyberBattleSimProvisioner(object):  # noqa: UP004
     """Realize the selected generated chain while preserving portable intent."""
 
     def __init__(self, driver: CyberBattleSimDriverProtocol) -> None:
@@ -54,40 +54,13 @@ class CyberBattleSimProvisioner:
         plan: ProvisioningPlan,
         snapshot: RuntimeSnapshot,
     ) -> ApplyResult:
-        diagnostics = self.validate(plan)
-        if any(diagnostic.is_error for diagnostic in diagnostics):
-            return ApplyResult(
-                success=False,
-                snapshot=snapshot,
-                diagnostics=diagnostics,
-            )
-        mutating_operations = [
-            operation for operation in plan.operations if operation.action != ChangeAction.UNCHANGED
-        ]
-        if not mutating_operations:
-            return ApplyResult(success=True, snapshot=snapshot, diagnostics=diagnostics)
+        """Apply selected-source construction and portable state changes."""
 
-        should_construct = any(
-            operation.action in {ChangeAction.CREATE, ChangeAction.UPDATE}
-            for operation in plan.operations
-        )
-        if should_construct:
-            try:
-                self._driver.construct()
-            except Exception:
-                diagnostics.append(
-                    Diagnostic(
-                        code="cyberbattlesim.provisioning.construct-failed",
-                        domain="provisioning",
-                        address="provision.cyberbattlesim.selected-profile",
-                        message=("The selected CyberBattleSim source could not be constructed."),
-                    )
-                )
-                return ApplyResult(
-                    success=False,
-                    snapshot=snapshot,
-                    diagnostics=diagnostics,
-                )
+        diagnostics = self.validate(plan)
+        preflight = self._preflight(plan, snapshot, diagnostics)
+        if preflight is not None:
+            return preflight
+
         entries = dict(snapshot.entries)
         changed_addresses: list[str] = []
         for operation in plan.operations:
@@ -114,6 +87,56 @@ class CyberBattleSimProvisioner:
             diagnostics=diagnostics,
             changed_addresses=changed_addresses,
         )
+
+    def _preflight(
+        self,
+        plan: ProvisioningPlan,
+        snapshot: RuntimeSnapshot,
+        diagnostics: list[Diagnostic],
+    ) -> ApplyResult | None:
+        """Return a terminal validation, no-op, or construction result."""
+
+        if any(diagnostic.is_error for diagnostic in diagnostics):
+            return ApplyResult(
+                success=False,
+                snapshot=snapshot,
+                diagnostics=diagnostics,
+            )
+        mutating_operations = [
+            operation for operation in plan.operations if operation.action != ChangeAction.UNCHANGED
+        ]
+        if not mutating_operations:
+            return ApplyResult(success=True, snapshot=snapshot, diagnostics=diagnostics)
+        should_construct = any(
+            operation.action in {ChangeAction.CREATE, ChangeAction.UPDATE}
+            for operation in plan.operations
+        )
+        return self._construct_failure(snapshot, diagnostics) if should_construct else None
+
+    def _construct_failure(
+        self,
+        snapshot: RuntimeSnapshot,
+        diagnostics: list[Diagnostic],
+    ) -> ApplyResult | None:
+        """Construct the selected source and bound any native failure."""
+
+        try:
+            self._driver.construct()
+        except Exception:
+            diagnostics.append(
+                Diagnostic(
+                    code="cyberbattlesim.provisioning.construct-failed",
+                    domain="provisioning",
+                    address="provision.cyberbattlesim.selected-profile",
+                    message=("The selected CyberBattleSim source could not be constructed."),
+                )
+            )
+            return ApplyResult(
+                success=False,
+                snapshot=snapshot,
+                diagnostics=diagnostics,
+            )
+        return None
 
 
 __all__ = ["CyberBattleSimProvisioner"]

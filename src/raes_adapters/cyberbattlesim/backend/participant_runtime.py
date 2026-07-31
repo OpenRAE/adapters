@@ -51,6 +51,8 @@ _ACTION_KIND_BY_CONTRACT = {
 
 
 def _now_iso() -> str:
+    """Return a portable UTC timestamp."""
+
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
@@ -188,6 +190,8 @@ class CyberBattleSimParticipantRuntime(BaseParticipantRuntime):  # type: ignore[
         *,
         episode_id: str,
     ) -> ParticipantNativeActionExecution:
+        """Validate the portable action kind before native execution."""
+
         action_kind = _ACTION_KIND_BY_CONTRACT.get(request.action_contract_address)
         if action_kind is None or request.validated_selection is None:
             return self._rejected_action(
@@ -200,6 +204,22 @@ class CyberBattleSimParticipantRuntime(BaseParticipantRuntime):  # type: ignore[
                     "The selected CyberBattleSim profile does not support this participant action."
                 ),
             )
+        return self._execute_supported_action(
+            request,
+            snapshot,
+            episode_id=episode_id,
+            action_kind=action_kind,
+        )
+
+    def _execute_supported_action(
+        self,
+        request: ParticipantActionAdmissionRequest,
+        snapshot: RuntimeSnapshot,
+        *,
+        episode_id: str,
+        action_kind: str,
+    ) -> ParticipantNativeActionExecution:
+        """Execute one supported action and bound native failures."""
 
         try:
             step = self._driver.step(action_kind)
@@ -226,6 +246,22 @@ class CyberBattleSimParticipantRuntime(BaseParticipantRuntime):  # type: ignore[
                 code="cyberbattlesim.participant.action-unavailable",
                 message=("No source transition was available for the admitted participant action."),
             )
+        return self._accepted_action(
+            request,
+            snapshot,
+            episode_id=episode_id,
+            step=step,
+        )
+
+    def _accepted_action(
+        self,
+        request: ParticipantActionAdmissionRequest,
+        snapshot: RuntimeSnapshot,
+        *,
+        episode_id: str,
+        step: DriverStep,
+    ) -> ParticipantNativeActionExecution:
+        """Build portable results for one completed source transition."""
 
         observation = self._observation(
             request,

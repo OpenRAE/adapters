@@ -47,6 +47,8 @@ CYBERBATTLESIM_BACKEND_NAME = "cyberbattlesim"
 
 
 def _adapter_version() -> str:
+    """Return the installed adapter version or a local-development marker."""
+
     try:
         return distribution_version("raes-adapters")
     except PackageNotFoundError:
@@ -54,6 +56,8 @@ def _adapter_version() -> str:
 
 
 def _model_contract_id(model: type[ContractModel]) -> str:
+    """Resolve a published RAES model's contract identity."""
+
     schema_version = model.model_fields["schema_version"].default
     if not isinstance(schema_version, str):
         schema_property = model.model_json_schema()["properties"]["schema_version"]
@@ -91,6 +95,8 @@ def _supported_contracts(capabilities: BackendCapabilitySet) -> frozenset[str]:
 
 
 def _concept_bindings() -> tuple[ConceptBinding, ...]:
+    """Bind declared capability scopes to RAES-owned concept families."""
+
     return (
         ConceptBinding(
             scope="capabilities.provisioner.supported_node_types",
@@ -139,108 +145,130 @@ def _concept_bindings() -> tuple[ConceptBinding, ...]:
     )
 
 
+def _provisioner_capabilities() -> ProvisionerCapabilities:
+    """Declare selected generated-chain provisioning support."""
+
+    return ProvisionerCapabilities(
+        name="cyberbattlesim-provisioner",
+        supported_node_types=frozenset({"switch", "vm"}),
+        supported_os_families=frozenset({"linux", "windows"}),
+        supported_content_types=frozenset(),
+        supported_account_features=frozenset({"groups", "auth_method"}),
+        supported_domain_profiles=frozenset(),
+        supported_service_materialization_profiles=frozenset(),
+        max_total_nodes=10,
+        supports_accounts=True,
+        constraints={
+            "topology_realization": (
+                "selected generated chain; authored topology is representative"
+            ),
+            "account_realization": (
+                "auth method and group intent map to source-generated credentials; "
+                "no source identity equivalence"
+            ),
+        },
+    )
+
+
+def _orchestrator_capabilities() -> OrchestratorCapabilities:
+    """Declare portable episode-orchestration support."""
+
+    return OrchestratorCapabilities(
+        name="cyberbattlesim-orchestrator",
+        supported_sections=frozenset({"events", "workflows"}),
+        supports_workflows=True,
+        supports_assertion_refs=False,
+        supports_inject_bindings=False,
+        supported_workflow_features=frozenset({WorkflowFeature.CALL}),
+        constraints={
+            "native_transition_owner": "participant-runtime",
+            "workflow_scope": "episode lifecycle and serialized participant steps",
+        },
+    )
+
+
+def _evaluator_capabilities() -> EvaluatorCapabilities:
+    """Declare evaluator-owned stochastic result projection support."""
+
+    return EvaluatorCapabilities(
+        name="cyberbattlesim-evaluator",
+        supported_sections=frozenset({"conditions", "propositions", "assertions", "objectives"}),
+        supports_scoring=True,
+        supports_objectives=True,
+        supported_predicate_families=frozenset({"presence", "boolean", "string", "number"}),
+        supported_quantifiers=frozenset({"all", "any", "at_least"}),
+        supported_truth_outcomes=frozenset({"true", "false", "unknown", "unsupported"}),
+        supported_evidence_channels=frozenset({"api_response"}),
+        supported_time_domains=frozenset({"wall_clock"}),
+        preserves_binding_provenance=True,
+        constraints={
+            "reward_owner": "evaluator",
+            "outcome_reproduction": "stochastic-bounded",
+            "proposition_projection": "binding-preserving unknown under lossy source evidence",
+            "objective_terminal_state": (
+                "running until a distinct mapped terminal cause is available"
+            ),
+        },
+    )
+
+
+def _participant_capabilities() -> ParticipantRuntimeCapabilities:
+    """Declare bounded red-participant runtime support."""
+
+    return ParticipantRuntimeCapabilities(
+        name="cyberbattlesim-participant-runtime",
+        supported_participant_roles=frozenset({"red"}),
+        supported_behavior_features=frozenset(
+            {
+                "action_contracts",
+                "attribution_support",
+                "behavior_history",
+                "effects",
+                "failure_classes",
+                "observation_boundaries",
+                "outcome_interpretation",
+                "preconditions",
+                "state_transitions",
+                "temporal_contracts",
+            }
+        ),
+        supported_interaction_features=frozenset({"interference"}),
+        feature_support=(
+            ParticipantFeatureSupport(
+                feature="interference",
+                support_level=ParticipantFeatureSupportLevel.DISCLOSED_WEAK,
+                limitation_refs=("limitation:cyberbattlesim:source-internal-defender",),
+                disclosure_refs=("docs/decisions/cyberbattlesim-backend-guardrails.md",),
+            ),
+        ),
+        supports_autonomous_execution=False,
+        supports_bounded_concurrency=False,
+        constraints={
+            "max_in_flight_native_transitions": "1",
+            "native_action_coordinates": "driver-private",
+            "native_target_attribution": (
+                "unavailable; request targets remain intent and are not echoed "
+                "as realized effect targets"
+            ),
+            "participant_action_scope": (
+                "connect, local-vulnerability, and remote-vulnerability attacker contracts"
+            ),
+            "source_internal_defender": (
+                "scan-and-reimage executes inside the selected source step "
+                "and is not a participant-admitted action"
+            ),
+        },
+    )
+
+
 def _capabilities() -> BackendCapabilitySet:
+    """Compose the complete selected backend capability declaration."""
+
     return BackendCapabilitySet(
-        provisioner=ProvisionerCapabilities(
-            name="cyberbattlesim-provisioner",
-            supported_node_types=frozenset({"switch", "vm"}),
-            supported_os_families=frozenset({"linux", "windows"}),
-            supported_content_types=frozenset(),
-            supported_account_features=frozenset({"groups", "auth_method"}),
-            supported_domain_profiles=frozenset(),
-            supported_service_materialization_profiles=frozenset(),
-            max_total_nodes=10,
-            supports_accounts=True,
-            constraints={
-                "topology_realization": (
-                    "selected generated chain; authored topology is representative"
-                ),
-                "account_realization": (
-                    "auth method and group intent map to source-generated credentials; "
-                    "no source identity equivalence"
-                ),
-            },
-        ),
-        orchestrator=OrchestratorCapabilities(
-            name="cyberbattlesim-orchestrator",
-            supported_sections=frozenset({"events", "workflows"}),
-            supports_workflows=True,
-            supports_assertion_refs=False,
-            supports_inject_bindings=False,
-            supported_workflow_features=frozenset({WorkflowFeature.CALL}),
-            constraints={
-                "native_transition_owner": "participant-runtime",
-                "workflow_scope": "episode lifecycle and serialized participant steps",
-            },
-        ),
-        evaluator=EvaluatorCapabilities(
-            name="cyberbattlesim-evaluator",
-            supported_sections=frozenset(
-                {"conditions", "propositions", "assertions", "objectives"}
-            ),
-            supports_scoring=True,
-            supports_objectives=True,
-            supported_predicate_families=frozenset({"presence", "boolean", "string", "number"}),
-            supported_quantifiers=frozenset({"all", "any", "at_least"}),
-            supported_truth_outcomes=frozenset({"true", "false", "unknown", "unsupported"}),
-            supported_evidence_channels=frozenset({"api_response"}),
-            supported_time_domains=frozenset({"wall_clock"}),
-            preserves_binding_provenance=True,
-            constraints={
-                "reward_owner": "evaluator",
-                "outcome_reproduction": "stochastic-bounded",
-                "proposition_projection": (
-                    "binding-preserving unknown under lossy source evidence"
-                ),
-                "objective_terminal_state": (
-                    "running until a distinct mapped terminal cause is available"
-                ),
-            },
-        ),
-        participant_runtime=ParticipantRuntimeCapabilities(
-            name="cyberbattlesim-participant-runtime",
-            supported_participant_roles=frozenset({"red"}),
-            supported_behavior_features=frozenset(
-                {
-                    "action_contracts",
-                    "attribution_support",
-                    "behavior_history",
-                    "effects",
-                    "failure_classes",
-                    "observation_boundaries",
-                    "outcome_interpretation",
-                    "preconditions",
-                    "state_transitions",
-                    "temporal_contracts",
-                }
-            ),
-            supported_interaction_features=frozenset({"interference"}),
-            feature_support=(
-                ParticipantFeatureSupport(
-                    feature="interference",
-                    support_level=ParticipantFeatureSupportLevel.DISCLOSED_WEAK,
-                    limitation_refs=("limitation:cyberbattlesim:source-internal-defender",),
-                    disclosure_refs=("docs/decisions/cyberbattlesim-backend-guardrails.md",),
-                ),
-            ),
-            supports_autonomous_execution=False,
-            supports_bounded_concurrency=False,
-            constraints={
-                "max_in_flight_native_transitions": "1",
-                "native_action_coordinates": "driver-private",
-                "native_target_attribution": (
-                    "unavailable; request targets remain intent and are not echoed "
-                    "as realized effect targets"
-                ),
-                "participant_action_scope": (
-                    "connect, local-vulnerability, and remote-vulnerability attacker contracts"
-                ),
-                "source_internal_defender": (
-                    "scan-and-reimage executes inside the selected source step "
-                    "and is not a participant-admitted action"
-                ),
-            },
-        ),
+        provisioner=_provisioner_capabilities(),
+        orchestrator=_orchestrator_capabilities(),
+        evaluator=_evaluator_capabilities(),
+        participant_runtime=_participant_capabilities(),
         cleanup=CleanupCapabilities(
             name="cyberbattlesim-cleanup",
             supported_contract_versions=CLEANUP_CAPABILITY_REQUIRED_CONTRACTS,
