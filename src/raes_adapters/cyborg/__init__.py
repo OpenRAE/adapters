@@ -7,6 +7,9 @@ manifest, and target construction for that selected backend.
 The native backend is deliberately imported only when the default construction
 driver is used. Base-only installations therefore remain independent, while a
 user-installed selected CybORG source checkout can be driven through RAES.
+The selected profile is admitted; the absence of a governed public artifact
+containing the packaging fix limits automatic-installation claims rather than
+backend use.
 """
 
 from __future__ import annotations

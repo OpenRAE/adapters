@@ -11,7 +11,7 @@ The deliverable is a package-local evidence set under
 
 - `qualification.json` remains the source of truth for the selected repository,
   commit, tree, archive and file digests, legal disposition, known defects, and
-  admissibility outcome.
+  admission and attainable claim strength.
 - `public-protocol.md` remains source-native evidence for the selected
   CyberBattleSim case.
 - The authored RAES SDL carries portable scenario meaning only.
@@ -30,10 +30,10 @@ may be authored in SDL, while numeric reward, evaluator metrics, episode
 cutoffs, and random-stream controls belong in companion published experiment
 contracts.
 
-The current qualification is `not-admissible`. Authoring and validating this
-evidence set does not change that decision and must not be described as
-installability, runnable adapter support, deterministic replay, backend
-conformance, or scientific equivalence.
+The maintainer-selected profile is admitted. Authoring and validating this
+evidence set strengthens provenance but must not be described as dependency
+installability, deterministic replay, backend conformance, or scientific
+equivalence beyond the evidence actually captured.
 
 ## Reuse the published semantic owners
 

@@ -5,9 +5,10 @@
 This is the one selected source-native protocol for the CyberBattleSim
 qualification in RAESystem/adapters issue #25. It is backend-local evidence,
 not a RAES-authored scenario, adapter manifest, conformance profile, or claim
-of equivalence. The associated qualification record currently classifies the
-case as **not admissible** to RAESystem/research#12; this protocol fixes what
-would be run after the admission blockers are resolved.
+of equivalence. The maintainer-selected profile is admitted for adapter
+realization. The associated qualification record fixes the source identity and
+bounds the attainable claims; its packaging, stochastic-control, and upstream
+defect limitations do not veto execution.
 
 The source is Microsoft's official
 [`microsoft/CyberBattleSim`](https://github.com/microsoft/CyberBattleSim)

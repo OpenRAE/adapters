@@ -70,13 +70,14 @@ root license is not by itself evidence that every nested or separately sourced
 asset can be redistributed. Dependency licenses and notice obligations remain
 part of the resolved profile.
 
-If the `cyborg` extra is populated and advertised as an automatic installation
-route, it must be installable from the published `raes-adapters` artifact on the
-declared Python/platform boundary. A successful editable checkout, local path
+The dependency-light `cyborg` adapter extra must be installable from the
+published `raes-adapters` artifact on the declared Python/platform boundary.
+That proves the adapter install surface, not automatic acquisition of the
+native simulator. Keeping the extra empty does not prohibit the documented
+source-install route. If the extra is later populated and advertised as an
+automatic installation route, a successful editable checkout, local path
 dependency, floating branch or tag, install-time clone, or warm user cache is
-not proof of that packaging claim. Keeping the extra empty does not prohibit
-the documented source-install route. If official source cannot produce a
-publishable immutable dependency, any governed repackaging or maintained fork
+not proof of that packaging claim. Any governed repackaging or maintained fork
 must preserve notices and bind:
 
 - the unmodified upstream commit and tree;

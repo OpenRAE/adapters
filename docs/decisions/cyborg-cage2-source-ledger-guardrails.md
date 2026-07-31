@@ -12,7 +12,7 @@ The deliverable is backend-local evidence under `raes_adapters.cyborg`:
 - `qualification.json` remains the only owner of the selected profile id,
   repository, commit and tree identities, selected-file digests, legal
   disposition, stochastic-source inventory, known defects, runtime evidence,
-  and admissibility decision.
+  maintainer admission, and attainable claim strength.
 - `cage2-source-ledger.jsonl` accounts for facts consumed from that selection
   and binds mapped facts only to published RAES SDL, contract, or evidence
   surfaces.
@@ -206,7 +206,8 @@ contract catalog.
   Any affected mapped fact must retain a source row and an appropriately tiered
   loss.
 - Do not let a mapped row, a complete ledger, a green validator, or a source
-  digest imply an installable extra, implemented backend capability,
+  digest erase a recorded qualification limitation or imply an installable
+  extra, implemented backend capability,
   deterministic replay, or outcome equivalence. Backend admission comes from
   maintainer selection; each stronger claim still requires its own evidence.
 - Do not put semantic values into free-form metadata, `mapping_rule`,

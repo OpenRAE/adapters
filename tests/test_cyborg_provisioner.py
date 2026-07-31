@@ -739,7 +739,7 @@ def test_failed_replacement_cleanup_compensates_candidate_without_advancing_snap
 def test_selected_cyborg_source_is_admitted_and_the_installation_limit_is_disclosed() -> None:
     record = load_qualification()
 
-    assert record["admissibility"]["decision"] == "admitted"
-    assert record["admissibility"]["scope"] == "maintainer-selected-cyborg-backend"
+    assert record["admission"]["decision"] == "admitted"
+    assert record["admission"]["scope"] == "maintainer-selected-cyborg-backend"
     assert record["packaging"]["patched_wheel"]["published"] is False
     assert CAGE2_SOURCE_26CE1C1.qualification_profile_id == record["profile_id"]

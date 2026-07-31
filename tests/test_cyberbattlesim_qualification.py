@@ -59,6 +59,45 @@ def test_clean_install_and_source_native_smoke_are_bounded_and_complete() -> Non
     assert "credential_cache" not in smoke
 
 
+def test_runtime_artifact_attestation_covers_complete_import_roots() -> None:
+    record = cyberbattlesim.load_qualification()
+    runtime_tree = record["runtime_source_tree"]
+
+    assert runtime_tree == {
+        "root": "cyberbattle",
+        "include": "all regular files; symlinks and unlisted files are rejected",
+        "file_count": 48,
+        "canonicalization": ("Sorted POSIX path, NUL, lowercase SHA-256 of raw file bytes, LF."),
+        "sha256": "aa97624b86b2f5c9ad80ea52a345d5fd6f8fa89cad31070c5e4748c55510ba02",
+    }
+    source_files = {entry["path"]: entry["sha256"] for entry in record["source_files"]}
+    assert source_files["cyberbattle/__init__.py"] == (
+        "146a6297d4361b7cd550e293e050c98b6795c4fc5416a1e72f62a8dc142668c4"
+    )
+    artifacts = {artifact["name"]: artifact for artifact in record["runtime_artifacts"]}
+    assert set(artifacts) == {"cyberbattlesim", "gymnasium", "numpy"}
+    assert artifacts["cyberbattlesim"]["roots"] == [
+        {
+            "path": "cyberbattle",
+            "file_count": 48,
+            "sha256": ("aa97624b86b2f5c9ad80ea52a345d5fd6f8fa89cad31070c5e4748c55510ba02"),
+        }
+    ]
+    assert artifacts["gymnasium"]["artifact"]["sha256"] == (
+        "61c3384b5575985bb7f85e43213bcb40f36fcdff388cae6bc229304c71f2843e"
+    )
+    assert artifacts["cyberbattlesim"]["artifact"]["require_direct_archive_sha256"] is False
+    assert artifacts["gymnasium"]["artifact"]["require_direct_archive_sha256"] is True
+    assert artifacts["numpy"]["artifact"]["require_direct_archive_sha256"] is True
+    assert {artifact["artifact"]["runtime_identity"] for artifact in artifacts.values()} == {
+        "complete-root-tree"
+    }
+    assert {root["path"] for root in artifacts["numpy"]["roots"]} == {
+        "numpy",
+        "numpy.libs",
+    }
+
+
 def test_protocol_fixes_every_identity_and_discloses_random_streams() -> None:
     record = cyberbattlesim.load_qualification()
     selection = record["protocol"]["selection"]
@@ -114,16 +153,24 @@ def test_legal_maintenance_and_patch_dispositions_are_explicit() -> None:
     )
 
 
-def test_negative_qualification_does_not_publish_a_broken_extra() -> None:
+def test_qualification_admits_selected_backend_and_bounds_claim_strength() -> None:
     record = cyberbattlesim.load_qualification()
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     extras = project["project"]["optional-dependencies"]
 
-    assert record["admissibility"]["decision"] == "not-admissible"
-    assert set(record["admissibility"]["blockers"]) == {
+    assert record["admission"]["decision"] == "admitted"
+    assert record["admission"]["authority"] == "maintainer-selection"
+    assert set(record["admission"]["limitations"]) == {
         "no-index-or-release-artifact",
         "incomplete-random-stream-binding",
         "unresolved-upstream-benchmark-defects",
     }
-    assert "cyberbattlesim" not in extras
+    assert record["admission"]["claim_strength"] == {
+        "source_identity": "attested",
+        "protocol_configuration": "attested",
+        "execution_controls": "partial",
+        "run_evidence": "attestable",
+        "outcome_reproduction": "stochastic-bounded",
+    }
+    assert extras["cyberbattlesim"] == []
     assert extras["cyborg"] == []

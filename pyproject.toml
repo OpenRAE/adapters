@@ -36,10 +36,16 @@ classifiers = [
 dependencies = ["raes==2.0.0"]
 
 [project.optional-dependencies]
+# Microsoft publishes the selected CyberBattleSim source but no index or
+# release artifact. The adapter extra is therefore dependency-light; users
+# install the pinned simulator source separately and target construction
+# reports its absence without weakening the base installation.
+cyberbattlesim = []
 # Reserved CybORG backend key. The selected backend is supported through the
 # documented source-install route. Issue #12 found the official wheel needs a
 # packaging-data patch that is not yet published, so the extra remains empty
-# instead of hiding that installation limitation behind a runtime clone.
+# instead of hiding that installation limitation behind a runtime clone or
+# advertising an editable checkout, install-time clone, or ungoverned wheel.
 cyborg = []
 
 [project.urls]
@@ -89,6 +95,10 @@ select = ["E", "F", "I", "UP", "B", "SIM", "C4"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
+"src/raes_adapters/cyberbattlesim/backend/driver.py" = ["UP004"]
+"src/raes_adapters/cyberbattlesim/backend/evaluator.py" = ["UP004"]
+"src/raes_adapters/cyberbattlesim/backend/orchestrator.py" = ["UP004"]
+"src/raes_adapters/cyberbattlesim/backend/provisioner.py" = ["UP004"]
 
 [tool.mypy]
 python_version = "3.12"
