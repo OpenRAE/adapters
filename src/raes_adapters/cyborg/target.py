@@ -15,10 +15,10 @@ from raes_runtime.registry import (  # type: ignore[import-untyped]
 
 from raes_adapters.base import build_runtime_target
 
-from . import load_qualification
 from .driver import CyborgDriver, SourceInstalledCyborgDriver
 from .manifest import CYBORG_BACKEND_NAME, create_cyborg_manifest
 from .provisioner import CyborgProvisioner
+from .qualification import load_qualification
 from .source_ledger import CAGE2_SOURCE_26CE1C1
 
 _CONFIG_KEYS = {
@@ -32,6 +32,8 @@ _CONFIG_KEYS = {
 
 
 def _normalized_config(config: dict[str, object]) -> dict[str, object]:
+    """Apply selected defaults and reject unknown or mismatched configuration."""
+
     unknown = sorted(set(config) - _CONFIG_KEYS)
     if unknown:
         raise ValueError("unknown CybORG target configuration: " + ", ".join(unknown))
@@ -64,6 +66,8 @@ def _validate_selection(
     config: dict[str, object],
     qualification: dict[str, Any],
 ) -> None:
+    """Require target inputs to identify exactly the selected backend source."""
+
     checks = (
         (
             "qualification_profile_id",

@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass
-from typing import Any
+from typing import NamedTuple
 
 _IMAGE_BY_OS_FAMILY = {
     "linux": "linux_decoy_host",
@@ -56,10 +55,29 @@ _COMPILED_INFRASTRUCTURE_KEYS = frozenset(
     }
 )
 _NETWORK_PROPERTY_KEYS = frozenset({"cidr", "gateway", "internal"})
+_INVALID_NODE_CODE = "cyborg-backend.plan.invalid-node"
+_INVALID_NODE_MESSAGE = "A node resource is not a complete compiled RAES VM descriptor."
+
+_NetworkFacts = tuple[
+    str,
+    dict[str, object],
+    int,
+    tuple[str, ...],
+    list[object],
+    dict[str, object],
+]
+_NodeFacts = tuple[
+    str,
+    int,
+    str,
+    dict[str, object],
+    dict[str, object],
+    int,
+    tuple[str, ...],
+]
 
 
-@dataclass(frozen=True)
-class CyborgScenarioResource:
+class CyborgScenarioResource(NamedTuple):
     """One copied admitted RAES resource supplied to native construction."""
 
     address: str
@@ -69,8 +87,7 @@ class CyborgScenarioResource:
     refresh_dependencies: tuple[str, ...]
 
 
-@dataclass(frozen=True)
-class CyborgScenarioDescriptor:
+class CyborgScenarioDescriptor(NamedTuple):
     """Private construction input derived from a complete desired RAES state."""
 
     profile_id: str
@@ -79,8 +96,7 @@ class CyborgScenarioDescriptor:
     resources: tuple[CyborgScenarioResource, ...]
 
 
-@dataclass(frozen=True)
-class CyborgTranslationIssue:
+class CyborgTranslationIssue(NamedTuple):
     """One bounded reason an admitted plan cannot be represented by CybORG."""
 
     code: str
@@ -111,35 +127,36 @@ def validate_scenario_resources(
 ) -> CyborgTranslationIssue | None:
     """Return the first deterministic representability failure, if any."""
 
+    issue: CyborgTranslationIssue | None = None
     unsupported_types = sorted(
         {resource.resource_type for resource in resources} - _SUPPORTED_RESOURCE_TYPES
     )
     if unsupported_types:
-        return CyborgTranslationIssue(
+        issue = CyborgTranslationIssue(
             "cyborg-backend.plan.unsupported-resource",
             "The provisioning plan contains a resource CybORG cannot represent.",
         )
-
-    networks = tuple(resource for resource in resources if resource.resource_type == "network")
-    nodes = tuple(resource for resource in resources if resource.resource_type == "node")
-    if not networks or not nodes:
-        return CyborgTranslationIssue(
-            "cyborg-backend.plan.incomplete-scenario",
-            "CybORG construction requires at least one network and one attached VM.",
-        )
-
-    network_names: set[str] = set()
-    for resource in networks:
-        issue = _validate_network(resource, network_names)
-        if issue is not None:
-            return issue
-
-    native_host_names: set[str] = set()
-    for resource in nodes:
-        issue = _validate_node(resource, network_names, native_host_names)
-        if issue is not None:
-            return issue
-    return None
+    else:
+        networks = tuple(resource for resource in resources if resource.resource_type == "network")
+        nodes = tuple(resource for resource in resources if resource.resource_type == "node")
+        if not networks or not nodes:
+            issue = CyborgTranslationIssue(
+                "cyborg-backend.plan.incomplete-scenario",
+                "CybORG construction requires at least one network and one attached VM.",
+            )
+        else:
+            network_names: set[str] = set()
+            for resource in networks:
+                issue = _validate_network(resource, network_names)
+                if issue is not None:
+                    break
+            native_host_names: set[str] = set()
+            if issue is None:
+                for resource in nodes:
+                    issue = _validate_node(resource, network_names, native_host_names)
+                    if issue is not None:
+                        break
+    return issue
 
 
 def translate_scenario(
@@ -199,47 +216,62 @@ def _validate_network(
     resource: CyborgScenarioResource,
     names: set[str],
 ) -> CyborgTranslationIssue | None:
+    """Validate one compiled switch and reserve its native subnet name."""
+
+    facts = _parse_network(resource)
+    issue: CyborgTranslationIssue | None = None
+    if facts is None:
+        issue = CyborgTranslationIssue(
+            "cyborg-backend.plan.invalid-network",
+            "A network resource is not a complete compiled RAES switch descriptor.",
+        )
+    else:
+        name, node, count, links, acls, properties = facts
+        if name in names:
+            issue = CyborgTranslationIssue(
+                "cyborg-backend.plan.native-name-collision",
+                "Multiple RAES resources would produce the same native CybORG name.",
+            )
+        elif node.get("type") != "switch" or count != 1:
+            issue = CyborgTranslationIssue(
+                "cyborg-backend.plan.unsupported-network-shape",
+                "CybORG represents each admitted RAES switch as exactly one subnet.",
+            )
+        elif _has_unsupported_switch_detail(node) or links or acls or properties.get("internal"):
+            issue = CyborgTranslationIssue(
+                "cyborg-backend.plan.unsupported-network-detail",
+                "Linked switches and authored network ACLs are not supported "
+                "by this CybORG mapping.",
+            )
+        else:
+            names.add(name)
+    return issue
+
+
+def _parse_network(resource: CyborgScenarioResource) -> _NetworkFacts | None:
+    """Parse the exact compiled switch payload shape without accepting extras."""
+
+    facts: _NetworkFacts | None = None
     payload = resource.payload
     try:
-        if set(payload) != _NETWORK_PAYLOAD_KEYS:
-            raise ValueError
+        _require_exact_keys(payload, _NETWORK_PAYLOAD_KEYS)
         name = _required_string(payload, "name")
-        if payload.get("node_name") != name:
-            raise ValueError
+        _require_equal(payload.get("node_name"), name)
         spec = _required_mapping(payload, "spec")
-        if set(spec) != _SPEC_KEYS:
-            raise ValueError
+        _require_exact_keys(spec, _SPEC_KEYS)
         node = _required_mapping(spec, "node")
         infrastructure = _required_mapping(spec, "infrastructure")
-        if set(node) != _COMPILED_NODE_KEYS or set(infrastructure) != _COMPILED_INFRASTRUCTURE_KEYS:
-            raise ValueError
+        _require_exact_keys(node, _COMPILED_NODE_KEYS)
+        _require_exact_keys(infrastructure, _COMPILED_INFRASTRUCTURE_KEYS)
         count = _required_positive_int(infrastructure, "count")
         links = _required_string_list(infrastructure, "links")
         _required_string_list(infrastructure, "dependencies")
         acls = _required_list(infrastructure, "acls")
         properties = _network_properties(infrastructure)
+        facts = name, node, count, links, acls, properties
     except (KeyError, TypeError, ValueError):
-        return CyborgTranslationIssue(
-            "cyborg-backend.plan.invalid-network",
-            "A network resource is not a complete compiled RAES switch descriptor.",
-        )
-    if name in names:
-        return CyborgTranslationIssue(
-            "cyborg-backend.plan.native-name-collision",
-            "Multiple RAES resources would produce the same native CybORG name.",
-        )
-    names.add(name)
-    if node.get("type") != "switch" or count != 1:
-        return CyborgTranslationIssue(
-            "cyborg-backend.plan.unsupported-network-shape",
-            "CybORG represents each admitted RAES switch as exactly one subnet.",
-        )
-    if _has_unsupported_switch_detail(node) or links or acls or properties.get("internal"):
-        return CyborgTranslationIssue(
-            "cyborg-backend.plan.unsupported-network-detail",
-            "Linked switches and authored network ACLs are not supported by this CybORG mapping.",
-        )
-    return None
+        facts = None
+    return facts
 
 
 def _validate_node(
@@ -247,76 +279,80 @@ def _validate_node(
     network_names: set[str],
     native_names: set[str],
 ) -> CyborgTranslationIssue | None:
+    """Validate one compiled VM and reserve every expanded native host name."""
+
+    facts = _parse_node(resource)
+    issue: CyborgTranslationIssue | None = None
+    if facts is None:
+        issue = CyborgTranslationIssue(_INVALID_NODE_CODE, _INVALID_NODE_MESSAGE)
+    else:
+        name, count, os_family, node, infrastructure, infrastructure_count, links = facts
+        if resource.payload.get("node_type") != "vm" or node.get("type") != "vm":
+            issue = CyborgTranslationIssue(
+                "cyborg-backend.plan.unsupported-node-type",
+                "The CybORG scenario mapping supports VM nodes and switch networks.",
+            )
+        elif os_family not in _IMAGE_BY_OS_FAMILY or node.get("os") != os_family:
+            issue = CyborgTranslationIssue(
+                "cyborg-backend.plan.unsupported-os-family",
+                "The CybORG scenario mapping has no selected image for the requested OS family.",
+            )
+        elif infrastructure_count != count:
+            issue = CyborgTranslationIssue(_INVALID_NODE_CODE, _INVALID_NODE_MESSAGE)
+        elif not links:
+            issue = CyborgTranslationIssue(
+                "cyborg-backend.plan.unattached-node",
+                "Every CybORG host must be attached to at least one admitted RAES network.",
+            )
+        elif any(link not in network_names for link in links):
+            issue = CyborgTranslationIssue(
+                "cyborg-backend.plan.unknown-network",
+                "A CybORG host references a network absent from the complete desired state.",
+            )
+        elif len(links) != len(set(links)):
+            issue = CyborgTranslationIssue(_INVALID_NODE_CODE, _INVALID_NODE_MESSAGE)
+        elif _has_unsupported_node_detail(resource.payload, node, infrastructure):
+            issue = CyborgTranslationIssue(
+                "cyborg-backend.plan.unsupported-node-detail",
+                "The RAES node requests a fact the selected CybORG image mapping cannot preserve.",
+            )
+        else:
+            expanded = _expanded_names(name, count)
+            if any(hostname in native_names for hostname in expanded):
+                issue = CyborgTranslationIssue(
+                    "cyborg-backend.plan.native-name-collision",
+                    "Multiple RAES resources would produce the same native CybORG name.",
+                )
+            else:
+                native_names.update(expanded)
+    return issue
+
+
+def _parse_node(resource: CyborgScenarioResource) -> _NodeFacts | None:
+    """Parse the exact compiled VM payload shape without accepting extras."""
+
+    facts: _NodeFacts | None = None
     payload = resource.payload
     try:
-        if set(payload) != _NODE_PAYLOAD_KEYS:
-            raise ValueError
+        _require_exact_keys(payload, _NODE_PAYLOAD_KEYS)
         name = _required_string(payload, "name")
-        if payload.get("node_name") != name:
-            raise ValueError
+        _require_equal(payload.get("node_name"), name)
         count = _required_positive_int(payload, "count")
         os_family = _required_string(payload, "os_family")
         spec = _required_mapping(payload, "spec")
-        if set(spec) != _SPEC_KEYS:
-            raise ValueError
+        _require_exact_keys(spec, _SPEC_KEYS)
         node = _required_mapping(spec, "node")
         infrastructure = _required_mapping(spec, "infrastructure")
-        if set(node) != _COMPILED_NODE_KEYS or set(infrastructure) != _COMPILED_INFRASTRUCTURE_KEYS:
-            raise ValueError
+        _require_exact_keys(node, _COMPILED_NODE_KEYS)
+        _require_exact_keys(infrastructure, _COMPILED_INFRASTRUCTURE_KEYS)
         infrastructure_count = _required_positive_int(infrastructure, "count")
         links = _required_string_list(infrastructure, "links")
         _required_string_list(infrastructure, "dependencies")
         _required_list(infrastructure, "acls")
+        facts = name, count, os_family, node, infrastructure, infrastructure_count, links
     except (KeyError, TypeError, ValueError):
-        return CyborgTranslationIssue(
-            "cyborg-backend.plan.invalid-node",
-            "A node resource is not a complete compiled RAES VM descriptor.",
-        )
-
-    if payload.get("node_type") != "vm" or node.get("type") != "vm":
-        return CyborgTranslationIssue(
-            "cyborg-backend.plan.unsupported-node-type",
-            "The CybORG scenario mapping supports VM nodes and switch networks.",
-        )
-    if os_family not in _IMAGE_BY_OS_FAMILY or node.get("os") != os_family:
-        return CyborgTranslationIssue(
-            "cyborg-backend.plan.unsupported-os-family",
-            "The CybORG scenario mapping has no selected image for the requested OS family.",
-        )
-    if infrastructure_count != count:
-        return CyborgTranslationIssue(
-            "cyborg-backend.plan.invalid-node",
-            "A node resource is not a complete compiled RAES VM descriptor.",
-        )
-    if not links:
-        return CyborgTranslationIssue(
-            "cyborg-backend.plan.unattached-node",
-            "Every CybORG host must be attached to at least one admitted RAES network.",
-        )
-    if any(link not in network_names for link in links):
-        return CyborgTranslationIssue(
-            "cyborg-backend.plan.unknown-network",
-            "A CybORG host references a network absent from the complete desired state.",
-        )
-    if len(links) != len(set(links)):
-        return CyborgTranslationIssue(
-            "cyborg-backend.plan.invalid-node",
-            "A node resource is not a complete compiled RAES VM descriptor.",
-        )
-    if _has_unsupported_node_detail(payload, node, infrastructure):
-        return CyborgTranslationIssue(
-            "cyborg-backend.plan.unsupported-node-detail",
-            "The RAES node requests a fact the selected CybORG image mapping cannot preserve.",
-        )
-
-    expanded = _expanded_names(name, count)
-    if any(hostname in native_names for hostname in expanded):
-        return CyborgTranslationIssue(
-            "cyborg-backend.plan.native-name-collision",
-            "Multiple RAES resources would produce the same native CybORG name.",
-        )
-    native_names.update(expanded)
-    return None
+        facts = None
+    return facts
 
 
 def _has_unsupported_node_detail(
@@ -324,6 +360,8 @@ def _has_unsupported_node_detail(
     node: dict[str, object],
     infrastructure: dict[str, object],
 ) -> bool:
+    """Detect compiled VM facts outside the selected image mapping."""
+
     unsupported_node_fields = (
         "source",
         "resources",
@@ -351,6 +389,8 @@ def _has_unsupported_node_detail(
 
 
 def _has_unsupported_switch_detail(node: dict[str, object]) -> bool:
+    """Detect compiled switch facts outside the selected subnet mapping."""
+
     unsupported_fields = (
         "source",
         "resources",
@@ -375,6 +415,8 @@ def _has_unsupported_switch_detail(node: dict[str, object]) -> bool:
 
 
 def _network_properties(infrastructure: dict[str, object]) -> dict[str, object]:
+    """Return a strictly shaped network-property mapping."""
+
     candidate = infrastructure["properties"]
     if candidate is None:
         return {}
@@ -392,12 +434,16 @@ def _network_properties(infrastructure: dict[str, object]) -> dict[str, object]:
 
 
 def _expanded_names(name: str, count: int) -> tuple[str, ...]:
+    """Expand one RAES counted resource into deterministic native names."""
+
     if count == 1:
         return (name,)
     return tuple(f"{name}-{index}" for index in range(count))
 
 
-def _required_mapping(value: dict[str, object], key: str) -> dict[str, Any]:
+def _required_mapping(value: dict[str, object], key: str) -> dict[str, object]:
+    """Return one required mapping value or reject the payload shape."""
+
     candidate = value[key]
     if not isinstance(candidate, dict):
         raise TypeError
@@ -405,6 +451,8 @@ def _required_mapping(value: dict[str, object], key: str) -> dict[str, Any]:
 
 
 def _required_string(value: dict[str, object], key: str) -> str:
+    """Return one required non-empty string value."""
+
     candidate = value[key]
     if not isinstance(candidate, str) or not candidate:
         raise TypeError
@@ -412,6 +460,8 @@ def _required_string(value: dict[str, object], key: str) -> str:
 
 
 def _required_positive_int(value: dict[str, object], key: str) -> int:
+    """Return one required positive integer value, excluding booleans."""
+
     candidate = value[key]
     if type(candidate) is not int or candidate < 1:
         raise TypeError
@@ -419,6 +469,8 @@ def _required_positive_int(value: dict[str, object], key: str) -> int:
 
 
 def _required_string_list(value: dict[str, object], key: str) -> tuple[str, ...]:
+    """Return one required list of non-empty strings as an immutable tuple."""
+
     candidate = value[key]
     if not isinstance(candidate, list) or any(
         not isinstance(item, str) or not item for item in candidate
@@ -428,10 +480,26 @@ def _required_string_list(value: dict[str, object], key: str) -> tuple[str, ...]
 
 
 def _required_list(value: dict[str, object], key: str) -> list[object]:
+    """Return one required list value."""
+
     candidate = value[key]
     if not isinstance(candidate, list):
         raise TypeError
     return candidate
+
+
+def _require_exact_keys(value: dict[str, object], expected: frozenset[str]) -> None:
+    """Reject a compiled mapping that omits or adds any field."""
+
+    if set(value) != expected:
+        raise ValueError
+
+
+def _require_equal(actual: object, expected: object) -> None:
+    """Reject inconsistent duplicate fields in a compiled descriptor."""
+
+    if actual != expected:
+        raise ValueError
 
 
 __all__ = [

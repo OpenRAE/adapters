@@ -14,12 +14,40 @@ from contextlib import suppress
 from importlib import import_module, invalidate_caches
 from importlib.machinery import PathFinder
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import Protocol, cast
 
-from . import load_qualification
+from .qualification import load_qualification
 from .scenario import CyborgScenarioDescriptor, translate_scenario
 
 _NATIVE_RANDOM_LOCK = threading.Lock()
+
+
+class _NativeCyborg(Protocol):
+    """Minimum native instance surface used behind the driver boundary."""
+
+    def set_seed(self, seed: int) -> None:
+        """Set the simulator seed."""
+
+    def reset(self) -> object:
+        """Reset the simulator after construction."""
+
+    def shutdown(self) -> None:
+        """Release native simulator state."""
+
+
+class _NativeCyborgType(Protocol):
+    """Callable constructor surface exposed by the selected package."""
+
+    def __call__(self, scenario_path: str, mode: str) -> _NativeCyborg:
+        """Construct a simulator from one generated scenario document."""
+
+
+class _NativePackage(Protocol):
+    """Selected package attributes inspected after verified import."""
+
+    CYBORG_VERSION: object
+    CybORG: _NativeCyborgType
+    __file__: str
 
 
 class CyborgDriver(Protocol):
@@ -37,14 +65,14 @@ class CyborgDriver(Protocol):
         """Try to release one owned native handle idempotently."""
 
 
-class SourceInstalledCyborgDriver:
+class SourceInstalledCyborgDriver(CyborgDriver):
     """Construct a generated scenario with a user-installed selected CybORG source."""
 
     def __init__(self, *, expected_version: str) -> None:
         self._expected_version = expected_version
         self._binding_lock = threading.Lock()
         self._runtime_workspace: tempfile.TemporaryDirectory[str] | None = None
-        self._cyborg_type: Any = None
+        self._cyborg_type: _NativeCyborgType | None = None
 
     def construct(
         self,
@@ -56,7 +84,7 @@ class SourceInstalledCyborgDriver:
 
         cyborg_type = self._native_binding()
         scenario = translate_scenario(descriptor)
-        native: Any = None
+        native: _NativeCyborg | None = None
         scenario_path: Path | None = None
         try:
             scenario_path = self._write_scenario(scenario)
@@ -85,12 +113,12 @@ class SourceInstalledCyborgDriver:
         """Shut down an owned CybORG backend without inspecting native output."""
 
         try:
-            cast(Any, handle).shutdown()
+            cast(_NativeCyborg, handle).shutdown()
         except Exception:
             return False
         return True
 
-    def _native_binding(self) -> Any:
+    def _native_binding(self) -> _NativeCyborgType:
         """Load the constructor from a private snapshot of verified source bytes."""
 
         with self._binding_lock:
@@ -139,7 +167,7 @@ class SourceInstalledCyborgDriver:
             return cyborg_type
 
     @staticmethod
-    def _import_verified_snapshot(package_root: Path) -> Any:
+    def _import_verified_snapshot(package_root: Path) -> _NativePackage:
         """Import only from the private source snapshot, never installed bytecode."""
 
         if any(name == "CybORG" or name.startswith("CybORG.") for name in sys.modules):
@@ -150,7 +178,7 @@ class SourceInstalledCyborgDriver:
         sys.path.insert(0, parent)
         invalidate_caches()
         try:
-            package = cast(Any, import_module("CybORG"))
+            package = cast(_NativePackage, import_module("CybORG"))
         finally:
             with suppress(ValueError):
                 sys.path.remove(parent)

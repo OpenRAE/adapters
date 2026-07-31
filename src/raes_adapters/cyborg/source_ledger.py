@@ -16,7 +16,7 @@ from typing import Any, NamedTuple, cast
 
 from raes_contracts.contracts import schema_bundle  # type: ignore[import-untyped]
 
-from . import load_qualification
+from .qualification import load_qualification
 
 type JsonValue = None | bool | int | float | str | list[JsonValue] | dict[str, JsonValue]
 type JsonObject = dict[str, JsonValue]

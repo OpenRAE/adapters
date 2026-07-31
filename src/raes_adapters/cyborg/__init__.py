@@ -11,42 +11,26 @@ user-installed selected CybORG source checkout can be driven through RAES.
 
 from __future__ import annotations
 
-import json
-from importlib.resources import files
-from typing import Any, cast
-
-
-def load_qualification() -> dict[str, Any]:
-    """Load a fresh copy of the selected CAGE-2 qualification record."""
-    resource = files(__package__).joinpath("qualification.json")
-    return cast(dict[str, Any], json.loads(resource.read_text(encoding="utf-8")))
-
-
-def read_compatibility_patch() -> str:
-    """Read the qualification-only packaging patch verbatim."""
-    resource = files(__package__).joinpath("cage2-wheel-package-data.patch")
-    return resource.read_text(encoding="utf-8")
-
-
-from .driver import (  # noqa: E402
+from .driver import (
     CyborgDriver,
     SourceInstalledCyborgDriver,
 )
-from .manifest import (  # noqa: E402
+from .manifest import (
     CYBORG_BACKEND_NAME,
     CYBORG_PROFILE_ID,
     create_cyborg_manifest,
     create_cyborg_realization_envelope,
 )
-from .provisioner import CyborgProvisioner  # noqa: E402
-from .scenario import (  # noqa: E402
+from .provisioner import CyborgProvisioner
+from .qualification import load_qualification, read_compatibility_patch
+from .scenario import (
     CYBORG_SCENARIO_MAPPING_VERSION,
     CyborgScenarioDescriptor,
     CyborgScenarioResource,
     translate_scenario,
 )
-from .source_ledger import CAGE2_SOURCE_26CE1C1  # noqa: E402
-from .target import (  # noqa: E402
+from .source_ledger import CAGE2_SOURCE_26CE1C1
+from .target import (
     create_cyborg_components,
     create_cyborg_target,
     register_cyborg_backend,

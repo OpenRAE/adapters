@@ -44,6 +44,8 @@ _SUPPORTED_CONTRACTS = frozenset(
 
 
 def _current_backend_version() -> str:
+    """Return the installed adapter version without requiring a wheel install."""
+
     try:
         return distribution_version("raes-adapters")
     except PackageNotFoundError:
@@ -140,6 +142,8 @@ def create_cyborg_realization_envelope(
 def _provisioner_capabilities(
     envelope: BackendRealizationEnvelopeModel,
 ) -> ProvisionerCapabilities:
+    """Derive manifest capabilities from the validated realization envelope."""
+
     configuration = envelope.configuration
     return ProvisionerCapabilities(
         name="cyborg-cage2-provisioner",
