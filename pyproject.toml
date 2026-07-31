@@ -36,11 +36,10 @@ classifiers = [
 dependencies = ["raes==2.0.0"]
 
 [project.optional-dependencies]
-# Reserved CybORG backend key. Issue #12 found the official CAGE-2 source
-# runnable only after a packaging-data patch that has no governed public
-# artifact. Keep the extra empty rather than publish an editable checkout,
-# install-time clone, or ungoverned wheel; the backend-local qualification
-# record carries the exact source, patch, dependency, and smoke evidence.
+# Reserved CybORG backend key. The selected backend is supported through the
+# documented source-install route. Issue #12 found the official wheel needs a
+# packaging-data patch that is not yet published, so the extra remains empty
+# instead of hiding that installation limitation behind a runtime clone.
 cyborg = []
 
 [project.urls]
@@ -99,6 +98,7 @@ mypy_path = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+pythonpath = ["."]
 
 [tool.coverage.run]
 branch = true

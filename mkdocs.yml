@@ -37,8 +37,9 @@ nav:
       - Overview: decisions/adrs/README.md
       - Template: decisions/adrs/TEMPLATE.md
       - Shared simulator-adapter plumbing guardrails: decisions/base-plumbing-guardrails.md
-      - CybORG/CAGE-2 runtime qualification guardrails: decisions/cyborg-cage2-runtime-qualification-guardrails.md
+      - CybORG/CAGE-2 backend qualification guardrails: decisions/cyborg-cage2-runtime-qualification-guardrails.md
       - CybORG/CAGE-2 source-ledger guardrails: decisions/cyborg-cage2-source-ledger-guardrails.md
+      - CybORG/CAGE-2 provisioner and manifest guardrails: decisions/cyborg-cage2-provisioner-manifest-guardrails.md
       - CyberBattleSim qualification guardrails: decisions/cyberbattlesim-qualification-guardrails.md
       - CyberBattleSim scenario and source-ledger guardrails: decisions/cyberbattlesim-scenario-ledger-guardrails.md
       - ADR 003 — Single distribution and Trusted Publishing: decisions/adrs/adr-003-single-distribution-and-trusted-publishing.md

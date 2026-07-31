@@ -30,14 +30,16 @@ and never define the shared semantic boundary (ADR-002).
 pip install raes-adapters  # shared base plumbing + qualification evidence
 ```
 
-The `cyborg` extra key is reserved but intentionally empty. Issue
+The selected CybORG backend is admitted and usable through its documented
+source installation. The `cyborg` extra key is reserved but currently empty. Issue
 [#12](https://github.com/RAESystem/adapters/issues/12) qualified the official
 CAGE Challenge 2 source and a packaging-only fix, but the upstream wheel omits
 the version and Scenario2 runtime data. The fixed wheel passed a clean Python
-3.12 smoke locally, but it is not a governed public artifact and the
-distribution's declared Python/platform range is not yet qualified. Advertising
-an editable checkout, install-time clone, or unpublished wheel as the extra
-would hide those blockers.
+3.12 smoke. Until that fix is published, install the pinned CAGE-2 source at
+commit `26ce1c1253fa9e2e73f25e6a7f2da32860c11257`, apply
+`src/raes_adapters/cyborg/cage2-wheel-package-data.patch`, and install its
+`CybORG/` package into the environment. The adapter validates the installed
+version and selected source-file digests before constructing the backend.
 
 There is also intentionally no `cyberbattlesim` extra. The
 [qualification record](src/raes_adapters/cyberbattlesim/qualification.json)
@@ -168,11 +170,23 @@ and sanitized red/blue/green smoke result. The accompanying
 [packaging patch](src/raes_adapters/cyborg/cage2-wheel-package-data.patch) is
 qualification evidence only; it is not silently applied or published.
 
+Issue [#15](https://github.com/RAESystem/adapters/issues/15) supplies a
+provisioning-only RAES target for that backend. `create_cyborg_target()` accepts
+admitted RAES provisioning plans and deterministically generates the native
+CybORG scenario: RAES switches become subnets, VM multiplicity becomes hosts,
+infrastructure links become subnet membership, and supported OS families select
+digest-verified CybORG images. The portable compiled plan entries and
+configuration-bound realization-envelope identity remain in the RAES snapshot;
+native CybORG objects stay private. Unsupported or lossy node facts fail before
+construction. Action stepping, participant-relative observations, and evaluation
+are added by the following roadmap issues rather than being claimed by this
+first manifest.
+
 The separate
 [architecture guardrails](docs/decisions/cyborg-cage2-runtime-qualification-guardrails.md)
-define the boundary: the result is not an adapter manifest, conformance claim,
-replication claim, or permission to place native CybORG state in portable RAES
-artifacts.
+define the qualification boundary: source installation and known losses limit
+strong replay/equivalence claims, but do not veto adapter construction or
+permission to retain an honest partial reproducibility record.
 
 ## Development
 

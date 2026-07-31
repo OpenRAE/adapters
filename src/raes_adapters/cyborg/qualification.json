@@ -263,6 +263,11 @@
     "pythonpath": "cleared",
     "python_safe_path": true,
     "network_after_install": "not-required",
+    "integrity": {
+      "algorithm": "sha256(relative-posix-path + NUL + sha256(source-bytes))",
+      "python_source_count": 337,
+      "python_source_tree_sha256": "f74427419b587b95e2f083c69f230a28a54871977fb4432644120e7f555d2212"
+    },
     "smoke": {
       "seed": 3,
       "scenario_exists": true,
@@ -295,6 +300,14 @@
           "GreenPortScan"
         ]
       }
+    },
+    "adapter_smoke": {
+      "backend": "cyborg-cage2",
+      "constructed": true,
+      "cleaned": true,
+      "native_projection_matches": true,
+      "recorded_resources": 2,
+      "realization_recorded": true
     }
   },
   "dependency_resolution": {
@@ -470,14 +483,15 @@
     }
   ],
   "admissibility": {
-    "decision": "not-admissible",
-    "scope": "published raes-adapters[cyborg] runtime",
-    "blockers": [
+    "decision": "admitted",
+    "scope": "maintainer-selected-cyborg-backend",
+    "installation_limitations": [
       "no-governed-public-patched-artifact",
       "declared-python-range-not-qualified",
       "declared-platform-range-not-qualified"
     ],
     "extra_disposition": "leave the cyborg extra empty rather than publish a local path, editable checkout, install-time clone, or ungoverned wheel",
+    "qualification_effect": "installation, replay, and equivalence claims are limited; the maintainer-selected source-installed backend remains admitted for adapter use",
     "requalification_trigger": "an immutable governed artifact that contains the packaging-only fix and is qualified across the declared Python and platform support boundary"
   }
 }
