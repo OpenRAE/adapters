@@ -6,6 +6,7 @@ import argparse
 import json
 import textwrap
 from collections.abc import Iterable, Mapping, Sequence
+from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
 from typing import cast
@@ -69,6 +70,7 @@ from raes_operations.realization_conformance import (  # type: ignore[import-unt
     write_backend_conformance_report,
 )
 from raes_runtime.manager import RuntimeManager  # type: ignore[import-untyped]
+from raes_runtime.registry import RuntimeTarget  # type: ignore[import-untyped]
 from raes_runtime.registry_probes import (  # type: ignore[import-untyped]
     sample_participant_action_admission_request,
 )
@@ -83,7 +85,10 @@ from .driver import (
     _NativeRewardComponent,
     _NativeTurnResult,
 )
+from .evaluator import CyborgEvaluator
 from .manifest import create_cyborg_manifest
+from .orchestrator import CyborgOrchestrator
+from .participant_runtime import CyborgParticipantRuntime
 from .qualification import load_qualification
 from .scenario import CyborgScenarioDescriptor
 from .source_ledger import (
@@ -149,7 +154,7 @@ _CAPABILITY_PROBE_REQUIREMENTS: Mapping[str, tuple[str, ...]] = {
 _NON_CAPABILITY_KEYS = frozenset({"constraints", "name"})
 
 
-class _HermeticProbeDriver:
+class _HermeticProbeDriver(object):  # noqa: UP004 - Sonar's profile requires explicit base
     """Deterministic, dependency-free driver used only for PR conformance."""
 
     def __init__(self) -> None:
@@ -234,7 +239,7 @@ class _HermeticProbeDriver:
         return True
 
 
-class _HostileNativeHandle:
+class _HostileNativeHandle(object):  # noqa: UP004 - Sonar's profile requires explicit base
     """Fail if a portable probe tries to render the injected native handle."""
 
     def __str__(self) -> str:
@@ -330,104 +335,14 @@ def cyborg_adapter_diagnostics(*, seed: int = 3) -> tuple[Diagnostic, ...]:
         )
     )
     applied = target.provisioner.apply(plan.provisioning, RuntimeSnapshot())
-    qualification = load_qualification()
     manifest = target.manifest
-    participant = target.participant_runtime
-    evaluator = target.evaluator
-    orchestrator = target.orchestrator
-    time_runtime = target.time_runtime
-    checks: dict[str, bool] = {
-        "pins": (
-            qualification.get("profile_id") == CAGE2_SOURCE_26CE1C1.qualification_profile_id
-            and manifest.constraints.get("profile") == CAGE2_SOURCE_26CE1C1.qualification_profile_id
-        ),
-        "seed-clock": (
-            manifest.time is not None
-            and time_runtime is not None
-            and manifest.realization_envelope is not None
-            and f"seed={seed}" in manifest.realization_envelope.configuration.network_policy
-        ),
-        "lifecycle": False,
-        "action-observation": False,
-        "reward-evaluation": False,
-    }
-    try:
-        if (
-            applied.success
-            and time_runtime is not None
-            and orchestrator is not None
-            and participant is not None
-            and evaluator is not None
-        ):
-            timed = time_runtime.initialize(_probe_time_declaration(), applied.snapshot)
-            started = orchestrator.start(_probe_orchestration_plan(), timed.snapshot)
-            snapshot = started.snapshot
-            initialized = []
-            for address in (_BLUE, _GREEN, _RED):
-                result = participant.initialize(
-                    ParticipantEpisodeInitializeRequest(
-                        participant_address=address,
-                        episode_id=f"{address}-episode-1",
-                    ),
-                    snapshot,
-                )
-                initialized.append(result.success)
-                snapshot = result.snapshot
-            action = participant.admit_action(_probe_action_request(), snapshot)
-            observations = {
-                address: participant.observations(address) for address in (_BLUE, _GREEN, _RED)
-            }
-            evaluated = evaluator.start(_probe_evaluation_plan(), action.snapshot)
-            evaluation = evaluator.results().get("evaluation.objective.defend", {})
-            reset = participant.reset_many(
-                tuple(
-                    ParticipantEpisodeResetRequest(
-                        participant_address=address,
-                        episode_id=f"{address}-episode-2",
-                    )
-                    for address in (_BLUE, _GREEN, _RED)
-                ),
-                evaluated.snapshot,
-            )
-            termination_results: list[ApplyResult] = []
-            terminated_snapshot = reset.snapshot
-            for address in (_BLUE, _GREEN, _RED):
-                termination = participant.terminate(
-                    ParticipantEpisodeTerminateRequest(participant_address=address),
-                    terminated_snapshot,
-                )
-                termination_results.append(termination)
-                terminated_snapshot = termination.snapshot
-            stopped = orchestrator.stop(terminated_snapshot)
-            checks["seed-clock"] = bool(
-                checks["seed-clock"]
-                and action.snapshot.time_model_state is not None
-                and action.snapshot.time_model_state.clocks[_CLOCK].coordinate.tick == 1
-            )
-            checks["lifecycle"] = bool(
-                timed.success
-                and started.success
-                and all(initialized)
-                and reset.success
-                and all(item.success for item in termination_results)
-                and stopped.success
-            )
-            checks["action-observation"] = bool(
-                action.success
-                and len(driver.selections) == 1
-                and all(observations.values())
-                and "participant-observation-envelope-v1" in manifest.supported_contract_versions
-            )
-            checks["reward-evaluation"] = bool(
-                evaluated.success
-                and evaluation.get("status") == "ready"
-                and evaluation.get("passed") is True
-                and evaluator.evidence_records()
-                and evaluator.derived_measures()
-                and "evaluation-result-envelope-v1" in manifest.supported_contract_versions
-            )
-    except Exception:
-        pass
+    checks = _initial_adapter_checks(target, seed)
+    with suppress(Exception):
+        runtime_checks = _execute_runtime_probes(target, driver, applied)
+        runtime_checks["seed-clock"] = bool(
+            checks["seed-clock"] and runtime_checks.get("seed-clock", False)
+        )
+        checks.update(runtime_checks)
     cleaned = target.provisioner.cleanup()
     checks["cleanup"] = applied.success and cleaned and not driver.handles
     checks["portable-output"] = _portable_probe_output_is_safe(manifest, applied)
@@ -437,7 +352,146 @@ def cyborg_adapter_diagnostics(*, seed: int = 3) -> tuple[Diagnostic, ...]:
     return diagnostics
 
 
+def _initial_adapter_checks(target: RuntimeTarget, seed: int) -> dict[str, bool]:
+    """Return static source-pin and clock-claim dispositions."""
+
+    qualification = load_qualification()
+    manifest = target.manifest
+    return {
+        "pins": (
+            qualification.get("profile_id") == CAGE2_SOURCE_26CE1C1.qualification_profile_id
+            and manifest.constraints.get("profile") == CAGE2_SOURCE_26CE1C1.qualification_profile_id
+        ),
+        "seed-clock": (
+            manifest.time is not None
+            and target.time_runtime is not None
+            and manifest.realization_envelope is not None
+            and f"seed={seed}" in manifest.realization_envelope.configuration.network_policy
+        ),
+        "lifecycle": False,
+        "action-observation": False,
+        "reward-evaluation": False,
+    }
+
+
+def _execute_runtime_probes(
+    target: RuntimeTarget,
+    driver: _HermeticProbeDriver,
+    applied: ApplyResult,
+) -> dict[str, bool]:
+    """Execute the bounded lifecycle, action, observation, and evaluation flow."""
+
+    if not applied.success or any(
+        component is None
+        for component in (
+            target.time_runtime,
+            target.orchestrator,
+            target.participant_runtime,
+            target.evaluator,
+        )
+    ):
+        return {}
+    time_runtime = target.time_runtime
+    orchestrator = cast(CyborgOrchestrator, target.orchestrator)
+    participant = cast(CyborgParticipantRuntime, target.participant_runtime)
+    evaluator = cast(CyborgEvaluator, target.evaluator)
+    timed = time_runtime.initialize(_probe_time_declaration(), applied.snapshot)
+    started = orchestrator.start(_probe_orchestration_plan(), timed.snapshot)
+    initialized_snapshot, initialized = _initialize_probe_participants(
+        participant, started.snapshot
+    )
+    action = participant.admit_action(_probe_action_request(), initialized_snapshot)
+    observations = tuple(participant.observations(address) for address in (_BLUE, _GREEN, _RED))
+    evaluated = evaluator.start(_probe_evaluation_plan(), action.snapshot)
+    evaluation = evaluator.results().get("evaluation.objective.defend", {})
+    reset = participant.reset_many(_probe_reset_requests(), evaluated.snapshot)
+    terminated_snapshot, terminated = _terminate_probe_participants(participant, reset.snapshot)
+    stopped = orchestrator.stop(terminated_snapshot)
+    manifest = target.manifest
+    return {
+        "seed-clock": bool(
+            action.snapshot.time_model_state is not None
+            and action.snapshot.time_model_state.clocks[_CLOCK].coordinate.tick == 1
+        ),
+        "lifecycle": all(
+            (
+                timed.success,
+                started.success,
+                initialized,
+                reset.success,
+                terminated,
+                stopped.success,
+            )
+        ),
+        "action-observation": bool(
+            action.success
+            and len(driver.selections) == 1
+            and all(observations)
+            and "participant-observation-envelope-v1" in manifest.supported_contract_versions
+        ),
+        "reward-evaluation": bool(
+            evaluated.success
+            and evaluation.get("status") == "ready"
+            and evaluation.get("passed") is True
+            and evaluator.evidence_records()
+            and evaluator.derived_measures()
+            and "evaluation-result-envelope-v1" in manifest.supported_contract_versions
+        ),
+    }
+
+
+def _initialize_probe_participants(
+    participant: CyborgParticipantRuntime,
+    snapshot: RuntimeSnapshot,
+) -> tuple[RuntimeSnapshot, bool]:
+    """Initialize every aggregate participant and return the final snapshot."""
+
+    dispositions: list[bool] = []
+    for address in (_BLUE, _GREEN, _RED):
+        result = participant.initialize(
+            ParticipantEpisodeInitializeRequest(
+                participant_address=address,
+                episode_id=f"{address}-episode-1",
+            ),
+            snapshot,
+        )
+        dispositions.append(result.success)
+        snapshot = result.snapshot
+    return snapshot, all(dispositions)
+
+
+def _probe_reset_requests() -> tuple[ParticipantEpisodeResetRequest, ...]:
+    """Return one complete aggregate reset request set."""
+
+    return tuple(
+        ParticipantEpisodeResetRequest(
+            participant_address=address,
+            episode_id=f"{address}-episode-2",
+        )
+        for address in (_BLUE, _GREEN, _RED)
+    )
+
+
+def _terminate_probe_participants(
+    participant: CyborgParticipantRuntime,
+    snapshot: RuntimeSnapshot,
+) -> tuple[RuntimeSnapshot, bool]:
+    """Terminate every aggregate participant and retain every disposition."""
+
+    dispositions: list[bool] = []
+    for address in (_BLUE, _GREEN, _RED):
+        result = participant.terminate(
+            ParticipantEpisodeTerminateRequest(participant_address=address),
+            snapshot,
+        )
+        dispositions.append(result.success)
+        snapshot = result.snapshot
+    return snapshot, all(dispositions)
+
+
 def _probe_time_declaration() -> TimeModelDeclarationModel:
+    """Return the RAES-owned logical clock used by the runtime probe."""
+
     domain = "time.domain.cage2"
     policy = "time.progression.cage2"
     return TimeModelDeclarationModel(
@@ -479,6 +533,8 @@ def _probe_time_declaration() -> TimeModelDeclarationModel:
 
 
 def _probe_orchestration_plan() -> OrchestrationPlan:
+    """Return the bounded one-turn workflow used by the runtime probe."""
+
     episode = ExperimentEpisodeControlModel(
         turn_order="scenario-defined",
         termination_rule="admitted-logical-step-limit-or-source-terminal",
@@ -528,6 +584,8 @@ def _probe_orchestration_plan() -> OrchestrationPlan:
 
 
 def _probe_action_request() -> ParticipantActionAdmissionRequest:
+    """Return one published sleep-action admission request."""
+
     sample = sample_participant_action_admission_request()
     selection = sample.implementation_selection.model_copy(update={"participant_address": _BLUE})
     validated = ParticipantValidatedActionSelection(
@@ -549,6 +607,8 @@ def _probe_action_request() -> ParticipantActionAdmissionRequest:
 
 
 def _probe_evaluation_plan() -> EvaluationPlan:
+    """Return a bounded objective plan over projected confidentiality evidence."""
+
     proposition = "evaluation.proposition.compromised"
     assertion = "evaluation.assertion.compromised"
     objective = "evaluation.objective.defend"
@@ -812,6 +872,8 @@ def _manifest_payload(
     manifest: BackendManifest | None,
     payload: Mapping[str, object] | None,
 ) -> Mapping[str, object]:
+    """Return the provided payload or project the live CybORG manifest."""
+
     if payload is not None:
         return payload
     return cast(
@@ -824,6 +886,8 @@ def _passed_probe_evidence_refs(
     source_diagnostics: Iterable[Diagnostic],
     adapter_diagnostics: Iterable[Diagnostic],
 ) -> tuple[str, ...]:
+    """Return only evidence references whose owning probes passed."""
+
     refs: list[str] = []
     if (
         report is not None
@@ -864,6 +928,8 @@ def _report_has_only_passing_or_published_unsupported_cases(
 
 
 def _affirmative_capability_pointers(payload: Mapping[str, object]) -> tuple[str, ...]:
+    """Derive JSON Pointers for every affirmative manifest capability."""
+
     capabilities = payload.get("capabilities")
     if not isinstance(capabilities, Mapping):
         return ()
@@ -886,6 +952,8 @@ def _iter_affirmative_capability_pointers(
     value: Mapping[object, object],
     base_pointer: str,
 ) -> Iterable[str]:
+    """Yield affirmative leaves below one manifest capability mapping."""
+
     for key, child in sorted(value.items(), key=lambda item: str(item[0])):
         if key in _NON_CAPABILITY_KEYS or not _is_affirmative_capability_value(child):
             continue
@@ -900,31 +968,55 @@ def _iter_affirmative_capability_pointers(
 
 
 def _is_affirmative_capability_value(value: object) -> bool:
-    if value in (None, False):
-        return False
+    """Return whether a manifest capability value makes an affirmative claim."""
+
+    affirmative = False
     if value is True:
-        return True
-    if isinstance(value, str | int | float):
-        return bool(value)
-    if isinstance(value, Sequence) and not isinstance(value, str | bytes):
-        return any(_is_affirmative_capability_value(item) for item in value)
-    if isinstance(value, Mapping):
-        return any(
+        affirmative = True
+    elif isinstance(value, str | int | float) and value is not False:
+        affirmative = bool(value)
+    elif isinstance(value, Sequence) and not isinstance(value, str | bytes):
+        affirmative = any(_is_affirmative_capability_value(item) for item in value)
+    elif isinstance(value, Mapping):
+        affirmative = any(
             _is_affirmative_capability_value(child)
             for key, child in value.items()
             if key not in _NON_CAPABILITY_KEYS
         )
-    return False
+    return affirmative
 
 
 def _escape_pointer_token(token: str) -> str:
+    """Escape one JSON Pointer token."""
+
     return token.replace("~", "~0").replace("/", "~1")
 
 
+def _cli_output_directory(value: str) -> Path:
+    """Resolve a relative artifact directory beneath the invocation directory."""
+
+    requested = Path(value)
+    if requested.is_absolute() or not requested.parts or ".." in requested.parts:
+        raise argparse.ArgumentTypeError("output directory must be a relative child path")
+    root = Path.cwd().resolve()
+    resolved = (root / requested).resolve()
+    try:
+        relative = resolved.relative_to(root)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            "output directory must remain beneath the invocation directory"
+        ) from error
+    if not relative.parts:
+        raise argparse.ArgumentTypeError("output directory must not be the invocation directory")
+    return resolved
+
+
 def _parser() -> argparse.ArgumentParser:
+    """Build the closed command-line parser for deterministic suite execution."""
+
     parser = argparse.ArgumentParser(description="Run CybORG conformance evidence.")
     parser.add_argument("--suite", choices=("pr", "full"), default="pr")
-    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--output-dir", type=_cli_output_directory, required=True)
     return parser
 
 
@@ -937,7 +1029,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-if __name__ == "__main__":  # pragma: no cover - exercised by clean-install subprocess
+# Exercised by the clean-install subprocess.
+if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())
 
 

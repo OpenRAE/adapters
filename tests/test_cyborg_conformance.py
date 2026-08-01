@@ -229,6 +229,20 @@ def test_seed_tiers_weaknesses_and_reproduction_commands_are_fixed() -> None:
     assert cyborg_conformance_reproduction_commands("full")[0][4] == "full"
 
 
+def test_cli_rejects_output_paths_outside_the_invocation_directory(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    invocation = tmp_path / "invocation"
+    invocation.mkdir()
+    monkeypatch.chdir(invocation)
+
+    with pytest.raises(SystemExit):
+        conformance_module.main(["--suite", "pr", "--output-dir", "../outside-conformance"])
+
+    assert not (tmp_path / "outside-conformance").exists()
+
+
 def test_canonical_report_writer_persists_the_projected_payload(tmp_path: Path) -> None:
     report = run_cyborg_conformance(seed=3)
     payload = cyborg_backend_conformance_payload(report)
@@ -296,12 +310,14 @@ def test_suite_index_preserves_canonical_reports_and_non_claims(tmp_path: Path) 
     assert "passed" not in index
     assert index["explicit_non_claims"]
     adapter_runs = index["adapter_diagnostics"]
-    assert isinstance(adapter_runs, list) and adapter_runs[0]["seed"] == 3
+    assert isinstance(adapter_runs, list)
+    assert adapter_runs[0]["seed"] == 3
     assert all(
         diagnostic["code"].endswith(".validated") for diagnostic in adapter_runs[0]["diagnostics"]
     )
     reports = index["reports"]
-    assert isinstance(reports, list) and len(reports) == 1
+    assert isinstance(reports, list)
+    assert len(reports) == 1
     report_path = tmp_path / str(reports[0]["report_path"])
     assert report_path.is_file()
     persisted = json.loads(report_path.read_text(encoding="utf-8"))
