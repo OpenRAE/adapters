@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from copy import deepcopy
 from datetime import UTC, datetime
 from typing import NamedTuple, cast
@@ -194,38 +195,12 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
     ) -> ApplyResult:
         """Commit one staged portable reset and then one native reset."""
 
-        try:
-            working, changed, diagnostics = self._portable_reset_candidate(
-                requests, snapshot, policy
-            )
-        except _ResetRejected as rejected:
-            self._restore_checkpoint(checkpoint)
-            result = (
-                self._reset_failure(snapshot)
-                if rejected.diagnostics is None
-                else ApplyResult(
-                    success=False,
-                    snapshot=snapshot,
-                    diagnostics=rejected.diagnostics,
-                )
-            )
-        except Exception:
-            self._restore_checkpoint(checkpoint)
-            result = self._reset_failure(snapshot)
-        else:
-            if not self._provisioner.reset_execution():
-                self._restore_checkpoint(checkpoint)
-                result = self._reset_failure(snapshot)
-            else:
-                self._clear_observations()
-                self._control.reset_terminal()
-                result = ApplyResult(
-                    success=True,
-                    snapshot=working,
-                    diagnostics=diagnostics,
-                    changed_addresses=list(dict.fromkeys([*changed, policy.clock_address])),
-                )
-        return result
+        return self._commit_coordinated_lifecycle(
+            snapshot,
+            policy,
+            checkpoint,
+            lambda: self._portable_reset_candidate(requests, snapshot, policy),
+        )
 
     def restart(
         self,
@@ -290,10 +265,24 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
     ) -> ApplyResult:
         """Commit one staged portable restart and then one native reset."""
 
+        return self._commit_coordinated_lifecycle(
+            snapshot,
+            policy,
+            checkpoint,
+            lambda: self._portable_restart_candidate(requests, snapshot, policy),
+        )
+
+    def _commit_coordinated_lifecycle(
+        self,
+        snapshot: RuntimeSnapshot,
+        policy: _ExecutionPolicy,
+        checkpoint: _RuntimeCheckpoint,
+        candidate: Callable[[], tuple[RuntimeSnapshot, list[str], list[Diagnostic]]],
+    ) -> ApplyResult:
+        """Commit one staged portable lifecycle batch and one native reset."""
+
         try:
-            working, changed, diagnostics = self._portable_restart_candidate(
-                requests, snapshot, policy
-            )
+            working, changed, diagnostics = candidate()
         except _ResetRejected as rejected:
             self._restore_checkpoint(checkpoint)
             result = (
