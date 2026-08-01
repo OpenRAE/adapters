@@ -109,6 +109,18 @@ cleanup probes. Native-source absence or mismatch is an explicit readiness
 result, never a fallback to the injected driver under the same label. The suite
 does not strengthen the recorded research claim merely because it passes.
 
+That native readiness lane is also where issue #28's adapter conformance
+composition is checked against the real simulator. The manual run must construct
+`CyberBattleSimDriver`, run `run_cyberbattlesim_conformance()` through the
+adapter target, serialize the report with `backend_conformance_report_payload()`,
+collect `cyberbattlesim_source_protocol_diagnostics()` and manifest capability
+evidence, and verify cleanup succeeds or fails through bounded RAES diagnostics.
+The emitted report, diagnostics, evidence references, and cleanup receipt must
+not contain native action coordinates, observations, reward vectors, hidden
+state, object representations, paths, environment dumps, or tracebacks. A
+missing native installation is a readiness failure or skip in that lane; it must
+not be relabeled as a passed adapter run by swapping in the deterministic driver.
+
 Clean-install conformance belongs in the existing distribution verification
 boundary: install the built wheel with the `cyberbattlesim` extra into the
 throwaway environment, run from an isolated directory with `PYTHONPATH` cleared

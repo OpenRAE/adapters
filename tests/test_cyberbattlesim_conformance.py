@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 
 from raes_backend_protocols.manifest import backend_manifest_payload
 from raes_conformance.conformance import BackendConformanceReport
@@ -66,6 +67,7 @@ PARTICIPANT = "participant.behavior.attacker"
 OBSERVATION_BOUNDARY = "participant.observation-boundary.attacker-view"
 LOCAL_ACTION = "participant.action-contract.local-vulnerability"
 SENTINEL = "native-secret-sentinel"
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 @dataclass
@@ -273,6 +275,10 @@ def _json_text(payload: object) -> str:
     return json.dumps(payload, sort_keys=True)
 
 
+def _normalized_text(text: str) -> str:
+    return " ".join(text.split())
+
+
 def test_canonical_conformance_report_and_payload_are_published_shapes() -> None:
     report = run_cyberbattlesim_conformance(driver=ProbeDriver(), seed=20260729)
 
@@ -339,6 +345,32 @@ def test_manifest_capability_evidence_is_derived_and_fails_closed() -> None:
         source_diagnostics=diagnostics,
     )
     assert payload_gaps == ("/capabilities/provisioner/supports_new_mode",)
+
+
+def test_manual_native_readiness_protocol_covers_adapter_conformance_path() -> None:
+    qualification_guardrails = (
+        REPO_ROOT / "docs/decisions/cyberbattlesim-qualification-guardrails.md"
+    ).read_text(encoding="utf-8")
+    conformance_guardrails = (
+        REPO_ROOT / "docs/decisions/cyberbattlesim-conformance-guardrails.md"
+    ).read_text(encoding="utf-8")
+    qualification_guardrails_text = _normalized_text(qualification_guardrails)
+    conformance_guardrails_text = _normalized_text(conformance_guardrails)
+
+    assert "manual native-readiness plan" in qualification_guardrails_text
+    assert "real `CyberBattleSimDriver`" in qualification_guardrails_text
+    assert "not an upstream CyberBattleSim test" in qualification_guardrails_text
+    assert "deterministic injected-driver CI probe" in qualification_guardrails_text
+
+    assert "adapter conformance composition is checked against the real simulator" in (
+        conformance_guardrails_text
+    )
+    assert "`CyberBattleSimDriver`" in conformance_guardrails_text
+    assert "`run_cyberbattlesim_conformance()`" in conformance_guardrails_text
+    assert "`backend_conformance_report_payload()`" in conformance_guardrails_text
+    assert "`cyberbattlesim_source_protocol_diagnostics()`" in conformance_guardrails_text
+    assert "must not contain native action coordinates" in conformance_guardrails_text
+    assert "deterministic driver" in conformance_guardrails_text
 
 
 def test_failure_surface_diagnostics_validate_and_do_not_leak_native_sentinels() -> None:
