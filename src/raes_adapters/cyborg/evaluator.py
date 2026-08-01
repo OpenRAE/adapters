@@ -60,6 +60,7 @@ _CAPTURE_REQUIREMENT_ID = "capture-requirement.cyborg-cage2.reward-fact"
 _CAPTURE_WINDOW_ID = "capture-window.cyborg-cage2.committed-turns"
 _RECORD_VERSION = "1.0.0"
 _PROBE_DIGEST = "sha256:" + hashlib.sha256(b"cyborg-cage2-reward-probe-v1").hexdigest()
+_EvaluatorBase = object
 
 
 def _now_iso() -> str:
@@ -95,7 +96,7 @@ class _EvaluationState(NamedTuple):
     assertion_outcomes: dict[str, str]
 
 
-class CyborgEvaluator(object):  # noqa: UP004
+class CyborgEvaluator(_EvaluatorBase):
     """Project committed backend facts without advancing or inspecting CybORG."""
 
     def __init__(self, provisioner: CyborgProvisioner) -> None:
@@ -340,15 +341,10 @@ class CyborgEvaluator(object):  # noqa: UP004
         expected = predicate.get("value") if isinstance(predicate, dict) else None
         subjects = payload.get("subject_addresses")
         requirements = payload.get("evidence_requirement_refs")
+        subject = CyborgEvaluator._single_subject(subjects)
         supported = (
-            isinstance(property_name, str)
-            and property_name in _SUPPORTED_COMPONENTS
-            and isinstance(operator_name, str)
-            and operator_name in _OPERATORS
-            and type(expected) in {int, float}
-            and isinstance(subjects, list)
-            and len(subjects) == 1
-            and isinstance(subjects[0], str)
+            CyborgEvaluator._supported_predicate_values(property_name, operator_name, expected)
+            and subject is not None
             and requirements == ["source-ledger:reward-components"]
         )
         binding = None
@@ -357,7 +353,7 @@ class CyborgEvaluator(object):  # noqa: UP004
                 cast(str, property_name),
                 cast(str, operator_name),
                 float(cast(int | float, expected)),
-                cast(str, subjects[0]),
+                cast(str, subject),
                 "source-ledger:reward-components",
             )
         capability = (
@@ -366,6 +362,29 @@ class CyborgEvaluator(object):  # noqa: UP004
             else "cyborg-cage2.evaluation.predicate-unsupported"
         )
         return binding, capability
+
+    @staticmethod
+    def _supported_predicate_values(
+        property_name: object, operator_name: object, expected: object
+    ) -> bool:
+        """Check the scalar fields of a supported reward-component predicate."""
+
+        return (
+            isinstance(property_name, str)
+            and property_name in _SUPPORTED_COMPONENTS
+            and isinstance(operator_name, str)
+            and operator_name in _OPERATORS
+            and type(expected) in {int, float}
+        )
+
+    @staticmethod
+    def _single_subject(subjects: object) -> str | None:
+        """Resolve one exact portable subject address from a compiled predicate."""
+
+        if not isinstance(subjects, list) or len(subjects) != 1:
+            return None
+        subject = subjects[0]
+        return subject if isinstance(subject, str) else None
 
     @staticmethod
     def _latest_component(
