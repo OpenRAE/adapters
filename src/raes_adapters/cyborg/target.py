@@ -17,6 +17,7 @@ from raes_runtime.registry import (  # type: ignore[import-untyped]
 from raes_adapters.base import build_runtime_target
 
 from .driver import CyborgDriver, SourceInstalledCyborgDriver
+from .evaluator import CyborgEvaluator
 from .manifest import CYBORG_BACKEND_NAME, create_cyborg_manifest
 from .orchestrator import CyborgExecutionControl, CyborgOrchestrator
 from .participant_runtime import CyborgParticipantRuntime
@@ -119,8 +120,8 @@ def create_cyborg_components(
         raise ValueError(
             "CybORG execution components require orchestration, participant, and time claims."
         )
-    if manifest.has_evaluator:
-        raise ValueError("CybORG evaluation is not implemented by this target.")
+    if not manifest.has_evaluator:
+        raise ValueError("CybORG evaluation components require an evaluator claim.")
     if manifest.realization_envelope is None:
         raise ValueError("CybORG manifest requires a realization envelope.")
     expected = create_cyborg_manifest(seed=normalized["seed"])
@@ -148,9 +149,11 @@ def create_cyborg_components(
         orchestrator,
         time_runtime,
     )
+    evaluator = CyborgEvaluator(provisioner)
     return RuntimeTargetComponents(
         provisioner=provisioner,
         orchestrator=orchestrator,
+        evaluator=evaluator,
         participant_runtime=participant_runtime,
         time_runtime=time_runtime,
     )

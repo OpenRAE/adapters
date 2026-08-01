@@ -26,6 +26,9 @@ from raes_contracts.runtime_state import (  # type: ignore[import-untyped]
 
 from .driver import (
     CyborgDriver,
+    _NativeEvaluationContext,
+    _NativeEvaluationTurn,
+    _NativeTurnResult,
     validate_action_selection,
 )
 from .scenario import (
@@ -68,7 +71,10 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
         self._active_available = False
         self._active_descriptor: CyborgScenarioDescriptor | None = None
         self._active_hostnames: frozenset[str] = frozenset()
+        self._active_host_addresses: dict[str, str] = {}
         self._execution_generation = 0
+        self._pending_evaluation: _NativeEvaluationTurn | None = None
+        self._committed_evaluation: list[_NativeEvaluationTurn] = []
         self._pending_cleanup: list[object] = []
         self._lock = threading.RLock()
 
@@ -110,6 +116,8 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
                     self._active_available = False
                     self._active_descriptor = None
                     self._active_hostnames = frozenset()
+                    self._active_host_addresses = {}
+                    self._clear_evaluation()
                 else:
                     self._active_available = False
                     succeeded = False
@@ -145,6 +153,8 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
         self._active_available = True
         self._active_descriptor = descriptor
         self._active_hostnames = frozenset(translate_scenario(descriptor)["Hosts"])
+        self._active_host_addresses = _host_address_map(descriptor)
+        self._clear_evaluation()
         return _success(snapshot, reconciliation, self._realization_envelope)
 
     @contextmanager
@@ -172,6 +182,7 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
             elif candidate is not None:
                 self._active = candidate
                 self._active_available = True
+                self._clear_evaluation()
             return configured
 
     def _execution_candidate(self, red_variant: str) -> object | None:
@@ -191,26 +202,82 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
         except Exception:
             return None
 
-    def execute_turn(self, selection: object) -> object:
+    def execute_turn(
+        self,
+        selection: object,
+        *,
+        run_id: str,
+        episode_id: str,
+        action_instance_id: str,
+        logical_step: int,
+        logical_step_limit: int,
+    ) -> object:
         """Execute at most one aggregate native turn under the session lock."""
 
         with self._lock:
             step = getattr(self._driver, "step", None)
-            if self._active is None or not self._active_available or not callable(step):
+            if (
+                self._active is None
+                or not self._active_available
+                or not callable(step)
+                or not validate_action_selection(selection)
+            ):
                 raise RuntimeError("CybORG execution session is unavailable.")
             try:
                 result = step(self._active, selection)
+                if not isinstance(result, _NativeTurnResult):
+                    raise ValueError
+                terminal_cause = None
+                if result.source_terminal:
+                    terminal_cause = "source-terminal"
+                elif logical_step == logical_step_limit:
+                    terminal_cause = "logical-step-limit"
+                project = getattr(self._driver, "project_evaluation", None)
+                if not callable(project):
+                    raise ValueError
+                evaluation = project(
+                    self._active,
+                    _NativeEvaluationContext(
+                        external_address=selection.action_contract_address,
+                        host_addresses=dict(self._active_host_addresses),
+                        run_id=run_id,
+                        episode_id=episode_id,
+                        action_instance_id=action_instance_id,
+                        logical_step=logical_step,
+                        terminal_cause=terminal_cause,
+                    ),
+                )
+                if not isinstance(evaluation, _NativeEvaluationTurn):
+                    raise ValueError
+                self._pending_evaluation = evaluation
                 self._execution_generation += 1
                 return result
             except Exception:
+                self._pending_evaluation = None
                 self._active_available = False
                 raise RuntimeError("CybORG aggregate turn failed.") from None
+
+    def commit_evaluation(self, action_instance_id: str) -> None:
+        """Publish only the staged facts belonging to the accepted portable turn."""
+
+        with self._lock:
+            pending = self._pending_evaluation
+            if pending is not None and pending.action_instance_id == action_instance_id:
+                self._committed_evaluation.append(pending)
+            self._pending_evaluation = None
+
+    def committed_evaluation(self) -> tuple[_NativeEvaluationTurn, ...]:
+        """Return immutable backend-private facts for evaluator projection."""
+
+        with self._lock:
+            return tuple(self._committed_evaluation)
 
     def quarantine_execution(self) -> None:
         """Prevent reuse after an unprojectable post-effect native result."""
 
         with self._lock:
             self._active_available = False
+            self._pending_evaluation = None
 
     def execution_available(self) -> bool:
         """Report only whether an owned session may safely accept another turn."""
@@ -247,7 +314,15 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
                 succeeded = False
             if not succeeded:
                 self._active_available = False
+            else:
+                self._clear_evaluation()
             return succeeded
+
+    def _clear_evaluation(self) -> None:
+        """Drop pending and episode-scoped evaluation facts."""
+
+        self._pending_evaluation = None
+        self._committed_evaluation = []
 
     def _descriptor(self, plan: ProvisioningPlan) -> CyborgScenarioDescriptor:
         """Copy the complete desired state into a private driver descriptor."""
@@ -396,6 +471,22 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
         if not self.cleanup():
             return _failure(snapshot, _cleanup_failed_diagnostic())
         return _success(snapshot, reconciliation, self._realization_envelope)
+
+
+def _host_address_map(descriptor: CyborgScenarioDescriptor) -> dict[str, str]:
+    """Map generated native host labels back to admitted node addresses."""
+
+    result: dict[str, str] = {}
+    for resource in descriptor.resources:
+        if resource.resource_type != "node":
+            continue
+        name = resource.payload["name"]
+        count = resource.payload["count"]
+        if not isinstance(name, str) or type(count) is not int or count < 1:
+            raise ValueError
+        native_names = (name,) if count == 1 else tuple(f"{name}-{index}" for index in range(count))
+        result.update(dict.fromkeys(native_names, resource.address))
+    return result
 
 
 def _resource_diagnostics(

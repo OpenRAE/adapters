@@ -296,7 +296,7 @@ def _agent_declarations(
             "adversary": "Red",
             "actions": list(_BLUE_ACTIONS),
             "agent_type": "SleepAgent",
-            "reward_calculator_type": "None",
+            "reward_calculator_type": "HybridAvailabilityConfidentiality",
             "starting_sessions": _blue_starting_sessions(host_names),
             "wrappers": [],
         },
@@ -329,7 +329,7 @@ def _agent_declarations(
             },
             "actions": list(_RED_ACTIONS),
             "agent_type": "SleepAgent",
-            "reward_calculator_type": "None",
+            "reward_calculator_type": "HybridImpactPwn",
             "starting_sessions": [
                 {
                     "hostname": first_host,

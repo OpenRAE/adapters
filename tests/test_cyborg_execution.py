@@ -12,7 +12,9 @@ from typing import Any
 import pytest
 from raes import parse_sdl
 from raes_contracts.contracts import (
+    ExperimentDerivedMeasureModel,
     ExperimentEpisodeControlModel,
+    ExperimentEvidenceRecordModel,
     ExperimentRedVariantSelectionModel,
 )
 from raes_contracts.contracts.time_model import (
@@ -33,6 +35,8 @@ from raes_contracts.participant_episode import (
 )
 from raes_contracts.planning import (
     ChangeAction,
+    EvaluationOp,
+    EvaluationPlan,
     OrchestrationOp,
     OrchestrationPlan,
     PlannedResource,
@@ -46,12 +50,15 @@ from raes_runtime.participant_result_contracts import (
 )
 from raes_runtime.registry_probes import sample_participant_action_admission_request
 
-from raes_adapters.cyborg import create_cyborg_target
+from raes_adapters.cyborg import CyborgEvaluator, create_cyborg_target
 from raes_adapters.cyborg import driver as driver_module
 from raes_adapters.cyborg import participant_runtime as participant_runtime_module
 from raes_adapters.cyborg.driver import (
     SourceInstalledCyborgDriver,
+    _NativeEvaluationContext,
+    _NativeEvaluationTurn,
     _NativeParticipantOccurrence,
+    _NativeRewardComponent,
     _NativeTurnResult,
 )
 
@@ -60,6 +67,7 @@ _GREEN = "participant.behavior.green"
 _RED = "participant.behavior.red"
 _SLEEP = "participant.action-contract.sleep"
 _ANALYSE = "participant.action-contract.analyse"
+_RESTORE = "participant.action-contract.restore"
 _GREEN_PORT_SCAN = "participant.action-contract.green-port-scan"
 _CLOCK = "time.clock.cage2"
 _WORKFLOW = "orchestration.workflow.cage2-run"
@@ -97,6 +105,13 @@ class FakeExecutionDriver:
     handles: list[HostileNative] = field(default_factory=list)
     cleanup_calls: list[object] = field(default_factory=list)
     selections: list[ParticipantValidatedActionSelection] = field(default_factory=list)
+    evaluation_contexts: list[dict[str, object]] = field(default_factory=list)
+    evaluation_rewards: tuple[tuple[str, float], ...] = (
+        (_BLUE, 0.0),
+        (_GREEN, 0.0),
+        (_RED, 0.0),
+    )
+    evaluation_components: tuple[_NativeRewardComponent, ...] = ()
     reconstruction_variants: list[str] = field(default_factory=list)
     resets: int = 0
 
@@ -155,6 +170,33 @@ class FakeExecutionDriver:
                 _NativeParticipantOccurrence(_GREEN, _GREEN_PORT_SCAN),
                 _NativeParticipantOccurrence(_RED, red_action),
             ),
+        )
+
+    def project_evaluation(
+        self,
+        handle: object,
+        context: _NativeEvaluationContext,
+    ) -> _NativeEvaluationTurn:
+        assert handle in self.handles
+        self.evaluation_contexts.append(
+            {
+                "external_address": context.external_address,
+                "host_addresses": context.host_addresses,
+                "run_id": context.run_id,
+                "episode_id": context.episode_id,
+                "action_instance_id": context.action_instance_id,
+                "logical_step": context.logical_step,
+                "terminal_cause": context.terminal_cause,
+            }
+        )
+        return _NativeEvaluationTurn(
+            run_id=context.run_id,
+            episode_id=context.episode_id,
+            action_instance_id=context.action_instance_id,
+            logical_step=context.logical_step,
+            terminal_cause=context.terminal_cause,
+            rewards=self.evaluation_rewards,
+            components=self.evaluation_components,
         )
 
 
@@ -342,18 +384,19 @@ def _prepared_target(
     return target, snapshot
 
 
-def test_target_declares_execution_components_without_evaluator() -> None:
+def test_target_declares_execution_and_evaluation_components() -> None:
     target = create_cyborg_target(driver=FakeExecutionDriver(), seed=7)
 
     assert target.manifest.has_orchestrator
     assert target.manifest.has_participant_runtime
     assert target.manifest.has_time
-    assert not target.manifest.has_evaluator
+    assert target.manifest.has_evaluator
     assert "participant-observation-envelope-v1" in target.manifest.supported_contract_versions
     assert "no observation" not in target.manifest.constraints["equivalence"]
     assert target.orchestrator is not None
     assert target.participant_runtime is not None
     assert target.time_runtime is not None
+    assert isinstance(target.evaluator, CyborgEvaluator)
 
 
 @pytest.mark.parametrize(
@@ -502,6 +545,216 @@ def test_one_admitted_action_commits_one_aggregate_turn_and_portable_joins() -> 
     )
     for forbidden in ("reward_vector", "action_id", "native-id", "Traceback", "HostileNative"):
         assert forbidden not in portable
+
+
+def test_evaluation_facts_commit_only_with_the_complete_portable_turn() -> None:
+    driver = FakeExecutionDriver()
+    target, snapshot = _prepared_target(driver, max_steps=1)
+    assert target.participant_runtime is not None
+
+    result = target.participant_runtime.admit_action(_request(), snapshot)
+
+    assert result.success
+    assert driver.evaluation_contexts == [
+        {
+            "external_address": _SLEEP,
+            "host_addresses": {"user-host": "provision.node.user-host"},
+            "run_id": f"{_WORKFLOW}-run",
+            "episode_id": f"{_BLUE}-episode-1",
+            "action_instance_id": "blue-action-1",
+            "logical_step": 1,
+            "terminal_cause": "logical-step-limit",
+        }
+    ]
+    assert target.provisioner.committed_evaluation() == (
+        _NativeEvaluationTurn(
+            run_id=f"{_WORKFLOW}-run",
+            episode_id=f"{_BLUE}-episode-1",
+            action_instance_id="blue-action-1",
+            logical_step=1,
+            terminal_cause="logical-step-limit",
+            rewards=((_BLUE, 0.0), (_GREEN, 0.0), (_RED, 0.0)),
+            components=(),
+        ),
+    )
+
+
+def test_effectful_turn_without_evaluation_projection_is_quarantined() -> None:
+    driver = FakeExecutionDriver()
+    driver.project_evaluation = None  # type: ignore[method-assign,assignment]
+    target, snapshot = _prepared_target(driver, max_steps=1)
+    assert target.participant_runtime is not None
+
+    result = target.participant_runtime.admit_action(_request(), snapshot)
+
+    assert not result.success
+    assert len(driver.selections) == 1
+    assert not target.provisioner.execution_available()
+    assert target.provisioner.committed_evaluation() == ()
+
+
+def test_evaluator_joins_supported_objective_to_typed_evidence_and_measure() -> None:
+    component = _NativeRewardComponent(
+        _BLUE,
+        "provision.node.user-host",
+        "confidentiality",
+        -0.1,
+        "source-ledger:reward-components",
+    )
+    driver = FakeExecutionDriver(
+        evaluation_rewards=((_BLUE, -0.1), (_GREEN, 0.0), (_RED, 0.1)),
+        evaluation_components=(component,),
+    )
+    target, snapshot = _prepared_target(driver, max_steps=1)
+    assert target.participant_runtime is not None
+    action = target.participant_runtime.admit_action(_request(), snapshot)
+    assert action.success
+    evaluator = CyborgEvaluator(target.provisioner)
+    plan = _evaluation_plan(property_name="confidentiality")
+
+    result = evaluator.start(plan, action.snapshot)
+
+    assert result.success
+    truth = result.snapshot.proposition_truth_results["evaluation.assertion.compromised"]
+    assert truth["proposition_outcome"] == "true"
+    assert truth["assertion_outcome"] == "true"
+    assert truth["evidence_refs"]
+    objective = evaluator.results()["evaluation.objective.defend"]
+    assert objective["status"] == "ready"
+    assert objective["passed"] is True
+    assert objective["score"] is None
+    records = evaluator.evidence_records()
+    measures = evaluator.derived_measures()
+    assert records
+    assert all(isinstance(item, ExperimentEvidenceRecordModel) for item in records)
+    assert len(measures) == 1
+    assert isinstance(measures[0], ExperimentDerivedMeasureModel)
+    assert measures[0].value == -0.1
+    assert measures[0].measure_kind == "score"
+    assert "not a conformance" in measures[0].limitations[0]
+    joined = str([item.model_dump(mode="json") for item in records])
+    for expected in (
+        f"{_WORKFLOW}-run",
+        f"{_BLUE}-episode-1",
+        "blue-action-1",
+        "logical-step:1",
+        "source-ledger:reward-components",
+        "terminal-cause",
+        "26ce1c1253fa9e2e73f25e6a7f2da32860c11257",
+    ):
+        assert expected in joined
+
+
+def test_evaluator_marks_unavailable_critical_impact_unsupported() -> None:
+    driver = FakeExecutionDriver()
+    target, snapshot = _prepared_target(driver, max_steps=1)
+    assert target.participant_runtime is not None
+    action = target.participant_runtime.admit_action(_request(), snapshot)
+    assert action.success
+    evaluator = CyborgEvaluator(target.provisioner)
+
+    result = evaluator.start(_evaluation_plan(property_name="critical-impact"), action.snapshot)
+
+    assert result.success
+    truth = result.snapshot.proposition_truth_results["evaluation.assertion.compromised"]
+    assert truth["proposition_outcome"] == "unsupported"
+    assert truth["assertion_outcome"] == "unsupported"
+    assert truth["unsupported_capability_refs"] == [
+        "cyborg-cage2.evaluation.critical-impact-unavailable"
+    ]
+    objective = evaluator.results()["evaluation.objective.defend"]
+    assert objective["status"] == "failed"
+    assert objective["passed"] is None
+    assert objective["score"] is None
+
+
+def test_evaluator_preserves_unchanged_assertion_outcomes_during_reconciliation() -> None:
+    component = _NativeRewardComponent(
+        _BLUE,
+        "provision.node.user-host",
+        "confidentiality",
+        -0.1,
+        "source-ledger:reward-components",
+    )
+    driver = FakeExecutionDriver(
+        evaluation_rewards=((_BLUE, -0.1), (_GREEN, 0.0), (_RED, 0.1)),
+        evaluation_components=(component,),
+    )
+    target, snapshot = _prepared_target(driver, max_steps=1)
+    assert target.participant_runtime is not None
+    action = target.participant_runtime.admit_action(_request(), snapshot)
+    assert action.success
+    evaluator = CyborgEvaluator(target.provisioner)
+    created = evaluator.start(_evaluation_plan(property_name="confidentiality"), action.snapshot)
+    assert created.success
+    incremental = _evaluation_plan(property_name="confidentiality")
+    operations = [
+        replace(operation, action=ChangeAction.UNCHANGED) for operation in incremental.operations
+    ]
+    operations.append(
+        EvaluationOp(
+            action=ChangeAction.CREATE,
+            address="evaluation.condition-binding.refresh",
+            resource_type="condition-binding",
+            payload={},
+        )
+    )
+
+    reconciled = evaluator.start(
+        replace(incremental, operations=operations),
+        created.snapshot,
+    )
+
+    assert reconciled.success
+    assert reconciled.changed_addresses == ["evaluation.condition-binding.refresh"]
+    assert evaluator.results()["evaluation.objective.defend"]["status"] == "ready"
+    assert evaluator.results()["evaluation.objective.defend"]["passed"] is True
+
+
+def _evaluation_plan(*, property_name: str) -> EvaluationPlan:
+    proposition = "evaluation.proposition.compromised"
+    assertion = "evaluation.assertion.compromised"
+    objective = "evaluation.objective.defend"
+    operations = [
+        EvaluationOp(
+            action=ChangeAction.CREATE,
+            address=proposition,
+            resource_type="proposition",
+            payload={
+                "evaluation_basis": "observed_state",
+                "subject_addresses": ["provision.node.user-host"],
+                "evidence_requirement_refs": ["source-ledger:reward-components"],
+                "spec": {
+                    "predicate": {
+                        "property": property_name,
+                        "operator": "lt",
+                        "value": 0.0,
+                    }
+                },
+            },
+        ),
+        EvaluationOp(
+            action=ChangeAction.CREATE,
+            address=assertion,
+            resource_type="assertion",
+            payload={"proposition_address": proposition, "polarity": "positive"},
+        ),
+        EvaluationOp(
+            action=ChangeAction.CREATE,
+            address=objective,
+            resource_type="objective",
+            payload={
+                "success_addresses": [assertion],
+                "spec": {"success": {"mode": "all"}},
+                "result_contract": {
+                    "resource_type": "objective",
+                    "supports_passed": True,
+                    "supports_score": False,
+                },
+            },
+        ),
+    ]
+    return EvaluationPlan(operations=operations, startup_order=[proposition, assertion, objective])
 
 
 @pytest.mark.parametrize(
@@ -1088,6 +1341,128 @@ def test_source_driver_projects_actual_dict_observation_shape(
         _NativeParticipantOccurrence(_GREEN, _SLEEP),
         _NativeParticipantOccurrence(_RED, "participant.action-contract.impact"),
     )
+
+
+def test_source_driver_projects_closed_reward_and_terminal_facts() -> None:
+    class NativeHandle:
+        def get_rewards(self) -> dict[str, float]:
+            return {"Blue": -12.0, "Green": 0.0, "Red": 11.0}
+
+        def get_reward_breakdown(self, agent: str) -> dict[str, object]:
+            if agent == "Blue":
+                return {"User0": SimpleNamespace(confidentiality=-1.0, availability=-10.0)}
+            if agent == "Red":
+                return {"User0": SimpleNamespace(confidentiality=1.0, availability=10.0)}
+            return {}
+
+    projected = SourceInstalledCyborgDriver._project_evaluation_turn(
+        NativeHandle(),
+        _NativeEvaluationContext(
+            external_address="participant.action-contract.restore",
+            host_addresses={"User0": "provision.node.user-0"},
+            run_id="run-7",
+            episode_id="episode-3",
+            action_instance_id="action-11",
+            logical_step=19,
+            terminal_cause="source-terminal",
+        ),
+    )
+
+    assert projected == _NativeEvaluationTurn(
+        run_id="run-7",
+        episode_id="episode-3",
+        action_instance_id="action-11",
+        logical_step=19,
+        terminal_cause="source-terminal",
+        rewards=((_BLUE, -12.0), (_GREEN, 0.0), (_RED, 11.0)),
+        components=(
+            _NativeRewardComponent(
+                _BLUE,
+                "provision.node.user-0",
+                "confidentiality",
+                -1.0,
+                "source-ledger:reward-components",
+            ),
+            _NativeRewardComponent(
+                _BLUE,
+                "provision.node.user-0",
+                "availability",
+                -10.0,
+                "source-ledger:reward-components",
+            ),
+            _NativeRewardComponent(
+                _BLUE,
+                None,
+                "action-cost",
+                -1.0,
+                "source-ledger:reward-objectives",
+            ),
+            _NativeRewardComponent(
+                _RED,
+                "provision.node.user-0",
+                "confidentiality",
+                1.0,
+                "source-ledger:reward-components",
+            ),
+            _NativeRewardComponent(
+                _RED,
+                "provision.node.user-0",
+                "availability",
+                10.0,
+                "source-ledger:reward-components",
+            ),
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    ("rewards", "blue_breakdown", "red_breakdown", "external_address"),
+    [
+        ({"Blue": float("nan"), "Green": 0.0, "Red": 0.0}, {}, {}, _SLEEP),
+        (
+            {"Blue": -1.0, "Green": 0.0, "Red": 0.0},
+            {"Unknown": SimpleNamespace(confidentiality=-1.0, availability=0.0)},
+            {},
+            _SLEEP,
+        ),
+        (
+            {"Blue": 0.0, "Green": 0.0, "Red": 0.0},
+            {"User0": SimpleNamespace(confidentiality=-1.0, availability=0.0)},
+            {},
+            _SLEEP,
+        ),
+        ({"Blue": 0.0, "Green": 0.0, "Red": 1.0}, {}, {}, _SLEEP),
+        ({"Blue": -2.0, "Green": 0.0, "Red": 0.0}, {}, {}, _RESTORE),
+    ],
+)
+def test_source_driver_rejects_invalid_native_reward_projection(
+    rewards: dict[str, float],
+    blue_breakdown: dict[str, object],
+    red_breakdown: dict[str, object],
+    external_address: str,
+) -> None:
+    class NativeHandle:
+        def get_rewards(self) -> dict[str, float]:
+            return rewards
+
+        def get_reward_breakdown(self, agent: str) -> dict[str, object]:
+            return blue_breakdown if agent == "Blue" else red_breakdown
+
+    handle = NativeHandle()
+    context = _NativeEvaluationContext(
+        external_address=external_address,
+        host_addresses={"User0": "provision.node.user-0"},
+        run_id="run-7",
+        episode_id="episode-3",
+        action_instance_id="action-11",
+        logical_step=19,
+        terminal_cause=None,
+    )
+    with pytest.raises(ValueError):
+        SourceInstalledCyborgDriver._project_evaluation_turn(
+            handle,
+            context,
+        )
 
 
 def test_source_driver_rejects_invalid_native_turn_outputs(

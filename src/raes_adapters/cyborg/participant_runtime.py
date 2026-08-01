@@ -452,6 +452,7 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
                         result = self._commit_failure(request, snapshot)
             if isinstance(result, ParticipantActionApplyResult) and result.success:
                 self._commit_observations(action_instance_id)
+                self._provisioner.commit_evaluation(action_instance_id)
             else:
                 self._pending_observations.pop(action_instance_id, None)
             return result
@@ -494,7 +495,12 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
 
         try:
             policy, tick = self._action_context(request, snapshot)
-            projected = self._native_turn(request)
+            projected = self._native_turn(
+                request,
+                policy=policy,
+                episode_id=episode_id,
+                tick=tick,
+            )
             next_snapshot, observations = self._advance_portable_turn(
                 snapshot,
                 request=request,
@@ -546,11 +552,25 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
             raise _TurnRejected("session-unavailable")
         return policy, tick
 
-    def _native_turn(self, request: ParticipantActionAdmissionRequest) -> _NativeTurnResult:
+    def _native_turn(
+        self,
+        request: ParticipantActionAdmissionRequest,
+        *,
+        policy: _ExecutionPolicy,
+        episode_id: str,
+        tick: int,
+    ) -> _NativeTurnResult:
         """Execute and validate the bounded native turn projection."""
 
         try:
-            projected = self._provisioner.execute_turn(request.validated_selection)
+            projected = self._provisioner.execute_turn(
+                request.validated_selection,
+                run_id=f"{policy.workflow_address}-run",
+                episode_id=episode_id,
+                action_instance_id=request.action_instance_id,
+                logical_step=tick + 1,
+                logical_step_limit=policy.max_steps,
+            )
         except RuntimeError:
             raise _TurnRejected("turn-failed") from None
         if not _valid_turn(projected, request.action_contract_address):

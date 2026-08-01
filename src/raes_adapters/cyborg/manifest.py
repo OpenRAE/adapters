@@ -10,6 +10,7 @@ from raes_backend_protocols.capabilities import (  # type: ignore[import-untyped
     TIME_CAPABILITY_REQUIRED_CONTRACTS,
     BackendCapabilitySet,
     BackendManifest,
+    EvaluatorCapabilities,
     OrchestratorCapabilities,
     ParticipantRuntimeCapabilities,
     ProvisionerCapabilities,
@@ -52,6 +53,13 @@ _SUPPORTED_CONTRACTS = frozenset(
         "participant-shared-state-record-v1",
         "participant-joint-action-record-v1",
         "participant-time-management-context-v1",
+        "evaluation-history-event-stream-v1",
+        "evaluation-plan-v1",
+        "evaluation-result-envelope-v1",
+        "experiment-capture-spec-v1",
+        "experiment-derived-measure-v1",
+        "experiment-evidence-record-v1",
+        "proposition-truth-result-v1",
         *TIME_CAPABILITY_REQUIRED_CONTRACTS,
     }
 )
@@ -179,6 +187,33 @@ def _provisioner_capabilities(
     )
 
 
+def _evaluator_capabilities() -> EvaluatorCapabilities:
+    """Declare only the committed reward-fact evaluation surface."""
+
+    return EvaluatorCapabilities(
+        name="cyborg-cage2-evaluator",
+        supported_sections=frozenset({"conditions", "propositions", "assertions", "objectives"}),
+        supports_scoring=True,
+        supports_objectives=True,
+        supported_predicate_families=frozenset({"number"}),
+        supported_quantifiers=frozenset({"all", "any"}),
+        supported_truth_outcomes=frozenset({"true", "false", "unknown", "unsupported"}),
+        supported_evidence_channels=frozenset({"api_response"}),
+        supported_time_domains=frozenset({"logical"}),
+        preserves_binding_provenance=True,
+        constraints={
+            "fact_boundary": "Only reward facts from committed aggregate turns are visible.",
+            "score_semantics": (
+                "Cumulative Blue reward is a derived measure, not an objective, "
+                "conformance result, or replication claim."
+            ),
+            "critical_impact": (
+                "Critical-impact interpretation is unsupported by generated RAES scenarios."
+            ),
+        },
+    )
+
+
 def create_cyborg_manifest(**config: object) -> BackendManifest:
     """Return the evidence-bounded execution manifest for the selected backend."""
 
@@ -256,6 +291,7 @@ def create_cyborg_manifest(**config: object) -> BackendManifest:
         ),
         capabilities=BackendCapabilitySet(
             provisioner=_provisioner_capabilities(envelope),
+            evaluator=_evaluator_capabilities(),
             orchestrator=OrchestratorCapabilities(
                 name="cyborg-cage2-orchestrator",
                 supported_sections=frozenset({"workflows"}),
@@ -317,7 +353,9 @@ def create_cyborg_manifest(**config: object) -> BackendManifest:
                 "CybORG substitutes selected OS images and native private addresses. "
                 "Logical action execution is bounded to the selected aggregate-turn "
                 "mapping with lossy participant-relative observation envelopes. "
-                "It makes no evaluator, reward, or outcome-equivalence claim."
+                "Reward facts are evaluator-only and cumulative Blue reward is a "
+                "derived score. No score is a conformance, scenario-correctness, "
+                "objective, or outcome-equivalence claim."
             ),
         },
     )

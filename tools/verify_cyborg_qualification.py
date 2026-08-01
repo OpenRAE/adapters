@@ -36,7 +36,9 @@ import numpy as np
 import CybORG as package
 from CybORG import CYBORG_VERSION, CybORG
 from CybORG.Agents import B_lineAgent, GreenAgent
+from CybORG.Agents.SimpleAgents.SleepAgent import SleepAgent
 from CybORG.Agents.Wrappers import ChallengeWrapper
+from CybORG.Shared.Actions import Restore, Sleep
 
 seed = int(sys.argv[1])
 max_steps = int(sys.argv[2])
@@ -64,6 +66,47 @@ for _ in range(max_steps):
             },
         }
     )
+
+reward_native = CybORG(
+    str(scenario),
+    "sim",
+    agents={"Red": B_lineAgent, "Green": GreenAgent},
+)
+reward_native.set_seed(153)
+reward_native.reset()
+reward_steps = {}
+cumulative_blue = 0.0
+for logical_step in range(1, 17):
+    reward_result = reward_native.step("Blue", Sleep())
+    rewards = reward_native.get_rewards()
+    cumulative_blue += rewards["Blue"]
+    if logical_step in {3, 14, 15, 16}:
+        blue = reward_native.get_reward_breakdown("Blue")
+        red = reward_native.get_reward_breakdown("Red")
+        target = "User4" if logical_step == 3 else "Op_Server0"
+        reward_steps[str(logical_step)] = {
+            "blue_total": rewards["Blue"],
+            "red_total": rewards["Red"],
+            "target": target,
+            "blue_confidentiality": blue[target].confidentiality,
+            "blue_availability": blue[target].availability,
+            "red_confidentiality": red[target].confidentiality,
+            "red_availability": red[target].availability,
+            "source_terminal": reward_result.done,
+        }
+
+restore_native = CybORG(
+    str(scenario),
+    "sim",
+    agents={"Red": SleepAgent, "Green": SleepAgent},
+)
+restore_native.set_seed(153)
+restore_native.reset()
+restore_result = restore_native.step(
+    "Blue",
+    Restore(session=0, agent="Blue", hostname="User0"),
+)
+restore_rewards = restore_native.get_rewards()
 dependencies = {
     (dist.metadata["Name"] or "").lower().replace("_", "-"): dist.version
     for dist in distributions()
@@ -95,6 +138,17 @@ print(
                     role: [step["actions"][role] for step in steps]
                     for role in ("blue", "red", "green")
                 },
+                "reward_projection": {
+                    "seed": 153,
+                    "steps": reward_steps,
+                    "cumulative_blue_through_step_16": cumulative_blue,
+                    "restore": {
+                        "hostname": "User0",
+                        "blue_total": restore_rewards["Blue"],
+                        "red_total": restore_rewards["Red"],
+                        "source_terminal": restore_result.done,
+                    },
+                },
             },
         },
         sort_keys=True,
@@ -114,6 +168,7 @@ from raes_adapters.cyborg import (
     translate_scenario,
 )
 from raes_contracts.runtime_state import RuntimeSnapshot
+from raes_contracts.participant_action_arguments import ParticipantValidatedActionSelection
 from raes_runtime.manager import RuntimeManager
 
 class AuditedSourceDriver:
@@ -140,6 +195,14 @@ class AuditedSourceDriver:
                 for name, info in expected_agents.items()
             )
         )
+        self.reward_calculators_match = {
+            name: scenario.get_agent_info(name).reward_calculator_type
+            for name in ("Blue", "Green", "Red")
+        } == {
+            "Blue": "HybridAvailabilityConfidentiality",
+            "Green": "None",
+            "Red": "HybridImpactPwn",
+        }
         self.native_projection_matches = (
             set(scenario.hosts) == set(expected["Hosts"])
             and set(scenario.subnets) == set(expected_subnets)
@@ -147,11 +210,28 @@ class AuditedSourceDriver:
             and memberships_match
             and set(state.hosts) == set(expected["Hosts"])
             and set(state.subnet_name_to_cidr) == set(expected_subnets)
+            and self.reward_calculators_match
         )
         return native
 
     def cleanup(self, handle):
         return self.delegate.cleanup(handle)
+
+    def construct_execution(self, descriptor, *, seed, red_variant):
+        return self.delegate.construct_execution(
+            descriptor,
+            seed=seed,
+            red_variant=red_variant,
+        )
+
+    def step(self, handle, selection):
+        return self.delegate.step(handle, selection)
+
+    def project_evaluation(self, handle, context):
+        return self.delegate.project_evaluation(handle, context)
+
+    def reset(self, handle, *, seed):
+        return self.delegate.reset(handle, seed=seed)
 
 driver = AuditedSourceDriver()
 target = create_cyborg_target(driver=driver, seed=3)
@@ -174,6 +254,59 @@ if execution_plan.diagnostics:
     raise RuntimeError("CybORG adapter smoke plan was not admitted")
 plan = execution_plan.provisioning
 result = target.provisioner.apply(plan, RuntimeSnapshot())
+configured = target.provisioner.configure_execution("sleep")
+selection = ParticipantValidatedActionSelection(
+    action_contract_address="participant.action-contract.restore",
+    argument_shape_ref="participant.action-argument-shape.cage2",
+    proposal_ref="proposal:qualification-restore",
+    normalized_arguments=(("hostname", "user0"), ("session", 0)),
+)
+turn = target.provisioner.execute_turn(
+    selection,
+    run_id="qualification-run",
+    episode_id="qualification-episode",
+    action_instance_id="qualification-restore",
+    logical_step=1,
+    logical_step_limit=2,
+)
+target.provisioner.commit_evaluation("qualification-restore")
+facts = target.provisioner.committed_evaluation()
+adapter_reward_projection_checks = {
+    "configured": configured,
+    "action_succeeded": turn.external_action_succeeded,
+    "one_fact": len(facts) == 1,
+    "rewards": len(facts) == 1 and facts[0].rewards == (
+        ("participant.behavior.blue", -1.1),
+        ("participant.behavior.green", 0.0),
+        ("participant.behavior.red", 0.1),
+    ),
+    "components": len(facts) == 1
+    and facts[0].components
+    == (
+        (
+            "participant.behavior.blue",
+            "provision.node.user0",
+            "confidentiality",
+            -0.1,
+            "source-ledger:reward-components",
+        ),
+        (
+            "participant.behavior.blue",
+            None,
+            "action-cost",
+            -1.0,
+            "source-ledger:reward-objectives",
+        ),
+        (
+            "participant.behavior.red",
+            "provision.node.user0",
+            "confidentiality",
+            0.1,
+            "source-ledger:reward-components",
+        ),
+    ),
+}
+adapter_reward_projection_matches = all(adapter_reward_projection_checks.values())
 cleaned = target.provisioner.cleanup()
 print(
     json.dumps(
@@ -182,6 +315,8 @@ print(
             "constructed": result.success,
             "cleaned": cleaned,
             "native_projection_matches": driver.native_projection_matches,
+            "reward_calculators_match": driver.reward_calculators_match,
+            "adapter_reward_projection_matches": adapter_reward_projection_matches,
             "recorded_resources": len(result.snapshot.entries),
             "realization_recorded": result.snapshot.realization_envelope is not None,
         },

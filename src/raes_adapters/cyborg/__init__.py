@@ -18,6 +18,7 @@ from .driver import (
     CyborgDriver,
     SourceInstalledCyborgDriver,
 )
+from .evaluator import CyborgEvaluator
 from .manifest import (
     CYBORG_BACKEND_NAME,
     CYBORG_PROFILE_ID,
@@ -47,6 +48,7 @@ __all__ = [
     "CYBORG_PROFILE_ID",
     "CYBORG_SCENARIO_MAPPING_VERSION",
     "CyborgDriver",
+    "CyborgEvaluator",
     "CyborgOrchestrator",
     "CyborgParticipantRuntime",
     "CyborgProvisioner",
