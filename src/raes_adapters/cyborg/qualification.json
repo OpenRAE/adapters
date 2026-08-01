@@ -299,13 +299,67 @@
           "GreenPortScan",
           "GreenPortScan"
         ]
+      },
+      "reward_projection": {
+        "seed": 153,
+        "steps": {
+          "3": {
+            "blue_total": -0.1,
+            "red_total": 0.1,
+            "target": "User4",
+            "blue_confidentiality": -0.1,
+            "blue_availability": 0,
+            "red_confidentiality": 0.1,
+            "red_availability": 0,
+            "source_terminal": false
+          },
+          "14": {
+            "blue_total": -3.1,
+            "red_total": 3.1,
+            "target": "Op_Server0",
+            "blue_confidentiality": -1.0,
+            "blue_availability": 0,
+            "red_confidentiality": 1.0,
+            "red_availability": 0,
+            "source_terminal": false
+          },
+          "15": {
+            "blue_total": -13.1,
+            "red_total": 13.1,
+            "target": "Op_Server0",
+            "blue_confidentiality": -1.0,
+            "blue_availability": -10.0,
+            "red_confidentiality": 1.0,
+            "red_availability": 10.0,
+            "source_terminal": false
+          },
+          "16": {
+            "blue_total": -13.1,
+            "red_total": 13.1,
+            "target": "Op_Server0",
+            "blue_confidentiality": -1.0,
+            "blue_availability": -10.0,
+            "red_confidentiality": 1.0,
+            "red_availability": 10.0,
+            "source_terminal": false
+          }
+        },
+        "cumulative_blue_through_step_16": -40.4,
+        "restore": {
+          "hostname": "User0",
+          "blue_total": -1.0,
+          "red_total": 0.0,
+          "source_terminal": false
+        }
       }
     },
     "adapter_smoke": {
       "backend": "cyborg-cage2",
       "constructed": true,
       "cleaned": true,
-      "native_projection_matches": true,
+    "native_projection_matches": true,
+    "reward_calculators_match": true,
+    "adapter_reward_projection_matches": true,
       "recorded_resources": 2,
       "realization_recorded": true
     }

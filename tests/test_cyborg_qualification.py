@@ -138,6 +138,58 @@ def test_clean_patched_wheel_smoke_is_bounded_and_covers_all_roles() -> None:
             "red": ["DiscoverRemoteSystems", "DiscoverNetworkServices"],
             "green": ["GreenPortScan", "GreenPortScan"],
         },
+        "reward_projection": {
+            "seed": 153,
+            "steps": {
+                "3": {
+                    "blue_total": -0.1,
+                    "red_total": 0.1,
+                    "target": "User4",
+                    "blue_confidentiality": -0.1,
+                    "blue_availability": 0,
+                    "red_confidentiality": 0.1,
+                    "red_availability": 0,
+                    "source_terminal": False,
+                },
+                "14": {
+                    "blue_total": -3.1,
+                    "red_total": 3.1,
+                    "target": "Op_Server0",
+                    "blue_confidentiality": -1.0,
+                    "blue_availability": 0,
+                    "red_confidentiality": 1.0,
+                    "red_availability": 0,
+                    "source_terminal": False,
+                },
+                "15": {
+                    "blue_total": -13.1,
+                    "red_total": 13.1,
+                    "target": "Op_Server0",
+                    "blue_confidentiality": -1.0,
+                    "blue_availability": -10.0,
+                    "red_confidentiality": 1.0,
+                    "red_availability": 10.0,
+                    "source_terminal": False,
+                },
+                "16": {
+                    "blue_total": -13.1,
+                    "red_total": 13.1,
+                    "target": "Op_Server0",
+                    "blue_confidentiality": -1.0,
+                    "blue_availability": -10.0,
+                    "red_confidentiality": 1.0,
+                    "red_availability": 10.0,
+                    "source_terminal": False,
+                },
+            },
+            "cumulative_blue_through_step_16": -40.4,
+            "restore": {
+                "hostname": "User0",
+                "blue_total": -1.0,
+                "red_total": 0.0,
+                "source_terminal": False,
+            },
+        },
     }
     serialized = json.dumps(smoke)
     assert "observation_values" not in serialized
@@ -154,6 +206,8 @@ def test_raes_adapter_smoke_constructs_and_cleans_the_selected_backend() -> None
         "constructed": True,
         "cleaned": True,
         "native_projection_matches": True,
+        "reward_calculators_match": True,
+        "adapter_reward_projection_matches": True,
         "recorded_resources": 2,
         "realization_recorded": True,
     }

@@ -174,7 +174,10 @@ def test_manifest_is_valid_and_discloses_the_actual_projection() -> None:
     assert model.capabilities.provisioner.name == "cyborg-cage2-provisioner"
     assert manifest.realization_envelope is not None
     assert manifest.has_orchestrator is True
-    assert manifest.has_evaluator is False
+    assert manifest.has_evaluator is True
+    assert model.capabilities.evaluator is not None
+    assert model.capabilities.evaluator.supports_scoring is True
+    assert model.capabilities.evaluator.supports_objectives is True
     assert manifest.has_participant_runtime is True
     assert manifest.has_observation is False
     assert manifest.has_time is True
@@ -253,6 +256,9 @@ def test_compiled_sdl_is_translated_to_native_topology_not_a_fixed_scenario() ->
             "username": "SYSTEM",
         }
     ]
+    assert agents["Blue"]["reward_calculator_type"] == ("HybridAvailabilityConfidentiality")
+    assert agents["Green"]["reward_calculator_type"] == "None"
+    assert agents["Red"]["reward_calculator_type"] == "HybridImpactPwn"
     assert scenario["Subnets"] == {
         "user-net": {
             "Hosts": ["linux-host-0", "linux-host-1", "windows-host"],

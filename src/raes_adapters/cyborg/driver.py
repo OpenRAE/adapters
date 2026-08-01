@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import random
 import shutil
@@ -51,6 +52,28 @@ class _NativeTurnResult(NamedTuple):
     occurrences: tuple[_NativeParticipantOccurrence, ...]
 
 
+class _NativeRewardComponent(NamedTuple):
+    """One finite backend evaluation fact with a portable target identity."""
+
+    participant_address: str
+    target_address: str | None
+    component: str
+    value: float
+    source_row: str
+
+
+class _NativeEvaluationTurn(NamedTuple):
+    """Closed evaluation facts projected from one accepted native turn."""
+
+    run_id: str
+    episode_id: str
+    action_instance_id: str
+    logical_step: int
+    terminal_cause: str | None
+    rewards: tuple[tuple[str, float], ...]
+    components: tuple[_NativeRewardComponent, ...]
+
+
 _ACTION_ARGUMENTS: dict[str, frozenset[str]] = {
     _SLEEP: frozenset(),
     _MONITOR: frozenset({"session"}),
@@ -58,6 +81,17 @@ _ACTION_ARGUMENTS: dict[str, frozenset[str]] = {
     _REMOVE: frozenset({"hostname", "session"}),
     _RESTORE: frozenset({"hostname", "session"}),
 }
+
+
+def _finite_native_number(value: object) -> float:
+    """Accept only plain finite source numeric scalars without rendering them."""
+
+    if type(value) not in {int, float}:
+        raise ValueError
+    projected = value if type(value) is float else float(cast(int, value))
+    if not math.isfinite(projected):
+        raise ValueError
+    return projected
 
 
 def validate_action_selection(selection: object) -> TypeGuard[ParticipantValidatedActionSelection]:
@@ -91,6 +125,12 @@ class _NativeCyborg(Protocol):
 
     def get_last_action(self, agent: str) -> object:
         """Return the private action selected for one participant."""
+
+    def get_rewards(self) -> object:
+        """Return source-native participant reward totals for the latest turn."""
+
+    def get_reward_breakdown(self, agent: str) -> object:
+        """Return source-native reward components for one participant."""
 
 
 class _NativeObservation(Protocol):
@@ -298,6 +338,34 @@ class SourceInstalledCyborgDriver(CyborgDriver):
                 random.setstate(caller_state)
         return projected
 
+    def project_evaluation(
+        self,
+        handle: object,
+        *,
+        external_address: str,
+        host_addresses: dict[str, str],
+        run_id: str,
+        episode_id: str,
+        action_instance_id: str,
+        logical_step: int,
+        terminal_cause: str | None,
+    ) -> _NativeEvaluationTurn:
+        """Read the latest native reward surfaces into a closed fact set."""
+
+        try:
+            return self._project_evaluation_turn(
+                cast(_NativeCyborg, handle),
+                external_address=external_address,
+                host_addresses=host_addresses,
+                run_id=run_id,
+                episode_id=episode_id,
+                action_instance_id=action_instance_id,
+                logical_step=logical_step,
+                terminal_cause=terminal_cause,
+            )
+        except Exception:
+            raise RuntimeError("CybORG evaluation projection failed.") from None
+
     @staticmethod
     def _native_blue_action(selection: ParticipantValidatedActionSelection) -> object:
         """Bind normalized arguments to fixed source action constructors."""
@@ -360,6 +428,117 @@ class SourceInstalledCyborgDriver(CyborgDriver):
                 _NativeParticipantOccurrence(_GREEN, green),
                 _NativeParticipantOccurrence(_RED, red),
             ),
+        )
+
+    @staticmethod
+    def _project_evaluation_turn(
+        native: _NativeCyborg,
+        *,
+        external_address: str,
+        host_addresses: dict[str, str],
+        run_id: str,
+        episode_id: str,
+        action_instance_id: str,
+        logical_step: int,
+        terminal_cause: str | None,
+    ) -> _NativeEvaluationTurn:
+        """Project exact finite reward facts without retaining native values."""
+
+        if (
+            not all(
+                isinstance(value, str) and value
+                for value in (external_address, run_id, episode_id, action_instance_id)
+            )
+            or type(logical_step) is not int
+            or logical_step < 1
+            or terminal_cause not in {None, "source-terminal", "logical-step-limit"}
+            or not host_addresses
+            or any(
+                not isinstance(native_name, str)
+                or not native_name
+                or not isinstance(address, str)
+                or not address
+                for native_name, address in host_addresses.items()
+            )
+        ):
+            raise ValueError
+
+        rewards = native.get_rewards()
+        if type(rewards) is not dict or set(rewards) != {"Blue", "Green", "Red"}:
+            raise ValueError
+        totals = {
+            participant: _finite_native_number(rewards[source_name])
+            for source_name, participant in (
+                ("Blue", _BLUE),
+                ("Green", _GREEN),
+                ("Red", _RED),
+            )
+        }
+
+        components: list[_NativeRewardComponent] = []
+        component_totals: dict[str, float] = {}
+        for source_name, participant in (("Blue", _BLUE), ("Red", _RED)):
+            breakdown = native.get_reward_breakdown(source_name)
+            if type(breakdown) is not dict:
+                raise ValueError
+            component_total = 0.0
+            for native_hostname in sorted(breakdown):
+                if type(native_hostname) is not str or native_hostname not in host_addresses:
+                    raise ValueError
+                native_components = breakdown[native_hostname]
+                confidentiality = _finite_native_number(
+                    getattr(native_components, "confidentiality", None)
+                )
+                availability = _finite_native_number(
+                    getattr(native_components, "availability", None)
+                )
+                for component, value in (
+                    ("confidentiality", confidentiality),
+                    ("availability", availability),
+                ):
+                    component_total += value
+                    if value != 0.0:
+                        components.append(
+                            _NativeRewardComponent(
+                                participant,
+                                host_addresses[native_hostname],
+                                component,
+                                value,
+                                "source-ledger:reward-components",
+                            )
+                        )
+            component_totals[participant] = component_total
+
+        red_difference = totals[_RED] - component_totals[_RED]
+        if not math.isclose(red_difference, 0.0, rel_tol=0.0, abs_tol=1e-9):
+            raise ValueError
+        action_cost = totals[_BLUE] - component_totals[_BLUE]
+        if action_cost > 0.0:
+            raise ValueError
+        if not math.isclose(action_cost, 0.0, rel_tol=0.0, abs_tol=1e-9):
+            components.insert(
+                len([item for item in components if item.participant_address == _BLUE]),
+                _NativeRewardComponent(
+                    _BLUE,
+                    None,
+                    "action-cost",
+                    action_cost,
+                    "source-ledger:reward-objectives",
+                ),
+            )
+        if external_address == _RESTORE and not math.isclose(
+            action_cost, -1.0, rel_tol=0.0, abs_tol=1e-9
+        ):
+            raise ValueError
+
+        return _NativeEvaluationTurn(
+            run_id=run_id,
+            episode_id=episode_id,
+            action_instance_id=action_instance_id,
+            logical_step=logical_step,
+            terminal_cause=terminal_cause,
+            rewards=tuple(totals.items()),
+            components=tuple(components),
         )
 
     def _native_binding(self) -> _NativeCyborgType:
