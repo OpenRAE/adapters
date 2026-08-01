@@ -74,6 +74,18 @@ class _NativeEvaluationTurn(NamedTuple):
     components: tuple[_NativeRewardComponent, ...]
 
 
+class _NativeEvaluationContext(NamedTuple):
+    """Portable identity and admitted-host context for one native turn."""
+
+    external_address: str
+    host_addresses: dict[str, str]
+    run_id: str
+    episode_id: str
+    action_instance_id: str
+    logical_step: int
+    terminal_cause: str | None
+
+
 _ACTION_ARGUMENTS: dict[str, frozenset[str]] = {
     _SLEEP: frozenset(),
     _MONITOR: frozenset({"session"}),
@@ -92,6 +104,146 @@ def _finite_native_number(value: object) -> float:
     if not math.isfinite(projected):
         raise ValueError
     return projected
+
+
+def _strict_native_mapping(value: object) -> dict[str, object]:
+    """Return an exact native dict after rejecting subclasses and non-string keys."""
+
+    if type(value) is not dict:
+        raise ValueError
+    mapping = cast(dict[object, object], value)
+    if any(type(key) is not str for key in mapping):
+        raise ValueError
+    return cast(dict[str, object], mapping)
+
+
+def _valid_evaluation_context(context: object) -> TypeGuard[_NativeEvaluationContext]:
+    """Validate the closed portable context passed across the driver boundary."""
+
+    if not isinstance(context, _NativeEvaluationContext):
+        return False
+    identities = (
+        context.external_address,
+        context.run_id,
+        context.episode_id,
+        context.action_instance_id,
+    )
+    return (
+        all(isinstance(value, str) and bool(value) for value in identities)
+        and type(context.logical_step) is int
+        and context.logical_step >= 1
+        and context.terminal_cause in {None, "source-terminal", "logical-step-limit"}
+        and _valid_host_addresses(context.host_addresses)
+    )
+
+
+def _valid_host_addresses(host_addresses: object) -> bool:
+    """Accept only a non-empty exact string-to-string portable host map."""
+
+    if type(host_addresses) is not dict or not host_addresses:
+        return False
+    mapping = cast(dict[object, object], host_addresses)
+    return all(
+        type(native_name) is str and bool(native_name) and type(address) is str and bool(address)
+        for native_name, address in mapping.items()
+    )
+
+
+def _project_reward_totals(value: object) -> dict[str, float]:
+    """Project the exact Blue, Green, and Red total reward surface."""
+
+    rewards = _strict_native_mapping(value)
+    if set(rewards) != {"Blue", "Green", "Red"}:
+        raise ValueError
+    return {
+        _BLUE: _finite_native_number(rewards["Blue"]),
+        _GREEN: _finite_native_number(rewards["Green"]),
+        _RED: _finite_native_number(rewards["Red"]),
+    }
+
+
+def _project_participant_components(
+    native: _NativeCyborg,
+    source_name: str,
+    participant: str,
+    host_addresses: dict[str, str],
+) -> tuple[list[_NativeRewardComponent], float]:
+    """Project one participant's finite host reward breakdown."""
+
+    breakdown = _strict_native_mapping(native.get_reward_breakdown(source_name))
+    components: list[_NativeRewardComponent] = []
+    total = 0.0
+    for native_hostname in sorted(breakdown):
+        if native_hostname not in host_addresses:
+            raise ValueError
+        native_components = breakdown[native_hostname]
+        values = (
+            (
+                "confidentiality",
+                _finite_native_number(getattr(native_components, "confidentiality", None)),
+            ),
+            (
+                "availability",
+                _finite_native_number(getattr(native_components, "availability", None)),
+            ),
+        )
+        for component, value in values:
+            total += value
+            if not math.isclose(value, 0.0, rel_tol=0.0, abs_tol=1e-9):
+                components.append(
+                    _NativeRewardComponent(
+                        participant,
+                        host_addresses[native_hostname],
+                        component,
+                        value,
+                        "source-ledger:reward-components",
+                    )
+                )
+    return components, total
+
+
+def _project_reward_components(
+    native: _NativeCyborg,
+    host_addresses: dict[str, str],
+) -> tuple[list[_NativeRewardComponent], dict[str, float]]:
+    """Project Blue and Red component ledgers in stable participant order."""
+
+    blue, blue_total = _project_participant_components(native, "Blue", _BLUE, host_addresses)
+    red, red_total = _project_participant_components(native, "Red", _RED, host_addresses)
+    return blue + red, {_BLUE: blue_total, _RED: red_total}
+
+
+def _add_action_cost(
+    external_address: str,
+    totals: dict[str, float],
+    component_totals: dict[str, float],
+    components: list[_NativeRewardComponent],
+) -> list[_NativeRewardComponent]:
+    """Reconcile total rewards and add the bounded Blue action-cost component."""
+
+    red_difference = totals[_RED] - component_totals[_RED]
+    if not math.isclose(red_difference, 0.0, rel_tol=0.0, abs_tol=1e-9):
+        raise ValueError
+    action_cost = totals[_BLUE] - component_totals[_BLUE]
+    if action_cost > 0.0:
+        raise ValueError
+    if external_address == _RESTORE and not math.isclose(
+        action_cost, -1.0, rel_tol=0.0, abs_tol=1e-9
+    ):
+        raise ValueError
+    if not math.isclose(action_cost, 0.0, rel_tol=0.0, abs_tol=1e-9):
+        blue_count = sum(item.participant_address == _BLUE for item in components)
+        components.insert(
+            blue_count,
+            _NativeRewardComponent(
+                _BLUE,
+                None,
+                "action-cost",
+                action_cost,
+                "source-ledger:reward-objectives",
+            ),
+        )
+    return components
 
 
 def validate_action_selection(selection: object) -> TypeGuard[ParticipantValidatedActionSelection]:
@@ -341,28 +493,12 @@ class SourceInstalledCyborgDriver(CyborgDriver):
     def project_evaluation(
         self,
         handle: object,
-        *,
-        external_address: str,
-        host_addresses: dict[str, str],
-        run_id: str,
-        episode_id: str,
-        action_instance_id: str,
-        logical_step: int,
-        terminal_cause: str | None,
+        context: _NativeEvaluationContext,
     ) -> _NativeEvaluationTurn:
         """Read the latest native reward surfaces into a closed fact set."""
 
         try:
-            return self._project_evaluation_turn(
-                cast(_NativeCyborg, handle),
-                external_address=external_address,
-                host_addresses=host_addresses,
-                run_id=run_id,
-                episode_id=episode_id,
-                action_instance_id=action_instance_id,
-                logical_step=logical_step,
-                terminal_cause=terminal_cause,
-            )
+            return self._project_evaluation_turn(cast(_NativeCyborg, handle), context)
         except Exception:
             raise RuntimeError("CybORG evaluation projection failed.") from None
 
@@ -433,110 +569,25 @@ class SourceInstalledCyborgDriver(CyborgDriver):
     @staticmethod
     def _project_evaluation_turn(
         native: _NativeCyborg,
-        *,
-        external_address: str,
-        host_addresses: dict[str, str],
-        run_id: str,
-        episode_id: str,
-        action_instance_id: str,
-        logical_step: int,
-        terminal_cause: str | None,
+        context: _NativeEvaluationContext,
     ) -> _NativeEvaluationTurn:
         """Project exact finite reward facts without retaining native values."""
 
-        if (
-            not all(
-                isinstance(value, str) and value
-                for value in (external_address, run_id, episode_id, action_instance_id)
-            )
-            or type(logical_step) is not int
-            or logical_step < 1
-            or terminal_cause not in {None, "source-terminal", "logical-step-limit"}
-            or not host_addresses
-            or any(
-                not isinstance(native_name, str)
-                or not native_name
-                or not isinstance(address, str)
-                or not address
-                for native_name, address in host_addresses.items()
-            )
-        ):
+        if not _valid_evaluation_context(context):
             raise ValueError
 
-        rewards = native.get_rewards()
-        if type(rewards) is not dict or set(rewards) != {"Blue", "Green", "Red"}:
-            raise ValueError
-        totals = {
-            participant: _finite_native_number(rewards[source_name])
-            for source_name, participant in (
-                ("Blue", _BLUE),
-                ("Green", _GREEN),
-                ("Red", _RED),
-            )
-        }
-
-        components: list[_NativeRewardComponent] = []
-        component_totals: dict[str, float] = {}
-        for source_name, participant in (("Blue", _BLUE), ("Red", _RED)):
-            breakdown = native.get_reward_breakdown(source_name)
-            if type(breakdown) is not dict:
-                raise ValueError
-            component_total = 0.0
-            for native_hostname in sorted(breakdown):
-                if type(native_hostname) is not str or native_hostname not in host_addresses:
-                    raise ValueError
-                native_components = breakdown[native_hostname]
-                confidentiality = _finite_native_number(
-                    getattr(native_components, "confidentiality", None)
-                )
-                availability = _finite_native_number(
-                    getattr(native_components, "availability", None)
-                )
-                for component, value in (
-                    ("confidentiality", confidentiality),
-                    ("availability", availability),
-                ):
-                    component_total += value
-                    if value != 0.0:
-                        components.append(
-                            _NativeRewardComponent(
-                                participant,
-                                host_addresses[native_hostname],
-                                component,
-                                value,
-                                "source-ledger:reward-components",
-                            )
-                        )
-            component_totals[participant] = component_total
-
-        red_difference = totals[_RED] - component_totals[_RED]
-        if not math.isclose(red_difference, 0.0, rel_tol=0.0, abs_tol=1e-9):
-            raise ValueError
-        action_cost = totals[_BLUE] - component_totals[_BLUE]
-        if action_cost > 0.0:
-            raise ValueError
-        if not math.isclose(action_cost, 0.0, rel_tol=0.0, abs_tol=1e-9):
-            components.insert(
-                len([item for item in components if item.participant_address == _BLUE]),
-                _NativeRewardComponent(
-                    _BLUE,
-                    None,
-                    "action-cost",
-                    action_cost,
-                    "source-ledger:reward-objectives",
-                ),
-            )
-        if external_address == _RESTORE and not math.isclose(
-            action_cost, -1.0, rel_tol=0.0, abs_tol=1e-9
-        ):
-            raise ValueError
+        totals = _project_reward_totals(native.get_rewards())
+        components, component_totals = _project_reward_components(native, context.host_addresses)
+        components = _add_action_cost(
+            context.external_address, totals, component_totals, components
+        )
 
         return _NativeEvaluationTurn(
-            run_id=run_id,
-            episode_id=episode_id,
-            action_instance_id=action_instance_id,
-            logical_step=logical_step,
-            terminal_cause=terminal_cause,
+            run_id=context.run_id,
+            episode_id=context.episode_id,
+            action_instance_id=context.action_instance_id,
+            logical_step=context.logical_step,
+            terminal_cause=context.terminal_cause,
             rewards=tuple(totals.items()),
             components=tuple(components),
         )

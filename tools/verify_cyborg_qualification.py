@@ -227,8 +227,8 @@ class AuditedSourceDriver:
     def step(self, handle, selection):
         return self.delegate.step(handle, selection)
 
-    def project_evaluation(self, handle, **context):
-        return self.delegate.project_evaluation(handle, **context)
+    def project_evaluation(self, handle, context):
+        return self.delegate.project_evaluation(handle, context)
 
     def reset(self, handle, *, seed):
         return self.delegate.reset(handle, seed=seed)

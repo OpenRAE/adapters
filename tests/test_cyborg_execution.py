@@ -55,6 +55,7 @@ from raes_adapters.cyborg import driver as driver_module
 from raes_adapters.cyborg import participant_runtime as participant_runtime_module
 from raes_adapters.cyborg.driver import (
     SourceInstalledCyborgDriver,
+    _NativeEvaluationContext,
     _NativeEvaluationTurn,
     _NativeParticipantOccurrence,
     _NativeRewardComponent,
@@ -174,33 +175,26 @@ class FakeExecutionDriver:
     def project_evaluation(
         self,
         handle: object,
-        *,
-        external_address: str,
-        host_addresses: dict[str, str],
-        run_id: str,
-        episode_id: str,
-        action_instance_id: str,
-        logical_step: int,
-        terminal_cause: str | None,
+        context: _NativeEvaluationContext,
     ) -> _NativeEvaluationTurn:
         assert handle in self.handles
         self.evaluation_contexts.append(
             {
-                "external_address": external_address,
-                "host_addresses": host_addresses,
-                "run_id": run_id,
-                "episode_id": episode_id,
-                "action_instance_id": action_instance_id,
-                "logical_step": logical_step,
-                "terminal_cause": terminal_cause,
+                "external_address": context.external_address,
+                "host_addresses": context.host_addresses,
+                "run_id": context.run_id,
+                "episode_id": context.episode_id,
+                "action_instance_id": context.action_instance_id,
+                "logical_step": context.logical_step,
+                "terminal_cause": context.terminal_cause,
             }
         )
         return _NativeEvaluationTurn(
-            run_id=run_id,
-            episode_id=episode_id,
-            action_instance_id=action_instance_id,
-            logical_step=logical_step,
-            terminal_cause=terminal_cause,
+            run_id=context.run_id,
+            episode_id=context.episode_id,
+            action_instance_id=context.action_instance_id,
+            logical_step=context.logical_step,
+            terminal_cause=context.terminal_cause,
             rewards=self.evaluation_rewards,
             components=self.evaluation_components,
         )
@@ -631,7 +625,8 @@ def test_evaluator_joins_supported_objective_to_typed_evidence_and_measure() -> 
     assert objective["score"] is None
     records = evaluator.evidence_records()
     measures = evaluator.derived_measures()
-    assert records and all(isinstance(item, ExperimentEvidenceRecordModel) for item in records)
+    assert records
+    assert all(isinstance(item, ExperimentEvidenceRecordModel) for item in records)
     assert len(measures) == 1
     assert isinstance(measures[0], ExperimentDerivedMeasureModel)
     assert measures[0].value == -0.1
@@ -1362,13 +1357,15 @@ def test_source_driver_projects_closed_reward_and_terminal_facts() -> None:
 
     projected = SourceInstalledCyborgDriver._project_evaluation_turn(
         NativeHandle(),
-        external_address="participant.action-contract.restore",
-        host_addresses={"User0": "provision.node.user-0"},
-        run_id="run-7",
-        episode_id="episode-3",
-        action_instance_id="action-11",
-        logical_step=19,
-        terminal_cause="source-terminal",
+        _NativeEvaluationContext(
+            external_address="participant.action-contract.restore",
+            host_addresses={"User0": "provision.node.user-0"},
+            run_id="run-7",
+            episode_id="episode-3",
+            action_instance_id="action-11",
+            logical_step=19,
+            terminal_cause="source-terminal",
+        ),
     )
 
     assert projected == _NativeEvaluationTurn(
@@ -1451,16 +1448,20 @@ def test_source_driver_rejects_invalid_native_reward_projection(
         def get_reward_breakdown(self, agent: str) -> dict[str, object]:
             return blue_breakdown if agent == "Blue" else red_breakdown
 
+    handle = NativeHandle()
+    context = _NativeEvaluationContext(
+        external_address=external_address,
+        host_addresses={"User0": "provision.node.user-0"},
+        run_id="run-7",
+        episode_id="episode-3",
+        action_instance_id="action-11",
+        logical_step=19,
+        terminal_cause=None,
+    )
     with pytest.raises(ValueError):
         SourceInstalledCyborgDriver._project_evaluation_turn(
-            NativeHandle(),
-            external_address=external_address,
-            host_addresses={"User0": "provision.node.user-0"},
-            run_id="run-7",
-            episode_id="episode-3",
-            action_instance_id="action-11",
-            logical_step=19,
-            terminal_cause=None,
+            handle,
+            context,
         )
 
 

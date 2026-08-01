@@ -26,6 +26,7 @@ from raes_contracts.runtime_state import (  # type: ignore[import-untyped]
 
 from .driver import (
     CyborgDriver,
+    _NativeEvaluationContext,
     _NativeEvaluationTurn,
     _NativeTurnResult,
     validate_action_selection,
@@ -226,25 +227,25 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
                 result = step(self._active, selection)
                 if not isinstance(result, _NativeTurnResult):
                     raise ValueError
-                terminal_cause = (
-                    "source-terminal"
-                    if result.source_terminal
-                    else "logical-step-limit"
-                    if logical_step == logical_step_limit
-                    else None
-                )
+                terminal_cause = None
+                if result.source_terminal:
+                    terminal_cause = "source-terminal"
+                elif logical_step == logical_step_limit:
+                    terminal_cause = "logical-step-limit"
                 project = getattr(self._driver, "project_evaluation", None)
                 if not callable(project):
                     raise ValueError
                 evaluation = project(
                     self._active,
-                    external_address=selection.action_contract_address,
-                    host_addresses=dict(self._active_host_addresses),
-                    run_id=run_id,
-                    episode_id=episode_id,
-                    action_instance_id=action_instance_id,
-                    logical_step=logical_step,
-                    terminal_cause=terminal_cause,
+                    _NativeEvaluationContext(
+                        external_address=selection.action_contract_address,
+                        host_addresses=dict(self._active_host_addresses),
+                        run_id=run_id,
+                        episode_id=episode_id,
+                        action_instance_id=action_instance_id,
+                        logical_step=logical_step,
+                        terminal_cause=terminal_cause,
+                    ),
                 )
                 if not isinstance(evaluation, _NativeEvaluationTurn):
                     raise ValueError

@@ -6,7 +6,7 @@ import hashlib
 import json
 from datetime import UTC, datetime
 from operator import eq, ge, gt, le, lt, ne
-from typing import cast
+from typing import NamedTuple, cast
 
 from raes_contracts.contracts import (  # type: ignore[import-untyped]
     EvaluationHistoryEventModel,
@@ -44,7 +44,7 @@ from raes_contracts.runtime_state import (  # type: ignore[import-untyped]
     SnapshotEntry,
 )
 
-from .driver import _NativeEvaluationTurn
+from .driver import _NativeEvaluationTurn, _NativeRewardComponent
 from .manifest import CYBORG_PROFILE_ID
 from .provisioner import CyborgProvisioner
 from .qualification import load_qualification
@@ -63,15 +63,39 @@ _PROBE_DIGEST = "sha256:" + hashlib.sha256(b"cyborg-cage2-reward-probe-v1").hexd
 
 
 def _now_iso() -> str:
+    """Return one UTC timestamp in the contract's canonical spelling."""
+
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _identity(*parts: object) -> str:
+    """Derive a stable identifier from a closed set of portable values."""
+
     encoded = json.dumps(parts, ensure_ascii=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
-class CyborgEvaluator:
+class _PredicateBinding(NamedTuple):
+    """Supported proposition fields resolved from one compiled operation."""
+
+    property_name: str
+    operator_name: str
+    expected: float
+    subject: str
+    requirement: str
+
+
+class _EvaluationState(NamedTuple):
+    """Mutable projection maps reconciled as one evaluator state."""
+
+    entries: dict[str, SnapshotEntry]
+    results: dict[str, dict[str, object]]
+    history: dict[str, list[dict[str, object]]]
+    truth: dict[str, dict[str, object]]
+    assertion_outcomes: dict[str, str]
+
+
+class CyborgEvaluator(object):  # noqa: UP004
     """Project committed backend facts without advancing or inspecting CybORG."""
 
     def __init__(self, provisioner: CyborgProvisioner) -> None:
@@ -89,9 +113,16 @@ class CyborgEvaluator:
 
         failure = self._validate_plan(plan, snapshot)
         if failure is not None:
-            return failure
-        if not any(item.action != ChangeAction.UNCHANGED for item in plan.operations):
-            return ApplyResult(success=True, snapshot=snapshot)
+            result = failure
+        elif not any(item.action != ChangeAction.UNCHANGED for item in plan.operations):
+            result = ApplyResult(success=True, snapshot=snapshot)
+        else:
+            result = self._start_changed(plan, snapshot)
+        return result
+
+    def _start_changed(self, plan: EvaluationPlan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        """Project a plan containing at least one changed operation."""
+
         try:
             facts = self._provisioner.committed_evaluation()
             now = _now_iso()
@@ -169,49 +200,22 @@ class CyborgEvaluator:
         propositions = {
             item.address: item for item in active if item.resource_type == "proposition"
         }
-        assertion_outcomes = {
-            address: outcome
-            for address, payload in truth.items()
-            if isinstance(payload, dict)
-            and isinstance((outcome := payload.get("assertion_outcome")), str)
-            and outcome in {"true", "false", "unknown", "unsupported"}
-        }
-        terminal = bool(facts and facts[-1].terminal_cause is not None)
-        run_id = facts[-1].run_id if facts else "cyborg-cage2.run-unavailable"
+        assertion_outcomes = self._existing_assertion_outcomes(truth)
+        state = _EvaluationState(entries, results, history, truth, assertion_outcomes)
 
         for operation in plan.operations:
             if operation.action == ChangeAction.UNCHANGED:
                 continue
             changed.append(operation.address)
-            if operation.action == ChangeAction.DELETE:
-                entries.pop(operation.address, None)
-                results.pop(operation.address, None)
-                history.pop(operation.address, None)
-                truth.pop(operation.address, None)
-                continue
-            entries[operation.address] = SnapshotEntry(
-                address=operation.address,
-                domain=RuntimeDomain.EVALUATION,
-                resource_type=operation.resource_type,
-                payload=operation.payload,
-                ordering_dependencies=operation.ordering_dependencies,
-                refresh_dependencies=operation.refresh_dependencies,
-                status="admitted" if operation.resource_type != "objective" else "evaluating",
+            self._apply_operation(
+                operation,
+                state,
+                propositions,
+                facts,
+                record_index,
             )
-            if operation.resource_type == "assertion":
-                truth_result = self._truth_result(operation, propositions, facts, record_index)
-                if truth_result is not None:
-                    truth[operation.address] = truth_result.model_dump(mode="json")
-                    assertion_outcomes[operation.address] = truth_result.assertion_outcome.value
 
-        for operation in active:
-            if operation.resource_type != "objective":
-                continue
-            result = self._objective_result(operation, assertion_outcomes, terminal, run_id, now)
-            results[operation.address] = result.model_dump(mode="json")
-            history[operation.address] = [
-                event.model_dump(mode="json") for event in self._history_events(result, now)
-            ]
+        self._apply_objectives(active, facts, now, state)
         return ApplyResult(
             success=True,
             snapshot=snapshot.with_entries(
@@ -224,6 +228,76 @@ class CyborgEvaluator:
         )
 
     @staticmethod
+    def _existing_assertion_outcomes(
+        truth: dict[str, dict[str, object]],
+    ) -> dict[str, str]:
+        """Seed objective inputs from assertion outcomes preserved by reconciliation."""
+
+        outcomes: dict[str, str] = {}
+        for address, payload in truth.items():
+            outcome = payload.get("assertion_outcome") if isinstance(payload, dict) else None
+            if isinstance(outcome, str) and outcome in {
+                "true",
+                "false",
+                "unknown",
+                "unsupported",
+            }:
+                outcomes[address] = outcome
+        return outcomes
+
+    def _apply_operation(
+        self,
+        operation: EvaluationOp,
+        state: _EvaluationState,
+        propositions: dict[str, EvaluationOp],
+        facts: tuple[_NativeEvaluationTurn, ...],
+        record_index: dict[tuple[str, int, str, str | None, str], str],
+    ) -> None:
+        """Apply one changed non-objective resource or remove prior state."""
+
+        if operation.action == ChangeAction.DELETE:
+            state.entries.pop(operation.address, None)
+            state.results.pop(operation.address, None)
+            state.history.pop(operation.address, None)
+            state.truth.pop(operation.address, None)
+            return
+        state.entries[operation.address] = SnapshotEntry(
+            address=operation.address,
+            domain=RuntimeDomain.EVALUATION,
+            resource_type=operation.resource_type,
+            payload=operation.payload,
+            ordering_dependencies=operation.ordering_dependencies,
+            refresh_dependencies=operation.refresh_dependencies,
+            status="admitted" if operation.resource_type != "objective" else "evaluating",
+        )
+        if operation.resource_type == "assertion":
+            truth_result = self._truth_result(operation, propositions, facts, record_index)
+            if truth_result is not None:
+                state.truth[operation.address] = truth_result.model_dump(mode="json")
+                state.assertion_outcomes[operation.address] = truth_result.assertion_outcome.value
+
+    def _apply_objectives(
+        self,
+        operations: list[EvaluationOp],
+        facts: tuple[_NativeEvaluationTurn, ...],
+        now: str,
+        state: _EvaluationState,
+    ) -> None:
+        """Refresh every active objective from the reconciled assertion state."""
+
+        terminal = bool(facts and facts[-1].terminal_cause is not None)
+        run_id = facts[-1].run_id if facts else "cyborg-cage2.run-unavailable"
+        for operation in operations:
+            if operation.resource_type == "objective":
+                result = self._objective_result(
+                    operation, state.assertion_outcomes, terminal, run_id, now
+                )
+                state.results[operation.address] = result.model_dump(mode="json")
+                state.history[operation.address] = [
+                    event.model_dump(mode="json") for event in self._history_events(result, now)
+                ]
+
+    @staticmethod
     def _truth_result(
         assertion: EvaluationOp,
         propositions: dict[str, EvaluationOp],
@@ -233,25 +307,43 @@ class CyborgEvaluator:
         proposition_address = assertion.payload.get("proposition_address")
         polarity = assertion.payload.get("polarity")
         proposition = propositions.get(str(proposition_address))
-        if proposition is None or polarity not in {"positive", "negative"}:
-            return None
+        result = None
+        if proposition is not None and polarity in {"positive", "negative"}:
+            base = {
+                "result_id": f"truth.{assertion.address}",
+                "proposition_address": str(proposition_address),
+                "assertion_address": assertion.address,
+                "assertion_polarity": polarity,
+                "evaluation_basis": "observed_state",
+            }
+            binding, capability = CyborgEvaluator._predicate_binding(proposition)
+            match = CyborgEvaluator._latest_component(facts, binding)
+            if binding is None:
+                result = CyborgEvaluator._unsupported_truth(base, capability)
+            elif match is None:
+                result = CyborgEvaluator._unknown_truth(base)
+            else:
+                result = CyborgEvaluator._observed_truth(base, binding, match, record_index)
+        return result
+
+    @staticmethod
+    def _predicate_binding(
+        proposition: EvaluationOp,
+    ) -> tuple[_PredicateBinding | None, str]:
+        """Resolve the one supported finite reward-component predicate shape."""
+
         payload = proposition.payload
-        predicate = payload.get("spec", {})
-        predicate = predicate.get("predicate", {}) if isinstance(predicate, dict) else {}
+        spec = payload.get("spec")
+        predicate = spec.get("predicate") if isinstance(spec, dict) else None
         property_name = predicate.get("property") if isinstance(predicate, dict) else None
         operator_name = predicate.get("operator") if isinstance(predicate, dict) else None
         expected = predicate.get("value") if isinstance(predicate, dict) else None
         subjects = payload.get("subject_addresses")
         requirements = payload.get("evidence_requirement_refs")
-        base = {
-            "result_id": f"truth.{assertion.address}",
-            "proposition_address": str(proposition_address),
-            "assertion_address": assertion.address,
-            "assertion_polarity": polarity,
-            "evaluation_basis": "observed_state",
-        }
-        supported_shape = (
-            property_name in _SUPPORTED_COMPONENTS
+        supported = (
+            isinstance(property_name, str)
+            and property_name in _SUPPORTED_COMPONENTS
+            and isinstance(operator_name, str)
             and operator_name in _OPERATORS
             and type(expected) in {int, float}
             and isinstance(subjects, list)
@@ -259,42 +351,83 @@ class CyborgEvaluator:
             and isinstance(subjects[0], str)
             and requirements == ["source-ledger:reward-components"]
         )
-        if not supported_shape:
-            capability = (
-                "cyborg-cage2.evaluation.critical-impact-unavailable"
-                if property_name == "critical-impact"
-                else "cyborg-cage2.evaluation.predicate-unsupported"
+        binding = None
+        if supported:
+            binding = _PredicateBinding(
+                cast(str, property_name),
+                cast(str, operator_name),
+                float(cast(int | float, expected)),
+                cast(str, subjects[0]),
+                "source-ledger:reward-components",
             )
-            return PropositionTruthResultModel(
-                **base,
-                proposition_outcome="unsupported",
-                assertion_outcome="unsupported",
-                unsupported_capability_refs=[capability],
-                loss_disclosures=[
-                    PropositionLossDisclosureModel(kind="lossy", within_admissible_bound=True)
-                ],
-            )
+        capability = (
+            "cyborg-cage2.evaluation.critical-impact-unavailable"
+            if property_name == "critical-impact"
+            else "cyborg-cage2.evaluation.predicate-unsupported"
+        )
+        return binding, capability
+
+    @staticmethod
+    def _latest_component(
+        facts: tuple[_NativeEvaluationTurn, ...],
+        binding: _PredicateBinding | None,
+    ) -> tuple[_NativeEvaluationTurn, _NativeRewardComponent] | None:
+        """Return the latest exact component matching a supported predicate."""
+
+        if binding is None:
+            return None
         matches = [
             (turn, component)
             for turn in facts
             for component in turn.components
-            if component.component == property_name
-            and component.target_address == subjects[0]
-            and component.source_row == requirements[0]
+            if component.component == binding.property_name
+            and component.target_address == binding.subject
+            and component.source_row == binding.requirement
         ]
-        if not matches:
-            return PropositionTruthResultModel(
-                **base,
-                proposition_outcome="unknown",
-                assertion_outcome="unknown",
-                indeterminacy_reason="missing_evidence",
-                loss_disclosures=[
-                    PropositionLossDisclosureModel(kind="lossy", within_admissible_bound=True)
-                ],
-            )
-        turn, component = matches[-1]
-        expected_number = float(cast(int | float, expected))
-        proposition_true = bool(_OPERATORS[str(operator_name)](component.value, expected_number))
+        return matches[-1] if matches else None
+
+    @staticmethod
+    def _unsupported_truth(base: dict[str, str], capability: str) -> PropositionTruthResultModel:
+        """Build an explicit unsupported result without inferring hidden truth."""
+
+        return PropositionTruthResultModel(
+            **base,
+            proposition_outcome="unsupported",
+            assertion_outcome="unsupported",
+            unsupported_capability_refs=[capability],
+            loss_disclosures=[
+                PropositionLossDisclosureModel(kind="lossy", within_admissible_bound=True)
+            ],
+        )
+
+    @staticmethod
+    def _unknown_truth(base: dict[str, str]) -> PropositionTruthResultModel:
+        """Build an unknown result when no committed component evidence exists."""
+
+        return PropositionTruthResultModel(
+            **base,
+            proposition_outcome="unknown",
+            assertion_outcome="unknown",
+            indeterminacy_reason="missing_evidence",
+            loss_disclosures=[
+                PropositionLossDisclosureModel(kind="lossy", within_admissible_bound=True)
+            ],
+        )
+
+    @staticmethod
+    def _observed_truth(
+        base: dict[str, str],
+        binding: _PredicateBinding,
+        match: tuple[_NativeEvaluationTurn, _NativeRewardComponent],
+        record_index: dict[tuple[str, int, str, str | None, str], str],
+    ) -> PropositionTruthResultModel:
+        """Evaluate one proposition from its latest committed component evidence."""
+
+        turn, component = match
+        proposition_true = bool(
+            _OPERATORS[binding.operator_name](component.value, binding.expected)
+        )
+        polarity = base["assertion_polarity"]
         assertion_true = proposition_true if polarity == "positive" else not proposition_true
         evidence_ref = record_index[
             (
@@ -315,7 +448,7 @@ class CyborgEvaluator:
                 implementation_version="1.0.0",
                 artifact_digest=_PROBE_DIGEST,
                 backend_manifest_ref="backend-manifest.cyborg-cage2",
-                proposition_address=str(proposition_address),
+                proposition_address=base["proposition_address"],
                 capability_refs=["cyborg-cage2.evaluation.reward-components"],
             ),
             evidence_refs=[evidence_ref],
@@ -581,8 +714,9 @@ class CyborgEvaluator:
         records: tuple[ExperimentEvidenceRecordModel, ...],
         now: str,
     ) -> tuple[ExperimentDerivedMeasureModel, ...]:
+        measures: list[ExperimentDerivedMeasureModel] = []
         if not facts or not records:
-            return ()
+            return tuple(measures)
         blue_total = sum(dict(turn.rewards)[_BLUE] for turn in facts)
         refs = [
             ExperimentEvidenceRecordReferenceModel(
@@ -594,7 +728,7 @@ class CyborgEvaluator:
             if f"participant={_BLUE};" in (record.raw_content.payload_summary or "")
             and "meaning=per-step-reward;" in (record.raw_content.payload_summary or "")
         ]
-        return (
+        measures.append(
             ExperimentDerivedMeasureModel(
                 schema_version="experiment-derived-measure/v1",
                 derived_measure_id=(
@@ -631,8 +765,9 @@ class CyborgEvaluator:
                         ref_kind="other", ref_id=facts[-1].episode_id, ref_version="1.0.0"
                     ),
                 ],
-            ),
+            )
         )
+        return tuple(measures)
 
     def status(self) -> dict[str, object]:
         return {
