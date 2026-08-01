@@ -229,7 +229,30 @@ def test_compiled_sdl_is_translated_to_native_topology_not_a_fixed_scenario() ->
     )
 
     scenario = translate_scenario(descriptor)
-    assert scenario["Agents"] == {}
+    assert set(scenario["Agents"]) == {"Blue", "Green", "Red"}
+    agents = scenario["Agents"]
+    assert isinstance(agents, dict)
+    assert agents["Blue"]["AllowedSubnets"] == ["user-net"]
+    assert agents["Green"]["AllowedSubnets"] == ["user-net"]
+    assert agents["Red"]["AllowedSubnets"] == ["user-net"]
+    assert {session["hostname"] for session in agents["Blue"]["starting_sessions"]} == {
+        "linux-host-0",
+        "linux-host-1",
+        "windows-host",
+    }
+    assert {session["hostname"] for session in agents["Green"]["starting_sessions"]} == {
+        "linux-host-0",
+        "linux-host-1",
+        "windows-host",
+    }
+    assert agents["Red"]["starting_sessions"] == [
+        {
+            "hostname": "linux-host-0",
+            "name": "RedPhish",
+            "type": "RedAbstractSession",
+            "username": "SYSTEM",
+        }
+    ]
     assert scenario["Subnets"] == {
         "user-net": {
             "Hosts": ["linux-host-0", "linux-host-1", "windows-host"],

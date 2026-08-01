@@ -103,7 +103,7 @@ class _NativeResult(Protocol):
     """Private result fields projected into bounded portable facts."""
 
     error: object | None
-    observation: _NativeObservation
+    observation: object
     done: object
 
 
@@ -342,9 +342,13 @@ class SourceInstalledCyborgDriver(CyborgDriver):
         if native_result.error is not None:
             raise ValueError
         observation = native_result.observation
-        if type(observation) is not shared.Observation:
+        if isinstance(observation, dict):
+            observation_data = observation
+        elif type(observation) is shared.Observation:
+            observation_data = cast(_NativeObservation, observation).data
+        else:
             raise ValueError
-        success = observation.data.get("success") == enums.TrinaryEnum.TRUE
+        success = observation_data.get("success") == enums.TrinaryEnum.TRUE
         source_terminal = native_result.done is True
         green = _project_native_action(native.get_last_action("Green"), actions)
         red = _project_native_action(native.get_last_action("Red"), actions)

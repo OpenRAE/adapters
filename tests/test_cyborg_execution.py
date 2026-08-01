@@ -1065,6 +1065,31 @@ def test_source_driver_step_projects_turn_and_preserves_caller_rng(
     )
 
 
+def test_source_driver_projects_actual_dict_observation_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    modules, actions, true_value = _fake_native_modules()
+    monkeypatch.setattr(driver_module, "import_module", modules.__getitem__)
+    results_type = modules["CybORG.Shared"].Results
+
+    class NativeHandle:
+        def get_last_action(self, agent: str) -> object:
+            return actions.Sleep() if agent == "Green" else actions.Impact()
+
+    projected = SourceInstalledCyborgDriver._project_turn(
+        NativeHandle(),
+        results_type(observation={"success": true_value}),
+        _SLEEP,
+    )
+
+    assert projected.external_action_succeeded is True
+    assert projected.occurrences == (
+        _NativeParticipantOccurrence(_BLUE, _SLEEP),
+        _NativeParticipantOccurrence(_GREEN, _SLEEP),
+        _NativeParticipantOccurrence(_RED, "participant.action-contract.impact"),
+    )
+
+
 def test_source_driver_rejects_invalid_native_turn_outputs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1135,7 +1160,11 @@ def test_source_driver_construct_execution_binds_exact_red_agent(
     result = source_driver.construct_execution(descriptor, seed=7, red_variant=variant)
 
     assert result == "native"
-    assert observed == {"descriptor": descriptor, "seed": 7, "agents": {"Red": red_agent}}
+    assert observed == {
+        "descriptor": descriptor,
+        "seed": 7,
+        "agents": {"Red": red_agent},
+    }
 
 
 def test_source_driver_construct_execution_rejects_invalid_policy_bindings(

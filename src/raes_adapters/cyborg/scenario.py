@@ -57,6 +57,27 @@ _COMPILED_INFRASTRUCTURE_KEYS = frozenset(
 _NETWORK_PROPERTY_KEYS = frozenset({"cidr", "gateway", "internal"})
 _INVALID_NODE_CODE = "cyborg-backend.plan.invalid-node"
 _INVALID_NODE_MESSAGE = "A node resource is not a complete compiled RAES VM descriptor."
+_BLUE_ACTIONS = [
+    "Sleep",
+    "Monitor",
+    "Analyse",
+    "Remove",
+    "Restore",
+]
+_GREEN_ACTIONS = [
+    "Sleep",
+    "GreenPingSweep",
+    "GreenPortScan",
+    "GreenConnection",
+]
+_RED_ACTIONS = [
+    "Sleep",
+    "DiscoverRemoteSystems",
+    "DiscoverNetworkServices",
+    "ExploitRemoteService",
+    "PrivilegeEscalate",
+    "Impact",
+]
 
 _NetworkFacts = tuple[
     str,
@@ -245,10 +266,108 @@ def translate_scenario(
         subnet["Size"] = max(1, len(subnet_hosts))
 
     return {
-        "Agents": {},
+        "Agents": _agent_declarations(hosts, subnets),
         "Subnets": subnets,
         "Hosts": hosts,
     }
+
+
+def _agent_declarations(
+    hosts: dict[str, object],
+    subnets: dict[str, object],
+) -> dict[str, object]:
+    """Declare the fixed CAGE-2 roles against the generated native topology."""
+
+    host_names = sorted(hosts)
+    subnet_names = sorted(subnets)
+    first_host = host_names[0]
+    visible_hosts = {
+        hostname: {
+            "Interfaces": "All",
+            "System info": "All",
+            "User info": "All",
+        }
+        for hostname in host_names
+    }
+    return {
+        "Blue": {
+            "AllowedSubnets": subnet_names,
+            "INT": {"Hosts": visible_hosts},
+            "adversary": "Red",
+            "actions": list(_BLUE_ACTIONS),
+            "agent_type": "SleepAgent",
+            "reward_calculator_type": "None",
+            "starting_sessions": _blue_starting_sessions(host_names),
+            "wrappers": [],
+        },
+        "Green": {
+            "AllowedSubnets": subnet_names,
+            "INT": {"Hosts": visible_hosts},
+            "actions": list(_GREEN_ACTIONS),
+            "agent_type": "SleepAgent",
+            "reward_calculator_type": "None",
+            "starting_sessions": [
+                {
+                    "hostname": hostname,
+                    "name": f"GreenSession{index}",
+                    "type": "green_session",
+                    "username": "GreenAgent",
+                }
+                for index, hostname in enumerate(host_names)
+            ],
+            "wrappers": [],
+        },
+        "Red": {
+            "AllowedSubnets": subnet_names,
+            "INT": {
+                "Hosts": {
+                    first_host: {
+                        "Interfaces": "All",
+                        "System info": "All",
+                    }
+                }
+            },
+            "actions": list(_RED_ACTIONS),
+            "agent_type": "SleepAgent",
+            "reward_calculator_type": "None",
+            "starting_sessions": [
+                {
+                    "hostname": first_host,
+                    "name": "RedPhish",
+                    "type": "RedAbstractSession",
+                    "username": "SYSTEM",
+                }
+            ],
+            "wrappers": [],
+        },
+    }
+
+
+def _blue_starting_sessions(host_names: list[str]) -> list[dict[str, object]]:
+    """Create one Velociraptor server and generated clients for Blue."""
+
+    first_host = host_names[0]
+    sessions: list[dict[str, object]] = [
+        {
+            "artifacts": ["NetworkConnections", "ProcessCreation"],
+            "hostname": first_host,
+            "name": "VeloServer",
+            "num_children_sessions": min(2, max(1, len(host_names))),
+            "type": "VelociraptorServer",
+            "username": "ubuntu",
+        }
+    ]
+    sessions.extend(
+        {
+            "hostname": hostname,
+            "name": f"VeloClient{index}",
+            "parent": "VeloServer",
+            "type": "VelociraptorClient",
+            "username": "ubuntu",
+        }
+        for index, hostname in enumerate(host_names)
+    )
+    return sessions
 
 
 def _validate_network(
