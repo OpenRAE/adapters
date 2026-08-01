@@ -113,6 +113,26 @@ assert payload["passed"] is True
 assert payload["native_conformance"] is False
 assert payload["cases"]
 """
+CYBORG_CONFORMANCE_PROBE = r"""
+import json
+import sys
+from pathlib import Path
+
+from raes_adapters.cyborg import run_cyborg_conformance_suite
+
+index = run_cyborg_conformance_suite(
+    suite="pr",
+    output_dir=Path(sys.argv[1]),
+)
+assert index["seeds"] == [3]
+assert "passed" not in index
+assert index["reports"]
+assert index["adapter_diagnostics"]
+assert index["adapter_diagnostics"][0]["seed"] == 3
+assert all(report["native_conformance"] is False for report in index["reports"])
+assert (Path(sys.argv[1]) / "index.json").is_file()
+json.dumps(index, sort_keys=True)
+"""
 
 nox.options.default_venv_backend = "none"
 nox.options.reuse_existing_virtualenvs = True
@@ -270,7 +290,7 @@ def _distributions(session: nox.Session) -> None:
     throwaway environment *outside* the checkout with no ``PYTHONPATH``, and
     checks identity there -- in the artifacts and in the installed metadata.
     """
-    workdir = Path(session.create_tmp())
+    workdir = Path(session.create_tmp()).resolve()
     dist = workdir / "dist"
     if dist.exists():
         shutil.rmtree(dist)
@@ -306,13 +326,16 @@ def _distributions(session: nox.Session) -> None:
 
     # Probe from a clean working directory with no PYTHONPATH, so nothing
     # resolves through the checkout.
-    _run(
-        session,
-        str(venv / "bin" / "python"),
-        str(REPO_ROOT / "tools" / "probe_installed_identity.py"),
-        IMPORT_PACKAGE,
-        env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
-    )
+    probe_cwd = workdir / "probe-cwd"
+    probe_cwd.mkdir(exist_ok=True)
+    with session.chdir(probe_cwd):
+        _run(
+            session,
+            str(venv / "bin" / "python"),
+            str(REPO_ROOT / "tools" / "probe_installed_identity.py"),
+            IMPORT_PACKAGE,
+            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+        )
 
     session.log("clean install: cyberbattlesim extra conformance")
     conformance_venv = workdir / "venv-cyberbattlesim"
@@ -329,14 +352,41 @@ def _distributions(session: nox.Session) -> None:
         str(dist),
         f"{wheels[0]}[cyberbattlesim]",
     )
+    with session.chdir(probe_cwd):
+        _run(
+            session,
+            str(conformance_venv / "bin" / "python"),
+            "-I",
+            "-c",
+            CYBERBATTLESIM_CONFORMANCE_PROBE,
+            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+        )
+
+    session.log("clean install: cyborg extra conformance")
+    cyborg_venv = workdir / "venv-cyborg"
+    _run(session, "uv", "venv", "--quiet", "--clear", str(cyborg_venv))
     _run(
         session,
-        str(conformance_venv / "bin" / "python"),
-        "-I",
-        "-c",
-        CYBERBATTLESIM_CONFORMANCE_PROBE,
-        env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+        "uv",
+        "pip",
+        "install",
+        "--quiet",
+        "--python",
+        str(cyborg_venv),
+        "--find-links",
+        str(dist),
+        f"{wheels[0]}[cyborg]",
     )
+    with session.chdir(probe_cwd):
+        _run(
+            session,
+            str(cyborg_venv / "bin" / "python"),
+            "-I",
+            "-c",
+            CYBORG_CONFORMANCE_PROBE,
+            str(workdir / "cyborg-conformance"),
+            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+        )
 
     site_packages = next(iter((venv / "lib").glob("python3.*/site-packages")))
     _uv_run_root(

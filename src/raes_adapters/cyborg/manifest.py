@@ -24,6 +24,9 @@ from raes_contracts.apparatus import (  # type: ignore[import-untyped]
     ConceptBinding,
     RealizationSupportDeclaration,
 )
+from raes_contracts.backend_profiles import (  # type: ignore[import-untyped]
+    load_backend_profile,
+)
 from raes_contracts.realization_envelope import (  # type: ignore[import-untyped]
     BackendRealizationEnvelopeModel,
     realization_envelope_digest,
@@ -39,6 +42,7 @@ CYBORG_PROFILE_ID = "cage2-cyborg-2.1-source-26ce1c1"
 
 _SUPPORTED_CONTRACTS = frozenset(
     {
+        *load_backend_profile("full-remote-control-plane").required_contracts,
         "backend-manifest-v2",
         "operation-receipt-v1",
         "operation-status-v1",

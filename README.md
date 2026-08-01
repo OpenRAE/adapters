@@ -263,14 +263,46 @@ and logical-time joins. B-line, Meander, and Sleep red selections and 30/50/100
 step limits are admitted through published RAES control contracts. Invalid input
 has no native effect, unprojectable post-step output quarantines the session, and
 the portable surfaces exclude native action identifiers, reward data, raw logs,
-hidden state, and native object representations. Participant-relative observation
-and evaluation remain later roadmap work and are not claimed by this manifest.
+hidden state, and native object representations. Participant-relative
+observations and evaluator-owned reward projections use published RAES
+contracts and retain their source-ledger losses.
 
 The separate
 [architecture guardrails](docs/decisions/cyborg-cage2-runtime-qualification-guardrails.md)
 define the qualification boundary: source installation and known losses limit
 strong replay/equivalence claims, but do not veto adapter construction or
 permission to retain an honest partial reproducibility record.
+
+## CybORG conformance and disclosure
+
+Issue [#19](https://github.com/OpenRAE/adapters/issues/19) provides the
+machine-readable CybORG conformance surface. It loads the live manifest through
+the published registry, validates `backend-manifest-v2`, selects RAES's
+`full-remote-control-plane` profile and canonical fixtures, and preserves the
+exact `BackendConformanceReport` and projector. Adapter-local source-ledger,
+pin, seed/clock, lifecycle, action/observation, reward/evaluation, cleanup, and
+portable-output probes use RAES diagnostics and evidence references; they do
+not append cases or invent a second aggregate pass result.
+
+```bash
+# Offline PR/hermetic evidence, fixed seed 3
+uv run --frozen python -m raes_adapters.cyborg.conformance \
+  --suite pr --output-dir artifacts/cyborg-conformance
+
+# Broader scheduled evidence, fixed ordered seeds 3 and 153
+uv run --frozen python -m raes_adapters.cyborg.conformance \
+  --suite full --output-dir artifacts/cyborg-conformance
+```
+
+RAES 2.0.0's published realization-envelope witness algebra cannot construct
+the required VM-to-network list binding. The canonical runner therefore emits
+its own bounded `unsupported` no-witness case while all applicable fixtures and
+adapter-local probes pass; the adapter does not rewrite that case. Both suites
+remain `hermetic-live` with `native_conformance=false`. The existing qualified
+source reproducer supplies the separate native readiness evidence. Seed 153
+does not erase `loss-evaluation-seed-unbound`, and neither suite claims
+deterministic replay or scientific equivalence. See the
+[conformance guardrails](docs/decisions/cyborg-conformance-guardrails.md).
 
 ## Development
 
