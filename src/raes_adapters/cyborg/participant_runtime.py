@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from copy import deepcopy
 from datetime import UTC, datetime
 from typing import NamedTuple, cast
@@ -10,8 +11,13 @@ from raes_backend_protocols.participant_runtime_base import (  # type: ignore[im
     BaseParticipantRuntime,
 )
 from raes_contracts.contracts import (  # type: ignore[import-untyped]
+    ParticipantActionEffectResultModel,
     ParticipantActionResultModel,
     ParticipantBehaviorHistoryEventModel,
+    ParticipantObservationEnvelopeModel,
+    ParticipantObservationLossDescriptorModel,
+    ParticipantObservationStochasticContextModel,
+    SourceStatusModel,
 )
 from raes_contracts.diagnostics import Diagnostic  # type: ignore[import-untyped]
 from raes_contracts.participant_binding import (  # type: ignore[import-untyped]
@@ -20,7 +26,10 @@ from raes_contracts.participant_binding import (  # type: ignore[import-untyped]
     ParticipantNativeActionExecution,
 )
 from raes_contracts.participant_episode import (  # type: ignore[import-untyped]
+    ParticipantEpisodeExecutionState,
     ParticipantEpisodeResetRequest,
+    ParticipantEpisodeRestartRequest,
+    ParticipantEpisodeStatus,
 )
 from raes_contracts.runtime_state import (  # type: ignore[import-untyped]
     ApplyResult,
@@ -43,6 +52,19 @@ _ORDER = (_BLUE, _GREEN, _RED)
 _CONTROL_TURN_LEDGER = "source-ledger:control-turn-order"
 _PRODUCER = "cyborg-cage2-participant-runtime"
 _SERIALIZED_ORDER = "serialized_backend_order"
+_OBSERVATION_PROVENANCE = [
+    "source-ledger:observation-visibility",
+    "source-ledger:observation-hidden-truth",
+    "mapping:loss-native-observation-boundary",
+]
+_REDACTED_OBSERVATION_FIELDS = [
+    "native-observation",
+    "native-action-mask",
+    "native-action-id",
+    "native-reward-vector",
+    "native-hidden-truth",
+    "native-object-representation",
+]
 
 
 def _now_iso() -> str:
@@ -76,6 +98,16 @@ class _TurnRecordContext(NamedTuple):
     tick: int
 
 
+class _RuntimeCheckpoint(NamedTuple):
+    """Participant-runtime mirrors that must roll back with native failures."""
+
+    results: dict[str, dict[str, object]]
+    history: dict[str, list[dict[str, object]]]
+    episode_counter: dict[str, int]
+    observations: dict[str, list[ParticipantObservationEnvelopeModel]]
+    pending_observations: dict[str, tuple[ParticipantObservationEnvelopeModel, ...]]
+
+
 class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
     """Translate admitted blue actions and project all three native occurrences."""
 
@@ -90,6 +122,11 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
         self._results: dict[str, dict[str, object]]
         self._history: dict[str, list[dict[str, object]]]
         self._episode_counter: dict[str, int]
+        self._observations: dict[str, list[ParticipantObservationEnvelopeModel]] = {}
+        self._pending_observations: dict[
+            str,
+            tuple[ParticipantObservationEnvelopeModel, ...],
+        ] = {}
         self._provisioner = provisioner
         self._control = control
         self._orchestrator = orchestrator
@@ -139,11 +176,7 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
                 snapshot,
             )
         else:
-            checkpoint = (
-                deepcopy(self._results),
-                deepcopy(self._history),
-                deepcopy(self._episode_counter),
-            )
+            checkpoint = self._checkpoint()
             policy = self._control.policy()
             if policy is None:
                 result = self.reset(
@@ -158,20 +191,100 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
         requests: tuple[ParticipantEpisodeResetRequest, ...],
         snapshot: RuntimeSnapshot,
         policy: _ExecutionPolicy,
-        checkpoint: tuple[
-            dict[str, dict[str, object]],
-            dict[str, list[dict[str, object]]],
-            dict[str, int],
-        ],
+        checkpoint: _RuntimeCheckpoint,
     ) -> ApplyResult:
         """Commit one staged portable reset and then one native reset."""
 
-        try:
-            working, changed, diagnostics = self._portable_reset_candidate(
-                requests, snapshot, policy
+        return self._commit_coordinated_lifecycle(
+            snapshot,
+            policy,
+            checkpoint,
+            lambda: self._portable_reset_candidate(requests, snapshot, policy),
+        )
+
+    def restart(
+        self,
+        request: ParticipantEpisodeRestartRequest,
+        snapshot: RuntimeSnapshot,
+    ) -> ApplyResult:
+        """Require aggregate restart for the shared red/green/blue session."""
+
+        del request
+        return ApplyResult(
+            success=False,
+            snapshot=snapshot,
+            diagnostics=[
+                Diagnostic(
+                    code="cyborg-backend.participant-restart.coordination-required",
+                    domain="participant",
+                    address="cyborg-cage2",
+                    message="CAGE-2 participant episodes must be restarted together.",
+                )
+            ],
+        )
+
+    def restart_many(
+        self,
+        requests: tuple[ParticipantEpisodeRestartRequest, ...],
+        snapshot: RuntimeSnapshot,
+    ) -> ApplyResult:
+        """Serialize one complete native, participant, workflow, and time restart."""
+
+        with self._provisioner.execution_transaction():
+            return self._restart_many_transaction(requests, snapshot)
+
+    def _restart_many_transaction(
+        self,
+        requests: tuple[ParticipantEpisodeRestartRequest, ...],
+        snapshot: RuntimeSnapshot,
+    ) -> ApplyResult:
+        """Stage all portable restarts, then reset the native aggregate once."""
+
+        if {item.participant_address for item in requests} != set(_ORDER) or len(requests) != 3:
+            result = self.restart(
+                ParticipantEpisodeRestartRequest(participant_address=_BLUE),
+                snapshot,
             )
+        else:
+            checkpoint = self._checkpoint()
+            policy = self._control.policy()
+            if policy is None:
+                result = self.restart(
+                    ParticipantEpisodeRestartRequest(participant_address=_BLUE), snapshot
+                )
+            else:
+                result = self._coordinated_restart(requests, snapshot, policy, checkpoint)
+        return result
+
+    def _coordinated_restart(
+        self,
+        requests: tuple[ParticipantEpisodeRestartRequest, ...],
+        snapshot: RuntimeSnapshot,
+        policy: _ExecutionPolicy,
+        checkpoint: _RuntimeCheckpoint,
+    ) -> ApplyResult:
+        """Commit one staged portable restart and then one native reset."""
+
+        return self._commit_coordinated_lifecycle(
+            snapshot,
+            policy,
+            checkpoint,
+            lambda: self._portable_restart_candidate(requests, snapshot, policy),
+        )
+
+    def _commit_coordinated_lifecycle(
+        self,
+        snapshot: RuntimeSnapshot,
+        policy: _ExecutionPolicy,
+        checkpoint: _RuntimeCheckpoint,
+        candidate: Callable[[], tuple[RuntimeSnapshot, list[str], list[Diagnostic]]],
+    ) -> ApplyResult:
+        """Commit one staged portable lifecycle batch and one native reset."""
+
+        try:
+            working, changed, diagnostics = candidate()
         except _ResetRejected as rejected:
-            self._results, self._history, self._episode_counter = checkpoint
+            self._restore_checkpoint(checkpoint)
             result = (
                 self._reset_failure(snapshot)
                 if rejected.diagnostics is None
@@ -182,13 +295,14 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
                 )
             )
         except Exception:
-            self._results, self._history, self._episode_counter = checkpoint
+            self._restore_checkpoint(checkpoint)
             result = self._reset_failure(snapshot)
         else:
             if not self._provisioner.reset_execution():
-                self._results, self._history, self._episode_counter = checkpoint
+                self._restore_checkpoint(checkpoint)
                 result = self._reset_failure(snapshot)
             else:
+                self._clear_observations()
                 self._control.reset_terminal()
                 result = ApplyResult(
                     success=True,
@@ -228,6 +342,64 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
             raise _ResetRejected
         return working, changed, diagnostics
 
+    def _portable_restart_candidate(
+        self,
+        requests: tuple[ParticipantEpisodeRestartRequest, ...],
+        snapshot: RuntimeSnapshot,
+        policy: _ExecutionPolicy,
+    ) -> tuple[RuntimeSnapshot, list[str], list[Diagnostic]]:
+        """Stage and validate every portable part of a coordinated restart."""
+
+        timed = self._time_runtime.reset(policy.clock_address, False, snapshot)
+        if not timed.success:
+            raise _ResetRejected
+        working = timed.snapshot
+        changed: list[str] = []
+        diagnostics: list[Diagnostic] = []
+        for request in requests:
+            restart_result = BaseParticipantRuntime.restart(self, request, working)
+            diagnostics.extend(restart_result.diagnostics)
+            if not restart_result.success:
+                raise _ResetRejected(diagnostics)
+            working = restart_result.snapshot
+            changed.extend(restart_result.changed_addresses)
+        working = self._orchestrator.mark_reset(working)
+        invalid = [
+            *participant_runtime_state_contract_diagnostics(working),
+            *participant_runtime_history_transition_diagnostics(snapshot, working),
+        ]
+        if invalid:
+            raise _ResetRejected
+        return working, changed, diagnostics
+
+    def _checkpoint(self) -> _RuntimeCheckpoint:
+        """Capture every mutable mirror touched before native commit."""
+
+        return _RuntimeCheckpoint(
+            deepcopy(self._results),
+            deepcopy(self._history),
+            deepcopy(self._episode_counter),
+            deepcopy(self._observations),
+            deepcopy(self._pending_observations),
+        )
+
+    def _restore_checkpoint(self, checkpoint: _RuntimeCheckpoint) -> None:
+        """Restore mutable mirrors after a failed aggregate transition."""
+
+        (
+            self._results,
+            self._history,
+            self._episode_counter,
+            self._observations,
+            self._pending_observations,
+        ) = checkpoint
+
+    def _clear_observations(self) -> None:
+        """Drop only episode-scoped observation envelopes after recovery."""
+
+        self._observations = {}
+        self._pending_observations = {}
+
     @staticmethod
     def _reset_failure(snapshot: RuntimeSnapshot) -> ApplyResult:
         """Return the bounded aggregate-reset failure."""
@@ -254,12 +426,14 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
 
         with self._provisioner.execution_transaction():
             generation = self._provisioner.execution_generation()
+            action_instance_id = request.action_instance_id
             try:
                 result = BaseParticipantRuntime.admit_action(self, request, snapshot)
             except Exception:
+                self._pending_observations.pop(action_instance_id, None)
                 if self._provisioner.execution_generation() != generation:
                     self._provisioner.quarantine_execution()
-                result = self._commit_failure(snapshot)
+                result = self._commit_failure(request, snapshot)
             if (
                 isinstance(result, ParticipantActionApplyResult)
                 and self._provisioner.execution_generation() != generation
@@ -275,11 +449,18 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
                     ]
                     if diagnostics:
                         self._provisioner.quarantine_execution()
-                        result = self._commit_failure(snapshot)
+                        result = self._commit_failure(request, snapshot)
+            if isinstance(result, ParticipantActionApplyResult) and result.success:
+                self._commit_observations(action_instance_id)
+            else:
+                self._pending_observations.pop(action_instance_id, None)
             return result
 
-    @staticmethod
-    def _commit_failure(snapshot: RuntimeSnapshot) -> ParticipantActionApplyResult:
+    def _commit_failure(
+        self,
+        request: ParticipantActionAdmissionRequest,
+        snapshot: RuntimeSnapshot,
+    ) -> ParticipantActionApplyResult:
         """Return the bounded post-effect portable-commit failure."""
 
         return ParticipantActionApplyResult(
@@ -293,6 +474,13 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
                     message="The aggregate turn could not be committed to portable runtime state.",
                 )
             ],
+            action_result=self._action_result(
+                request,
+                episode_id=_episode_id(snapshot, request.participant_address),
+                status="failed",
+                failure_class="backend_error",
+                observation_ref=_withheld_observation_ref(request, "portable-commit-failed"),
+            ),
         )
 
     def _model_action(
@@ -307,7 +495,7 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
         try:
             policy, tick = self._action_context(request, snapshot)
             projected = self._native_turn(request)
-            next_snapshot = self._advance_portable_turn(
+            next_snapshot, observations = self._advance_portable_turn(
                 snapshot,
                 request=request,
                 episode_id=episode_id,
@@ -315,10 +503,16 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
                 projected=projected,
                 tick=tick,
             )
+            self._pending_observations[request.action_instance_id] = observations
         except _TurnRejected as rejected:
             if rejected.quarantine:
                 self._provisioner.quarantine_execution()
-            execution = self._reject_action(snapshot, rejected.reason)
+            execution = self._reject_action(
+                request,
+                snapshot,
+                episode_id=episode_id,
+                reason=rejected.reason,
+            )
         else:
             execution = self._successful_execution(
                 request,
@@ -341,6 +535,8 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
             raise _TurnRejected("invalid-selection")
         if not self._provisioner.selection_targets_are_realized(request.validated_selection):
             raise _TurnRejected("unsupported-binding")
+        if not _all_participants_running(snapshot):
+            raise _TurnRejected("participants-not-ready")
         if policy is None or self._control.is_source_terminal():
             raise _TurnRejected("run-not-active")
         tick = _clock_tick(snapshot, policy.clock_address)
@@ -370,26 +566,34 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
         policy: _ExecutionPolicy,
         projected: _NativeTurnResult,
         tick: int,
-    ) -> RuntimeSnapshot:
+    ) -> tuple[RuntimeSnapshot, tuple[ParticipantObservationEnvelopeModel, ...]]:
         """Advance logical time and stage the complete portable turn."""
 
         advanced = self._time_runtime.advance(policy.clock_address, 1, 0, snapshot)
         if not advanced.success:
             raise _TurnRejected("clock-failed", quarantine=True)
+        next_tick = tick + 1
         next_snapshot = self._portable_turn(
             advanced.snapshot,
             request=request,
             episode_id=episode_id,
             projected=projected,
-            tick=tick + 1,
+            tick=next_tick,
             clock_address=policy.clock_address,
         )
         if projected.source_terminal:
             self._control.mark_source_terminal()
             next_snapshot = self._orchestrator.mark_completed(next_snapshot, "source-terminal")
-        elif tick + 1 == policy.max_steps:
+        elif next_tick == policy.max_steps:
             next_snapshot = self._orchestrator.mark_completed(next_snapshot, "logical-step-limit")
-        return next_snapshot
+        observations = _turn_observations(
+            snapshot,
+            request=request,
+            projected=projected,
+            tick=next_tick,
+            clock_address=policy.clock_address,
+        )
+        return next_snapshot, observations
 
     @staticmethod
     def _successful_execution(
@@ -402,17 +606,30 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
     ) -> ParticipantNativeActionExecution:
         """Build the typed result for one portable aggregate-turn commit."""
 
+        observation_ref = _observation_ref(
+            request.participant_address,
+            episode_id,
+            tick=_clock_tick(snapshot, policy.clock_address) or 0,
+            action_instance_id=request.action_instance_id,
+        )
         action_result = ParticipantActionResultModel(
             status="succeeded" if projected.external_action_succeeded else "failed",
             participant_address=request.participant_address,
             episode_id=episode_id,
             action_instance_id=request.action_instance_id,
             action_contract_address=request.action_contract_address,
-            observation_point=request.observation_boundary_address,
+            observation_point=observation_ref,
             preconditions=[],
-            effects=[],
+            effects=[
+                ParticipantActionEffectResultModel(
+                    effect_id=f"{request.action_instance_id}.observation",
+                    effect_class="observation_effect",
+                    description="A bounded participant-relative observation envelope was emitted.",
+                    target_refs=[observation_ref],
+                )
+            ],
             failure_class=None if projected.external_action_succeeded else "unknown",
-            observations=[],
+            observations=[observation_ref],
             resource_measurements=[],
             evidence_refs=[],
             diagnostics=[],
@@ -426,8 +643,14 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
             action_result=action_result,
         )
 
-    @staticmethod
-    def _reject_action(snapshot: RuntimeSnapshot, reason: str) -> ParticipantNativeActionExecution:
+    def _reject_action(
+        self,
+        request: ParticipantActionAdmissionRequest,
+        snapshot: RuntimeSnapshot,
+        *,
+        episode_id: str,
+        reason: str,
+    ) -> ParticipantNativeActionExecution:
         """Build one bounded action rejection."""
 
         diagnostic = Diagnostic(
@@ -437,8 +660,56 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
             message="The action could not be admitted to the CAGE-2 execution session.",
         )
         return ParticipantNativeActionExecution(
-            apply_result=ApplyResult(success=False, snapshot=snapshot, diagnostics=[diagnostic])
+            apply_result=ApplyResult(success=False, snapshot=snapshot, diagnostics=[diagnostic]),
+            action_result=self._action_result(
+                request,
+                episode_id=episode_id,
+                status=_failure_status(reason),
+                failure_class=_failure_class(reason),
+                observation_ref=_withheld_observation_ref(request, reason),
+            ),
         )
+
+    @staticmethod
+    def _action_result(
+        request: ParticipantActionAdmissionRequest,
+        *,
+        episode_id: str,
+        status: str,
+        failure_class: str,
+        observation_ref: str,
+    ) -> ParticipantActionResultModel:
+        """Build a bounded typed result for a failed or rejected action."""
+
+        return ParticipantActionResultModel(
+            status=status,
+            participant_address=request.participant_address,
+            episode_id=episode_id,
+            action_instance_id=request.action_instance_id,
+            action_contract_address=request.action_contract_address,
+            observation_point=observation_ref,
+            failure_class=failure_class,
+            observations=[],
+            evidence_refs=[],
+            diagnostics=[],
+        )
+
+    def _commit_observations(self, action_instance_id: str) -> None:
+        """Publish staged observations after the portable commit is valid."""
+
+        observations = self._pending_observations.pop(action_instance_id, ())
+        for observation in observations:
+            self._observations.setdefault(observation.participant_address or "", []).append(
+                observation
+            )
+
+    def observations(
+        self,
+        participant_address: str,
+    ) -> tuple[ParticipantObservationEnvelopeModel, ...]:
+        """Return only the requested participant's bounded observation envelopes."""
+
+        return tuple(self._observations.get(participant_address, ()))
 
     @staticmethod
     def _portable_turn(
@@ -504,6 +775,192 @@ def _participant_history(
             event.model_dump(mode="json", exclude_none=True)
         )
     return behavior
+
+
+def _turn_observations(
+    snapshot: RuntimeSnapshot,
+    *,
+    request: ParticipantActionAdmissionRequest,
+    projected: _NativeTurnResult,
+    tick: int,
+    clock_address: str,
+) -> tuple[ParticipantObservationEnvelopeModel, ...]:
+    """Build participant-relative observation envelopes without native payloads."""
+
+    now = _now_iso()
+    observations: list[ParticipantObservationEnvelopeModel] = []
+    for index, occurrence in enumerate(projected.occurrences):
+        participant = occurrence.participant_address
+        action_instance_id = (
+            request.action_instance_id
+            if index == 0
+            else f"{request.action_instance_id}:{_role(participant)}"
+        )
+        episode_id = _episode_id(snapshot, participant)
+        observation_ref = _observation_ref(
+            participant,
+            episode_id,
+            tick=tick,
+            action_instance_id=action_instance_id,
+        )
+        processed = participant != _BLUE or projected.external_action_succeeded
+        observations.append(
+            ParticipantObservationEnvelopeModel(
+                event_id=f"event.{observation_ref}",
+                schema_name="raes.participant_runtime.observation",
+                schema_version="1.0.0",
+                event_type="observation_emission",
+                extension_policy="reject_unknown_required",
+                source_status=SourceStatusModel(
+                    status_id=1 if processed else 2,
+                    status="success" if processed else "failure",
+                    status_code=(
+                        "participant_action_processed" if processed else "participant_action_failed"
+                    ),
+                    status_detail="A bounded CAGE-2 participant observation was projected.",
+                    source_status_label="selected-cyborg-aggregate-turn",
+                    source_status_mapping="raes.participant-action.terminal",
+                ),
+                participant_address=participant,
+                episode_id=episode_id,
+                sequence_number=tick,
+                occurred_at=now,
+                recorded_at=now,
+                ingested_at=now,
+                clock_authority=clock_address,
+                temporal_context=f"{clock_address}:{tick}",
+                ordering_basis=_SERIALIZED_ORDER,
+                logical_order_ref=f"{clock_address}:{tick}",
+                actor_ref=participant,
+                producer_ref=_PRODUCER,
+                source_system_ref="qualification.cyborg-cage2.selected-source",
+                provenance_refs=list(_OBSERVATION_PROVENANCE),
+                evidence_refs=["source-ledger:observation-visibility"],
+                redaction_policy_ref="redaction.cyborg-cage2.participant-view",
+                authorization_scope=f"participant:{participant}",
+                observation_ref=observation_ref,
+                visibility_projection_ref=(
+                    request.observation_boundary_address
+                    if participant == request.participant_address
+                    else _observation_boundary(participant)
+                ),
+                information_guarantee="lossy_projection",
+                delivery_basis="emission_is_delivery",
+                delivered_at=now,
+                hidden_state_refs=[],
+                centralized_state_refs=[],
+                loss_descriptor=ParticipantObservationLossDescriptorModel(
+                    kind="loss-native-observation-boundary",
+                    fields_redacted=list(_REDACTED_OBSERVATION_FIELDS),
+                ),
+                stochastic_context=ParticipantObservationStochasticContextModel(
+                    randomization_policy_ref="qualification.cyborg-cage2.partial-stochastic-control"
+                ),
+                redacted_field_refs=list(_REDACTED_OBSERVATION_FIELDS),
+            )
+        )
+    return tuple(observations)
+
+
+def _all_participants_running(snapshot: RuntimeSnapshot) -> bool:
+    """Require all fixed CAGE-2 participant episode heads to be running."""
+
+    return all(
+        (state := _participant_state(snapshot, address)) is not None
+        and state.status == ParticipantEpisodeStatus.RUNNING
+        for address in _ORDER
+    )
+
+
+def _participant_state(
+    snapshot: RuntimeSnapshot,
+    participant_address: str,
+) -> ParticipantEpisodeExecutionState | None:
+    """Read one participant state through the published episode model."""
+
+    payload = snapshot.participant_episode_results.get(participant_address)
+    if payload is None:
+        return None
+    try:
+        return ParticipantEpisodeExecutionState.from_payload(payload)
+    except (TypeError, ValueError):
+        return None
+
+
+def _episode_id(snapshot: RuntimeSnapshot, participant_address: str) -> str:
+    """Return the live episode id or one bounded placeholder for failures."""
+
+    state = _participant_state(snapshot, participant_address)
+    return "episode-unavailable" if state is None else state.episode_id
+
+
+def _observation_ref(
+    participant_address: str,
+    episode_id: str,
+    *,
+    tick: int,
+    action_instance_id: str,
+) -> str:
+    """Derive a portable observation ref from episode/action coordinates."""
+
+    return (
+        f"observation.cyborg.{_role(participant_address)}.{episode_id}.{tick}.{action_instance_id}"
+    )
+
+
+def _withheld_observation_ref(
+    request: ParticipantActionAdmissionRequest,
+    reason: str,
+) -> str:
+    """Derive a bounded ref for a withheld observation on rejection/failure."""
+
+    return (
+        f"observation.cyborg.{_role(request.participant_address)}."
+        f"{request.action_instance_id}.{reason}.withheld"
+    )
+
+
+def _observation_boundary(participant_address: str) -> str:
+    """Return the fixed participant-relative observation-boundary address."""
+
+    return f"participant.observation-boundary.{_role(participant_address)}"
+
+
+def _role(participant_address: str) -> str:
+    """Extract the bounded RAES participant role token from a fixed address."""
+
+    return participant_address.rsplit(".", 1)[-1]
+
+
+def _failure_status(reason: str) -> str:
+    """Map bounded rejection reasons to RAES action-result statuses."""
+
+    failed = {
+        "clock-failed",
+        "portable-commit-failed",
+        "projection-failed",
+        "session-unavailable",
+        "turn-failed",
+    }
+    return "failed" if reason in failed else "rejected"
+
+
+def _failure_class(reason: str) -> str:
+    """Map bounded rejection reasons to RAES participant failure classes."""
+
+    mapping = {
+        "clock-failed": "backend_error",
+        "invalid-selection": "unsupported_action",
+        "participants-not-ready": "target_unavailable",
+        "portable-commit-failed": "backend_error",
+        "projection-failed": "backend_error",
+        "run-not-active": "target_unavailable",
+        "session-unavailable": "backend_error",
+        "trial-complete": "resource_exhausted",
+        "turn-failed": "backend_error",
+        "unsupported-binding": "unsupported_action",
+    }
+    return mapping.get(reason, "unknown")
 
 
 def _event_envelope(

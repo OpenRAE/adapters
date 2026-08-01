@@ -127,14 +127,23 @@ class AuditedSourceDriver:
         scenario = native.environment_controller.scenario
         state = native.environment_controller.state
         expected_subnets = expected["Subnets"]
+        expected_agents = expected["Agents"]
         memberships_match = all(
             scenario.get_subnet_hosts(name) == subnet["Hosts"]
             for name, subnet in expected_subnets.items()
         )
+        agents_match = (
+            sorted(scenario.agents) == sorted(expected_agents)
+            and all(
+                scenario.get_agent_info(name).actions == info["actions"]
+                and scenario.get_agent_info(name).allowed_subnets == info["AllowedSubnets"]
+                for name, info in expected_agents.items()
+            )
+        )
         self.native_projection_matches = (
             set(scenario.hosts) == set(expected["Hosts"])
             and set(scenario.subnets) == set(expected_subnets)
-            and scenario.agents == []
+            and agents_match
             and memberships_match
             and set(state.hosts) == set(expected["Hosts"])
             and set(state.subnet_name_to_cidr) == set(expected_subnets)
