@@ -35,6 +35,7 @@ from raes_contracts.runtime_state import (  # type: ignore[import-untyped]
     RuntimeSnapshot,
 )
 
+from ._diagnostics import diagnostic_address
 from .driver import (
     CyberBattleSimDriverProtocol,
     DriverResetReport,
@@ -129,7 +130,7 @@ class CyberBattleSimParticipantRuntime(BaseParticipantRuntime):  # type: ignore[
                     Diagnostic(
                         code="cyberbattlesim.participant.reset-failed",
                         domain="participant",
-                        address=participant_address,
+                        address=diagnostic_address(participant_address),
                         message=("The selected CyberBattleSim episode could not be reset."),
                     )
                 ],
@@ -165,7 +166,7 @@ class CyberBattleSimParticipantRuntime(BaseParticipantRuntime):  # type: ignore[
             Diagnostic(
                 code="cyberbattlesim.seed.applied",
                 domain="participant",
-                address=participant_address,
+                address=diagnostic_address(participant_address),
                 message=("The adapter applied a selected stochastic-control binding."),
                 severity=Severity.INFO,
             )
@@ -175,7 +176,7 @@ class CyberBattleSimParticipantRuntime(BaseParticipantRuntime):  # type: ignore[
             Diagnostic(
                 code="cyberbattlesim.seed.unbound",
                 domain="participant",
-                address=participant_address,
+                address=diagnostic_address(participant_address),
                 message=("A selected CyberBattleSim random stream remains unbound."),
                 severity=Severity.WARNING,
             )
@@ -352,7 +353,7 @@ class CyberBattleSimParticipantRuntime(BaseParticipantRuntime):  # type: ignore[
                     Diagnostic(
                         code=code,
                         domain="participant",
-                        address=request.participant_address,
+                        address=diagnostic_address(request.participant_address),
                         message=message,
                     )
                 ],

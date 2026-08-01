@@ -48,6 +48,7 @@ from raes_contracts.runtime_state import (  # type: ignore[import-untyped]
 from raes_adapters.cyberbattlesim import load_qualification
 from raes_adapters.cyberbattlesim.scenario_ledger import CYBERBATTLE_CHAIN
 
+from ._diagnostics import diagnostic_address
 from .driver import CyberBattleSimDriverProtocol, DriverEvaluation
 
 EVALUATION_EVIDENCE_REF = "evidence-record.cyberbattlesim.evaluator-summary"
@@ -143,7 +144,7 @@ class CyberBattleSimEvaluator(object):
                 Diagnostic(
                     code="cyberbattlesim.evaluation.unsupported-resource",
                     domain="evaluation",
-                    address=operation.address,
+                    address=diagnostic_address(operation.address),
                     message=(
                         "The selected CyberBattleSim profile does not support "
                         "this evaluation resource type."
@@ -224,7 +225,7 @@ class CyberBattleSimEvaluator(object):
                 Diagnostic(
                     code="cyberbattlesim.evaluation.projection-failed",
                     domain="evaluation",
-                    address="evaluation.cyberbattlesim.selected-profile",
+                    address="/evaluation/cyberbattlesim/selected-profile",
                     message=(
                         "The CyberBattleSim evaluator could not project the selected run facts."
                     ),

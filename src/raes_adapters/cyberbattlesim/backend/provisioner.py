@@ -14,6 +14,7 @@ from raes_contracts.runtime_state import (  # type: ignore[import-untyped]
     SnapshotEntry,
 )
 
+from ._diagnostics import diagnostic_address
 from .driver import CyberBattleSimDriverProtocol
 
 _SUPPORTED_RESOURCE_TYPES = frozenset(
@@ -40,7 +41,7 @@ class CyberBattleSimProvisioner(object):
                     Diagnostic(
                         code="cyberbattlesim.provisioning.unsupported-resource",
                         domain="provisioning",
-                        address=operation.address,
+                        address=diagnostic_address(operation.address),
                         message=(
                             "The selected CyberBattleSim profile does not realize "
                             "this provisioning resource type."
@@ -127,7 +128,7 @@ class CyberBattleSimProvisioner(object):
                 Diagnostic(
                     code="cyberbattlesim.provisioning.construct-failed",
                     domain="provisioning",
-                    address="provision.cyberbattlesim.selected-profile",
+                    address="/provision/cyberbattlesim/selected-profile",
                     message=("The selected CyberBattleSim source could not be constructed."),
                 )
             )

@@ -174,11 +174,17 @@ Issue [#27](https://github.com/RAESystem/adapters/issues/27) implements a RAES
 runtime target for the admitted size-10 `CyberBattleChain-v0` profile:
 
 ```python
-from raes_adapters.cyberbattlesim.backend import create_cyberbattlesim_target
-from raes_adapters.base import run_conformance_probe
+from raes_adapters.cyberbattlesim.backend import (
+    cyberbattlesim_backend_conformance_payload,
+    cyberbattlesim_declared_weaknesses,
+    cyberbattlesim_source_protocol_diagnostics,
+    run_cyberbattlesim_conformance,
+)
 
-target = create_cyberbattlesim_target(seed=20260729)
-report = run_conformance_probe(target)
+report = run_cyberbattlesim_conformance(seed=20260729)
+payload = cyberbattlesim_backend_conformance_payload(report)
+diagnostics = cyberbattlesim_source_protocol_diagnostics()
+weaknesses = cyberbattlesim_declared_weaknesses()
 ```
 
 Target creation is dependency-light and does not import the simulator.
@@ -215,6 +221,17 @@ experiment.
 The [backend architecture guardrails](docs/decisions/cyberbattlesim-backend-guardrails.md)
 record the component ownership, failure hygiene, capability claims, and
 acceptance-test mapping.
+
+Issue [#28](https://github.com/RAESystem/adapters/issues/28) composes that
+runtime target with the published RAES conformance report and adapter-local
+source-protocol probes. The backend conformance result remains the exact
+`BackendConformanceReport` from RAES and is serialized only through the
+published report projector. The CyberBattleSim probes add RAES diagnostics,
+manifest-derived capability evidence links, source-ledger validation, and
+declared weakness references; they do not create another profile, fixture
+corpus, report schema, or research-validity claim. The
+[conformance-composition guardrails](docs/decisions/cyberbattlesim-conformance-guardrails.md)
+fix those boundaries.
 
 ## CybORG/CAGE-2 runtime qualification
 

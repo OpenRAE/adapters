@@ -28,6 +28,7 @@ Sessions:
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
 import sys
 import tomllib
 
@@ -39,6 +40,79 @@ DISTRIBUTION = "raes-adapters"
 MAX_LARGE_FILE_KB = "500"
 COVERAGE_FAIL_UNDER = "80"
 PRIVATE_KEY_EXCLUDE = ("tests/",)
+CYBERBATTLESIM_CONFORMANCE_PROBE = r"""
+from raes_adapters.cyberbattlesim.backend import (
+    DriverCleanupReport,
+    DriverEvaluation,
+    DriverResetReport,
+    DriverStep,
+    cyberbattlesim_backend_conformance_payload,
+    run_cyberbattlesim_conformance,
+)
+from raes_adapters.cyberbattlesim.scenario_ledger import validate_all
+
+
+class Driver:
+    def __init__(self):
+        self.closed = False
+        self.step_count = 0
+
+    def construct(self):
+        self.closed = False
+
+    def reset(self, seed):
+        self.closed = False
+        self.step_count = 0
+        return DriverResetReport(
+            operation_ref="driver.reset.clean-install",
+            applied_streams=("gym-environment", "gym-action-space") if seed is not None else (),
+            unbound_streams=("python-random", "numpy-global"),
+        )
+
+    def step(self, action_kind):
+        self.step_count += 1
+        return DriverStep(
+            operation_ref=f"driver.step.{self.step_count}",
+            step_number=self.step_count,
+            source_transition=True,
+            processed=True,
+            terminated=False,
+            truncated=False,
+            terminal_cause=None,
+        )
+
+    def evaluate(self):
+        return DriverEvaluation(
+            execution_ref="driver.reset.clean-install",
+            projection_ref="driver.reset.clean-install.evaluation.1",
+            step_count=self.step_count,
+            cumulative_reward=0.0,
+            terminated=False,
+            truncated=False,
+            terminal_cause=None,
+        )
+
+    def close(self):
+        already_closed = self.closed
+        self.closed = True
+        return DriverCleanupReport(
+            operation_ref="driver.close.clean-install",
+            closed=True,
+            verified=True,
+            already_closed=already_closed,
+        )
+
+    def verify_closed(self):
+        return self.closed
+
+
+assert validate_all() == []
+report = run_cyberbattlesim_conformance(driver=Driver(), seed=20260729)
+payload = cyberbattlesim_backend_conformance_payload(report)
+assert payload["passed"] is True
+assert payload["native_conformance"] is False
+assert payload["cases"]
+"""
 
 nox.options.default_venv_backend = "none"
 nox.options.reuse_existing_virtualenvs = True
@@ -198,6 +272,8 @@ def _distributions(session: nox.Session) -> None:
     """
     workdir = Path(session.create_tmp())
     dist = workdir / "dist"
+    if dist.exists():
+        shutil.rmtree(dist)
 
     _run(session, "uv", "build", "--out-dir", str(dist))
 
@@ -235,6 +311,30 @@ def _distributions(session: nox.Session) -> None:
         str(venv / "bin" / "python"),
         str(REPO_ROOT / "tools" / "probe_installed_identity.py"),
         IMPORT_PACKAGE,
+        env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+    )
+
+    session.log("clean install: cyberbattlesim extra conformance")
+    conformance_venv = workdir / "venv-cyberbattlesim"
+    _run(session, "uv", "venv", "--quiet", "--clear", str(conformance_venv))
+    _run(
+        session,
+        "uv",
+        "pip",
+        "install",
+        "--quiet",
+        "--python",
+        str(conformance_venv),
+        "--find-links",
+        str(dist),
+        f"{wheels[0]}[cyberbattlesim]",
+    )
+    _run(
+        session,
+        str(conformance_venv / "bin" / "python"),
+        "-I",
+        "-c",
+        CYBERBATTLESIM_CONFORMANCE_PROBE,
         env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
     )
 
