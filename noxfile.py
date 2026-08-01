@@ -384,7 +384,7 @@ def _distributions(session: nox.Session) -> None:
             "-I",
             "-c",
             CYBORG_CONFORMANCE_PROBE,
-            str(workdir / "cyborg-conformance"),
+            str(probe_cwd / "cyborg-conformance"),
             env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
         )
 

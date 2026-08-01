@@ -154,7 +154,7 @@ _CAPABILITY_PROBE_REQUIREMENTS: Mapping[str, tuple[str, ...]] = {
 _NON_CAPABILITY_KEYS = frozenset({"constraints", "name"})
 
 
-class _HermeticProbeDriver(object):  # noqa: UP004 - Sonar's profile requires explicit base
+class _HermeticProbeDriver(object):
     """Deterministic, dependency-free driver used only for PR conformance."""
 
     def __init__(self) -> None:
@@ -239,7 +239,7 @@ class _HermeticProbeDriver(object):  # noqa: UP004 - Sonar's profile requires ex
         return True
 
 
-class _HostileNativeHandle(object):  # noqa: UP004 - Sonar's profile requires explicit base
+class _HostileNativeHandle(object):
     """Fail if a portable probe tries to render the injected native handle."""
 
     def __str__(self) -> str:
@@ -409,35 +409,77 @@ def _execute_runtime_probes(
     stopped = orchestrator.stop(terminated_snapshot)
     manifest = target.manifest
     return {
-        "seed-clock": bool(
-            action.snapshot.time_model_state is not None
-            and action.snapshot.time_model_state.clocks[_CLOCK].coordinate.tick == 1
+        "seed-clock": _probe_clock_advanced(action.snapshot),
+        "lifecycle": _probe_lifecycle_succeeded(
+            timed.success,
+            started.success,
+            initialized,
+            reset.success,
+            terminated,
+            stopped.success,
         ),
-        "lifecycle": all(
-            (
-                timed.success,
-                started.success,
-                initialized,
-                reset.success,
-                terminated,
-                stopped.success,
-            )
+        "action-observation": _probe_action_observation_succeeded(
+            action.success,
+            driver,
+            observations,
+            manifest,
         ),
-        "action-observation": bool(
-            action.success
-            and len(driver.selections) == 1
-            and all(observations)
-            and "participant-observation-envelope-v1" in manifest.supported_contract_versions
-        ),
-        "reward-evaluation": bool(
-            evaluated.success
-            and evaluation.get("status") == "ready"
-            and evaluation.get("passed") is True
-            and evaluator.evidence_records()
-            and evaluator.derived_measures()
-            and "evaluation-result-envelope-v1" in manifest.supported_contract_versions
+        "reward-evaluation": _probe_evaluation_succeeded(
+            evaluated.success,
+            evaluation,
+            evaluator,
+            manifest,
         ),
     }
+
+
+def _probe_clock_advanced(snapshot: RuntimeSnapshot) -> bool:
+    """Return whether the runtime advanced the declared logical clock once."""
+
+    return bool(
+        snapshot.time_model_state is not None
+        and snapshot.time_model_state.clocks[_CLOCK].coordinate.tick == 1
+    )
+
+
+def _probe_lifecycle_succeeded(*dispositions: bool) -> bool:
+    """Return whether every lifecycle transition succeeded."""
+
+    return all(dispositions)
+
+
+def _probe_action_observation_succeeded(
+    action_succeeded: bool,
+    driver: _HermeticProbeDriver,
+    observations: Sequence[object],
+    manifest: BackendManifest,
+) -> bool:
+    """Return whether action admission produced all portable observations."""
+
+    return bool(
+        action_succeeded
+        and len(driver.selections) == 1
+        and all(observations)
+        and "participant-observation-envelope-v1" in manifest.supported_contract_versions
+    )
+
+
+def _probe_evaluation_succeeded(
+    evaluation_succeeded: bool,
+    evaluation: Mapping[str, object],
+    evaluator: CyborgEvaluator,
+    manifest: BackendManifest,
+) -> bool:
+    """Return whether evaluation produced ready portable evidence and measures."""
+
+    return bool(
+        evaluation_succeeded
+        and evaluation.get("status") == "ready"
+        and evaluation.get("passed") is True
+        and evaluator.evidence_records()
+        and evaluator.derived_measures()
+        and "evaluation-result-envelope-v1" in manifest.supported_contract_versions
+    )
 
 
 def _initialize_probe_participants(
@@ -801,6 +843,10 @@ def run_cyborg_conformance_suite(
     seeds = PR_CONFORMANCE_SEEDS if suite == "pr" else FULL_CONFORMANCE_SEEDS
     if suite not in {"pr", "full"}:
         raise ValueError("CybORG conformance suite must be 'pr' or 'full'.")
+    invocation_root = Path.cwd().resolve()
+    output_dir = output_dir.resolve()
+    if output_dir == invocation_root or not output_dir.is_relative_to(invocation_root):
+        raise ValueError("CybORG conformance output must be beneath the invocation directory.")
     reports: list[dict[str, object]] = []
     adapter_probe_runs: list[dict[str, object]] = []
     diagnostics = cyborg_source_diagnostics()
@@ -1029,8 +1075,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-# Exercised by the clean-install subprocess.
-if __name__ == "__main__":  # pragma: no cover
+if __name__ == "__main__":
     raise SystemExit(main())
 
 

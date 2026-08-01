@@ -239,6 +239,11 @@ def test_cli_rejects_output_paths_outside_the_invocation_directory(
 
     with pytest.raises(SystemExit):
         conformance_module.main(["--suite", "pr", "--output-dir", "../outside-conformance"])
+    with pytest.raises(ValueError, match="beneath the invocation directory"):
+        run_cyborg_conformance_suite(
+            suite="pr",
+            output_dir=tmp_path / "outside-conformance",
+        )
 
     assert not (tmp_path / "outside-conformance").exists()
 
@@ -302,7 +307,11 @@ def test_hostile_construction_failure_never_leaks_to_portable_output() -> None:
     assert "token=secret" not in rendered
 
 
-def test_suite_index_preserves_canonical_reports_and_non_claims(tmp_path: Path) -> None:
+def test_suite_index_preserves_canonical_reports_and_non_claims(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.chdir(tmp_path.parent)
     index = run_cyborg_conformance_suite(suite="pr", output_dir=tmp_path)
 
     assert index["suite"] == "pr"
@@ -330,6 +339,7 @@ def test_suite_refuses_failed_adapter_diagnostics(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    monkeypatch.chdir(tmp_path.parent)
     monkeypatch.setattr(
         conformance_module,
         "cyborg_adapter_diagnostics",
@@ -353,6 +363,7 @@ def test_suite_refuses_an_unexpected_published_failure(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    monkeypatch.chdir(tmp_path.parent)
     report = run_cyborg_conformance(seed=3)
     passing = next(case for case in report.cases if case.passed)
     failed = replace(passing, passed=False, outcome="failed")
@@ -373,6 +384,7 @@ def test_suite_refuses_manifest_capability_evidence_gaps(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    monkeypatch.chdir(tmp_path.parent)
     monkeypatch.setattr(
         conformance_module,
         "cyborg_manifest_capability_evidence_gaps",
