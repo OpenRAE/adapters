@@ -266,6 +266,8 @@ def _passed_probe_evidence_refs(
 
 
 def _affirmative_capability_pointers(payload: Mapping[str, object]) -> tuple[str, ...]:
+    """Return JSON pointers for manifest capability values that declare support."""
+
     capabilities = payload.get("capabilities")
     if not isinstance(capabilities, Mapping):
         return ()
@@ -291,6 +293,8 @@ def _iter_affirmative_capability_pointers(
     value: Mapping[object, object],
     base_pointer: str,
 ) -> Iterable[str]:
+    """Yield nested affirmative capability pointers below a manifest surface."""
+
     for key, child in sorted(value.items(), key=lambda item: str(item[0])):
         if key in _NON_CAPABILITY_KEYS or not _is_affirmative_capability_value(child):
             continue
@@ -308,26 +312,30 @@ def _iter_affirmative_capability_pointers(
 
 
 def _is_affirmative_capability_value(value: object) -> bool:
+    """Return whether a manifest capability value makes an affirmative claim."""
+
     if value in (None, False):
-        return False
-    if value is True:
-        return True
-    if isinstance(value, str):
-        return bool(value)
-    if isinstance(value, int | float):
-        return bool(value)
-    if isinstance(value, list | tuple | set | frozenset):
-        return any(_is_affirmative_capability_value(item) for item in value)
-    if isinstance(value, Mapping):
-        return any(
+        affirmative = False
+    elif value is True:
+        affirmative = True
+    elif isinstance(value, str | int | float):
+        affirmative = bool(value)
+    elif isinstance(value, list | tuple | set | frozenset):
+        affirmative = any(_is_affirmative_capability_value(item) for item in value)
+    elif isinstance(value, Mapping):
+        affirmative = any(
             _is_affirmative_capability_value(child)
             for key, child in cast(Mapping[object, object], value).items()
             if key not in _NON_CAPABILITY_KEYS
         )
-    return False
+    else:
+        affirmative = False
+    return affirmative
 
 
 def _escape_pointer_token(token: str) -> str:
+    """Escape one token for inclusion in a JSON Pointer."""
+
     return token.replace("~", "~0").replace("/", "~1")
 
 
