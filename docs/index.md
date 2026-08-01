@@ -25,6 +25,7 @@ semantic and protocol authority.
 - [CyberBattleSim qualification guardrails](decisions/cyberbattlesim-qualification-guardrails.md)
 - [CyberBattleSim scenario and source-ledger guardrails](decisions/cyberbattlesim-scenario-ledger-guardrails.md)
 - [CyberBattleSim backend architecture guardrails](decisions/cyberbattlesim-backend-guardrails.md)
+- [CyberBattleSim conformance-composition guardrails](decisions/cyberbattlesim-conformance-guardrails.md)
 - [Project services](maintainers/project-services.md)
 
 ## Verify a checkout

@@ -101,6 +101,18 @@ enabled, and run without network after installation where the upstream source
 permits it. Unexpected runtime downloads or writes are qualification findings,
 not setup conveniences.
 
+When adapter work adds new RAES-facing behavior for CyberBattleSim, the manual
+native-readiness plan must extend this same isolated source-native run instead
+of stopping at the upstream smoke. For issue #28, that means running the
+adapter conformance path with the real `CyberBattleSimDriver`, serializing the
+result through `backend_conformance_report_payload()`, collecting
+`cyberbattlesim_source_protocol_diagnostics()` and manifest capability evidence,
+and checking the emitted RAES payloads remain bounded and free of native action
+ids, observations, reward vectors, object representations, paths, environments,
+tracebacks, and hidden state. This is adapter-readiness evidence in this repo;
+it is not an upstream CyberBattleSim test and it does not replace the
+deterministic injected-driver CI probe.
+
 The extension seam is the selected qualification/protocol artifact identity
 passed to a module-local smoke runner. Scenario, participant, evaluator, seed,
 metric, or termination values must be read from that one canonical selection,

@@ -27,6 +27,8 @@ from raes_contracts.workflow import (  # type: ignore[import-untyped]
     WorkflowStepLifecycle,
 )
 
+from ._diagnostics import diagnostic_address
+
 _SUPPORTED_RESOURCE_TYPES = frozenset({"event", "workflow"})
 
 
@@ -64,7 +66,7 @@ class CyberBattleSimOrchestrator(object):
                     Diagnostic(
                         code="cyberbattlesim.orchestration.unsupported-resource",
                         domain="orchestration",
-                        address=operation.address,
+                        address=diagnostic_address(operation.address),
                         message=(
                             "The CyberBattleSim orchestrator does not support "
                             "this orchestration resource type."
