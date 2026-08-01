@@ -22,11 +22,14 @@ from raes_contracts.contracts.time_model import (
     TimeModelDeclarationModel,
     TimeProgressionPolicyDeclarationModel,
 )
+from raes_contracts.diagnostics import Diagnostic
 from raes_contracts.participant_action_arguments import ParticipantValidatedActionSelection
 from raes_contracts.participant_binding import ParticipantActionAdmissionRequest
 from raes_contracts.participant_episode import (
     ParticipantEpisodeInitializeRequest,
     ParticipantEpisodeResetRequest,
+    ParticipantEpisodeRestartRequest,
+    ParticipantEpisodeTerminateRequest,
 )
 from raes_contracts.planning import (
     ChangeAction,
@@ -45,6 +48,7 @@ from raes_runtime.registry_probes import sample_participant_action_admission_req
 
 from raes_adapters.cyborg import create_cyborg_target
 from raes_adapters.cyborg import driver as driver_module
+from raes_adapters.cyborg import participant_runtime as participant_runtime_module
 from raes_adapters.cyborg.driver import (
     SourceInstalledCyborgDriver,
     _NativeParticipantOccurrence,
@@ -345,6 +349,8 @@ def test_target_declares_execution_components_without_evaluator() -> None:
     assert target.manifest.has_participant_runtime
     assert target.manifest.has_time
     assert not target.manifest.has_evaluator
+    assert "participant-observation-envelope-v1" in target.manifest.supported_contract_versions
+    assert "no observation" not in target.manifest.constraints["equivalence"]
     assert target.orchestrator is not None
     assert target.participant_runtime is not None
     assert target.time_runtime is not None
@@ -374,12 +380,53 @@ def test_unmapped_or_invalid_actions_have_no_native_effect(
 
     assert not result.success
     assert result.snapshot is snapshot
+    assert result.action_result is not None
+    assert result.action_result.status == "rejected"
+    assert result.action_result.action_instance_id == "blue-action-1"
     assert driver.selections == []
+    assert target.participant_runtime.observations(_BLUE) == ()
+    assert result.snapshot.participant_behavior_history == snapshot.participant_behavior_history
     assert len(result.diagnostics) == 1
     assert result.diagnostics[0].code.startswith("cyborg-backend.action.")
     rendered = str(result.diagnostics[0])
     assert "native-id" not in rendered
     assert "unknown" not in rendered
+
+
+def test_action_requires_all_three_running_participants_before_native_effect() -> None:
+    driver = FakeExecutionDriver()
+    target = create_cyborg_target(driver=driver, seed=7)
+    assert target.orchestrator is not None
+    assert target.participant_runtime is not None
+    assert target.time_runtime is not None
+    planned = RuntimeManager(target).plan(parse_sdl(textwrap.dedent(_SDL)))
+    provisioned = target.provisioner.apply(planned.provisioning, RuntimeSnapshot())
+    assert provisioned.success
+    timed = target.time_runtime.initialize(_time_declaration(), provisioned.snapshot)
+    assert timed.success
+    started = target.orchestrator.start(
+        _orchestration_plan(max_steps=30, red_variant="sleep"),
+        timed.snapshot,
+    )
+    assert started.success
+    blue_only = target.participant_runtime.initialize(
+        ParticipantEpisodeInitializeRequest(
+            participant_address=_BLUE,
+            episode_id=f"{_BLUE}-episode-1",
+        ),
+        started.snapshot,
+    )
+    assert blue_only.success
+
+    result = target.participant_runtime.admit_action(_request(), blue_only.snapshot)
+
+    assert not result.success
+    assert result.snapshot is blue_only.snapshot
+    assert result.action_result is not None
+    assert result.action_result.status == "rejected"
+    assert result.action_result.failure_class == "target_unavailable"
+    assert driver.selections == []
+    assert target.participant_runtime.observations(_BLUE) == ()
 
 
 def test_one_admitted_action_commits_one_aggregate_turn_and_portable_joins() -> None:
@@ -399,6 +446,7 @@ def test_one_admitted_action_commits_one_aggregate_turn_and_portable_joins() -> 
     assert result.action_result.action_instance_id == request.action_instance_id
     assert result.action_result.participant_address == request.participant_address
     assert result.action_result.action_contract_address == request.action_contract_address
+    assert result.action_result.observation_point == result.action_result.observations[0]
     clock = result.snapshot.time_model_state
     assert clock is not None
     assert clock.clocks[_CLOCK].coordinate.tick == 1
@@ -416,7 +464,42 @@ def test_one_admitted_action_commits_one_aggregate_turn_and_portable_joins() -> 
     assert result.snapshot.participant_behavior_history[_RED][-1]["action_contract_address"] == (
         "participant.action-contract.discover-network-services"
     )
+    observations = {
+        address: target.participant_runtime.observations(address)
+        for address in (_BLUE, _GREEN, _RED)
+    }
+    assert {address: len(items) for address, items in observations.items()} == {
+        _BLUE: 1,
+        _GREEN: 1,
+        _RED: 1,
+    }
+    assert observations[_BLUE][0].observation_ref == result.action_result.observation_point
+    assert observations[_BLUE][0].participant_address == _BLUE
+    assert observations[_GREEN][0].participant_address == _GREEN
+    assert observations[_RED][0].participant_address == _RED
+    assert observations[_BLUE][0].visibility_projection_ref == (
+        "participant.observation-boundary.blue"
+    )
+    assert observations[_GREEN][0].visibility_projection_ref == (
+        "participant.observation-boundary.green"
+    )
+    assert observations[_RED][0].visibility_projection_ref == (
+        "participant.observation-boundary.red"
+    )
+    assert observations[_BLUE][0].hidden_state_refs == []
+    assert observations[_GREEN][0].hidden_state_refs == []
+    assert observations[_RED][0].hidden_state_refs == []
+    assert observations[_BLUE][0].centralized_state_refs == []
+    assert observations[_GREEN][0].centralized_state_refs == []
+    assert observations[_RED][0].centralized_state_refs == []
+    assert target.participant_runtime.observations("participant.behavior.white") == ()
     portable = repr(result.snapshot)
+    portable += repr(
+        {
+            address: [item.model_dump(mode="json") for item in items]
+            for address, items in observations.items()
+        }
+    )
     for forbidden in ("reward_vector", "action_id", "native-id", "Traceback", "HostileNative"):
         assert forbidden not in portable
 
@@ -532,27 +615,35 @@ def test_invalid_post_step_output_quarantines_session_until_reconstruction() -> 
     assert len(driver.selections) == 2
 
 
-def test_post_effect_portable_failure_quarantines_the_aggregate_session() -> None:
+def test_post_effect_portable_failure_quarantines_the_aggregate_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     driver = FakeExecutionDriver()
     target, snapshot = _prepared_target(driver, max_steps=30)
     assert target.participant_runtime is not None
-    incomplete = snapshot.with_entries(
-        dict(snapshot.entries),
-        participant_episode_results={
-            key: value
-            for key, value in snapshot.participant_episode_results.items()
-            if key != _GREEN
-        },
+    monkeypatch.setattr(
+        participant_runtime_module,
+        "participant_runtime_state_contract_diagnostics",
+        lambda snapshot: [
+            Diagnostic(
+                code="test.invalid-portable-state",
+                domain="participant",
+                address=_BLUE,
+                message="portable state invalid after native effect",
+            )
+        ],
     )
 
-    failed = target.participant_runtime.admit_action(_request(), incomplete)
+    failed = target.participant_runtime.admit_action(_request(), snapshot)
     blocked = target.participant_runtime.admit_action(
         _request(action_instance_id="after-portable-failure"),
-        incomplete,
+        snapshot,
     )
 
     assert not failed.success
-    assert failed.snapshot is incomplete
+    assert failed.snapshot is snapshot
+    assert failed.action_result is not None
+    assert failed.action_result.status == "failed"
     assert failed.diagnostics[0].code == "cyborg-backend.action.portable-commit-failed"
     assert not blocked.success
     assert len(driver.selections) == 1
@@ -649,6 +740,9 @@ def test_coordinated_reset_resets_the_aggregate_once() -> None:
     driver = FakeExecutionDriver()
     target, snapshot = _prepared_target(driver, max_steps=30)
     assert target.participant_runtime is not None
+    action = target.participant_runtime.admit_action(_request(), snapshot)
+    assert action.success
+    assert len(target.participant_runtime.observations(_BLUE)) == 1
 
     reset = target.participant_runtime.reset_many(
         tuple(
@@ -658,11 +752,14 @@ def test_coordinated_reset_resets_the_aggregate_once() -> None:
             )
             for address in (_BLUE, _GREEN, _RED)
         ),
-        snapshot,
+        action.snapshot,
     )
 
     assert reset.success
     assert driver.resets == 1
+    assert target.participant_runtime.observations(_BLUE) == ()
+    assert target.participant_runtime.observations(_GREEN) == ()
+    assert target.participant_runtime.observations(_RED) == ()
     assert {
         value["episode_id"] for value in reset.snapshot.participant_episode_results.values()
     } == {
@@ -670,6 +767,83 @@ def test_coordinated_reset_resets_the_aggregate_once() -> None:
         f"{_GREEN}-episode-2",
         f"{_RED}-episode-2",
     }
+    assert {
+        value["previous_episode_id"]
+        for value in reset.snapshot.participant_episode_results.values()
+    } == {
+        f"{_BLUE}-episode-1",
+        f"{_GREEN}-episode-1",
+        f"{_RED}-episode-1",
+    }
+
+
+def test_coordinated_restart_requires_terminal_three_participant_batch() -> None:
+    driver = FakeExecutionDriver()
+    target, snapshot = _prepared_target(driver, max_steps=30)
+    assert target.participant_runtime is not None
+    action = target.participant_runtime.admit_action(_request(), snapshot)
+    assert action.success
+    terminated = action.snapshot
+    for address in (_BLUE, _GREEN, _RED):
+        result = target.participant_runtime.terminate(
+            ParticipantEpisodeTerminateRequest(participant_address=address),
+            terminated,
+        )
+        assert result.success
+        terminated = result.snapshot
+
+    single = target.participant_runtime.restart(
+        ParticipantEpisodeRestartRequest(
+            participant_address=_BLUE,
+            episode_id=f"{_BLUE}-episode-2",
+        ),
+        terminated,
+    )
+    partial = target.participant_runtime.restart_many(
+        (
+            ParticipantEpisodeRestartRequest(
+                participant_address=_BLUE,
+                episode_id=f"{_BLUE}-episode-2",
+            ),
+        ),
+        terminated,
+    )
+    restarted = target.participant_runtime.restart_many(
+        tuple(
+            ParticipantEpisodeRestartRequest(
+                participant_address=address,
+                episode_id=f"{address}-episode-2",
+            )
+            for address in (_BLUE, _GREEN, _RED)
+        ),
+        terminated,
+    )
+
+    assert not single.success
+    assert single.snapshot is terminated
+    assert not partial.success
+    assert partial.snapshot is terminated
+    assert restarted.success
+    assert driver.resets == 1
+    assert target.participant_runtime.observations(_BLUE) == ()
+    assert {
+        value["status"] for value in restarted.snapshot.participant_episode_results.values()
+    } == {"running"}
+    assert {
+        value["previous_episode_id"]
+        for value in restarted.snapshot.participant_episode_results.values()
+    } == {
+        f"{_BLUE}-episode-1",
+        f"{_GREEN}-episode-1",
+        f"{_RED}-episode-1",
+    }
+    resumed = target.participant_runtime.admit_action(
+        _request(action_instance_id="after-restart"),
+        restarted.snapshot,
+    )
+    assert resumed.success
+    assert driver.resets == 1
+    assert len(driver.selections) == 2
 
 
 def test_exhausted_trial_reset_starts_a_new_logical_segment() -> None:

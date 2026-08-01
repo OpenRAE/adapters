@@ -48,6 +48,7 @@ _SUPPORTED_CONTRACTS = frozenset(
         "participant-episode-state-envelope-v1",
         "participant-episode-history-event-stream-v1",
         "participant-behavior-history-event-stream-v1",
+        "participant-observation-envelope-v1",
         "participant-shared-state-record-v1",
         "participant-joint-action-record-v1",
         "participant-time-management-context-v1",
@@ -315,8 +316,8 @@ def create_cyborg_manifest(**config: object) -> BackendManifest:
                 "Provisioning records and constructs the admitted RAES topology; "
                 "CybORG substitutes selected OS images and native private addresses. "
                 "Logical action execution is bounded to the selected aggregate-turn "
-                "mapping. It makes no observation, evaluation, reward, or "
-                "outcome-equivalence claim."
+                "mapping with lossy participant-relative observation envelopes. "
+                "It makes no evaluator, reward, or outcome-equivalence claim."
             ),
         },
     )
