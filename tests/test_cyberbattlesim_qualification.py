@@ -173,4 +173,4 @@ def test_qualification_admits_selected_backend_and_bounds_claim_strength() -> No
         "outcome_reproduction": "stochastic-bounded",
     }
     assert extras["cyberbattlesim"] == []
-    assert extras["cyborg"] == []
+    assert extras["cyborg"] == ["raes-env-packs==3.2.0"]

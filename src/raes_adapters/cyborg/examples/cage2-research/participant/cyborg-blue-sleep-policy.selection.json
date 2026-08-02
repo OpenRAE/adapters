@@ -1,0 +1,25 @@
+{
+  "participant_address": "participant.behavior.blue",
+  "implementation_identity": {"name": "cyborg-blue-sleep-policy", "version": "1.0.0"},
+  "manifest_ref": "participant/cyborg-blue-sleep-policy.manifest.json",
+  "manifest_digest": "sha256:55034c63715a2a354126f152ca7c23a6da879a213400760cf1ea2e54b8a0f72d",
+  "configuration_ref": "participant/cyborg-blue-sleep-policy.configuration.json",
+  "configuration_digest": "sha256:4d43e418e4556824a6ed658e9b0640d82f0254f4f511c6c266ffb51aeb4e1898",
+  "selected_decision_surface_mode": "policy-directed",
+  "participant_contract_versions": [
+    "participant-episode-state-envelope-v1",
+    "participant-behavior-history-event-stream-v1",
+    "participant-decision-surface-v2"
+  ],
+  "exposure_policy": {
+    "policy_id": "cyborg-blue-observation-boundary",
+    "policy_version": null,
+    "policy_digest": null,
+    "exposure_policy_kinds": ["hidden-truth", "observation-stream"],
+    "disclosed_refs": ["participant.observation-boundary.blue"],
+    "withheld_refs": ["evidence.cyborg.native-state"],
+    "tool_affordance_refs": [],
+    "visibility_scope_refs": ["participant.behavior.blue"],
+    "constraints": {}
+  }
+}

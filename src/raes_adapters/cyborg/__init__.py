@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 from .driver import (
     CyborgDriver,
     SourceInstalledCyborgDriver,
+    verify_selected_cyborg_source,
 )
 from .evaluator import CyborgEvaluator
 from .manifest import (
@@ -116,4 +117,5 @@ __all__ = [
     "run_cyborg_conformance",
     "run_cyborg_conformance_suite",
     "translate_scenario",
+    "verify_selected_cyborg_source",
 ]

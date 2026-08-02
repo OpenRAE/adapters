@@ -1405,6 +1405,11 @@ dependencies = [
     { name = "raes" },
 ]
 
+[package.optional-dependencies]
+cyborg = [
+    { name = "raes-env-packs" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "coverage" },
@@ -1421,7 +1426,10 @@ docs = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "raes", specifier = "==2.0.0" }]
+requires-dist = [
+    { name = "raes", specifier = "==2.0.0" },
+    { name = "raes-env-packs", marker = "extra == 'cyborg'", specifier = "==3.2.0" },
+]
 provides-extras = ["cyberbattlesim", "cyborg"]
 
 [package.metadata.requires-dev]
@@ -1437,6 +1445,19 @@ dev = [
 docs = [
     { name = "mkdocs", specifier = ">=1.6,<2" },
     { name = "mkdocs-material", specifier = ">=9.6,<10" },
+]
+
+[[package]]
+name = "raes-env-packs"
+version = "3.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyyaml" },
+    { name = "raes" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8a/b9/c2486bfe77346715c93afe3c2e9272304e46c7213a760d3326af35d8eed7/raes_env_packs-3.2.0.tar.gz", hash = "sha256:d8020fb2dbc280d9889e443fa9bcaf5976086af0cfdf6b4cb0f54fc2942dc3bc", size = 342751, upload-time = "2026-07-31T23:49:04.435Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a8/af/b54e1114ba53e74c86609e3789ca6ebb52cdc07a694cf7e6ce856c3d9f56/raes_env_packs-3.2.0-py3-none-any.whl", hash = "sha256:8fba95f896e06b8abde685553457ed927d35c355e806b76f57d82313644e6992", size = 158145, upload-time = "2026-07-31T23:49:03.184Z" },
 ]
 
 [[package]]

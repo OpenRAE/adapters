@@ -1,0 +1,49 @@
+{
+  "schema_version": "experiment-task/v1",
+  "task_id": "cage2-research-task",
+  "task_version": "1.0.0",
+  "title": "CAGE-2 bounded defence task",
+  "description": "Evaluate a selected blue policy against one declared CAGE-2 red variant on the packaged synthetic topology.",
+  "scenario_ref": {
+    "ref_kind": "scenario-snapshot",
+    "ref_id": "cage2-research",
+    "ref_digest": "sha256:926f13857da070f1ebdc3afbb3193c7c13f4aa9fe324b3eb93e1c2595871abda",
+    "ref_path": "sdl/cage2-research.sdl.yaml"
+  },
+  "evaluation_protocol": {
+    "protocol_id": "cage2-research-protocol",
+    "protocol_version": "1.0.0",
+    "intent": "Retain the source-projected blue reward as bounded portable evidence without exporting native state.",
+    "unit_of_analysis": "episode",
+    "metric_definitions": {
+      "cage2-cumulative-blue-reward": {
+        "metric_id": "cage2-cumulative-blue-reward",
+        "metric_version": "1.0.0",
+        "name": "Cumulative blue reward",
+        "measured_construct": "Sum of admitted source reward components projected for the blue participant.",
+        "unit_of_analysis": "episode",
+        "value_kind": "number",
+        "direction": "higher-is-better",
+        "evidence_requirements": [{"ref_kind": "evidence", "ref_id": "source-ledger:reward-components"}]
+      }
+    },
+    "observation_requirements": [{"ref_kind": "evidence", "ref_id": "source-ledger:reward-components"}]
+  },
+  "intended_use": "Run an installed-adapter smoke episode or the declared two-seed study.",
+  "non_use": ["Do not treat this synthetic example as an outcome-equivalence benchmark."],
+  "population_or_construct": "A synthetic single-host private network under the qualified CAGE-2 source mapping.",
+  "split_and_leakage_controls": {"partitioning_strategy": "Fixed public synthetic topology; hidden native truth is never exported."},
+  "apparatus_constraints": {"notes": ["Requires the separately installed qualified CybORG source and the cyborg-cage2 backend."]},
+  "validity_notes": [{"category": "external", "note": "The packaged topology is intentionally small and supports workflow validation, not broad empirical claims."}],
+  "artifact_refs": [{
+    "artifact_id": "cage2-research-concepts",
+    "role": "documentation",
+    "media_type": "text/markdown",
+    "uri": "pack:/docs/concepts.md",
+    "checksum": {"algorithm": "sha256", "value": "0000000000000000000000000000000000000000000000000000000000000000"},
+    "size_bytes": 1,
+    "created_at": "2026-08-02T00:00:00Z",
+    "source": "OpenRAE/adapters#20",
+    "sensitivity": "public"
+  }]
+}

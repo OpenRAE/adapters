@@ -30,6 +30,7 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Researcher command: researcher-command.md
   - Maintainers:
       - Continuous integration: maintainers/ci.md
       - Project services: maintainers/project-services.md
@@ -44,6 +45,7 @@ nav:
       - CybORG participant episode and observation guardrails: decisions/cyborg-participant-runtime-guardrails.md
       - CybORG reward, objective, and outcome projection guardrails: decisions/cyborg-evaluation-projection-guardrails.md
       - CybORG conformance-composition guardrails: decisions/cyborg-conformance-guardrails.md
+      - CybORG researcher run-and-evidence command guardrails: decisions/cyborg-researcher-command-guardrails.md
       - CyberBattleSim qualification guardrails: decisions/cyberbattlesim-qualification-guardrails.md
       - CyberBattleSim scenario and source-ledger guardrails: decisions/cyberbattlesim-scenario-ledger-guardrails.md
       - CyberBattleSim backend architecture guardrails: decisions/cyberbattlesim-backend-guardrails.md
