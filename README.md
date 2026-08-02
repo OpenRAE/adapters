@@ -1,8 +1,8 @@
 # raes-adapters
 
 [![Documentation](https://readthedocs.org/projects/raes-adapters/badge/?version=latest)](https://raes-adapters.readthedocs.io/en/latest/)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/RAESystem/adapters/badge)](https://scorecard.dev/viewer/?uri=github.com/RAESystem/adapters)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects?as=badge&url=https%3A%2F%2Fgithub.com%2FRAESystem%2Fadapters)](https://www.bestpractices.dev/projects?as=entry&url=https%3A%2F%2Fgithub.com%2FRAESystem%2Fadapters)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/OpenRAE/adapters/badge)](https://scorecard.dev/viewer/?uri=github.com/OpenRAE/adapters)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects?as=badge&url=https%3A%2F%2Fgithub.com%2FOpenRAE%2Fadapters)](https://www.bestpractices.dev/projects?as=entry&url=https%3A%2F%2Fgithub.com%2FOpenRAE%2Fadapters)
 
 A single distribution, **`raes-adapters`**, that qualifies and realizes
 [RAES](https://github.com/RAESystem/rae) scenarios against concrete simulator
@@ -35,7 +35,7 @@ pip install raes-adapters  # shared base plumbing + qualification evidence
 
 The selected CybORG backend is admitted and usable through its documented
 source installation. The `cyborg` extra key is dependency-light. Issue
-[#12](https://github.com/RAESystem/adapters/issues/12) qualified the official
+[#12](https://github.com/OpenRAE/adapters/issues/12) qualified the official
 CAGE Challenge 2 source and a packaging-only fix, but the upstream wheel omits
 the version and Scenario2 runtime data. The fixed wheel passed a clean Python
 3.12 smoke locally, but it is not a governed public artifact and the
@@ -56,6 +56,16 @@ binds Microsoft's legally usable, runnable source and admits the selected
 profile. Because no official index/release artifact exists, users install the
 pinned simulator source separately. Unbound random streams and open benchmark
 findings remain explicit limits on deterministic-replay and outcome claims.
+
+The `primaite` extra is dependency-light for the same reason. The
+[qualification record](src/raes_adapters/primaite/qualification.json) binds
+DSTL's MIT-licensed PrimAITE source (tag `v4.0.0`) and admits the selected
+`data_manipulation` profile through the source-native `PrimaiteGymEnv`. PrimAITE
+publishes no index/release wheel, so users install the pinned source separately
+(the qualified route pins `setuptools==75.6.0` to supply `pkg_resources`). A
+broken public seed seam, undeclared runtime dependencies, and an unpinned
+dependency graph remain explicit limits on deterministic-replay and
+reproducibility claims.
 
 The `nasim` extra pins the published `nasim==0.12.0` distribution together with
 its qualified runtime (`gymnasium==0.26.3`, `numpy==1.26.4`), so installing
@@ -127,6 +137,7 @@ raes-adapters/
     cyborg/                    # CybORG qualification, patch evidence, and future backend
       mapping/                 # pinned CAGE-2 → RAES source ledger (REP-003)
       profiles/                # conformance profile overrides
+    primaite/                  # immutable qualification + selected public protocol
     nasim/                     # immutable NASim qualification + selected public protocol
   tests/                       # pytest suite for the distribution
   release-please-config.json   # Release Please: versioning + CHANGELOG from main
@@ -150,7 +161,7 @@ backends land issue by issue:
 
 ## CyberBattleSim qualification
 
-Issue [#25](https://github.com/RAESystem/adapters/issues/25) selects the
+Issue [#25](https://github.com/OpenRAE/adapters/issues/25) selects the
 official Microsoft source at commit
 `854d6966607fb68645651f55b0f97221bd293e0d` and one public
 `CyberBattleChain-v0` protocol with the credential-cache baseline and basic
@@ -161,7 +172,7 @@ semantics. The separate
 [architecture guardrails](docs/decisions/cyberbattlesim-qualification-guardrails.md)
 explain why this evidence is not an adapter manifest or RAES conformance claim.
 
-Issue [#26](https://github.com/RAESystem/adapters/issues/26) authors the
+Issue [#26](https://github.com/OpenRAE/adapters/issues/26) authors the
 portable evidence set for that case: an authored RAES SDL scenario
 (`scenario/cyberbattle-chain.sdl.yaml`) that validates and compiles against
 `raes==2.0.0`, companion published experiment contracts
@@ -181,7 +192,7 @@ fix its boundaries.
 
 ## CyberBattleSim backend
 
-Issue [#27](https://github.com/RAESystem/adapters/issues/27) implements a RAES
+Issue [#27](https://github.com/OpenRAE/adapters/issues/27) implements a RAES
 runtime target for the admitted size-10 `CyberBattleChain-v0` profile:
 
 ```python
@@ -233,7 +244,7 @@ The [backend architecture guardrails](docs/decisions/cyberbattlesim-backend-guar
 record the component ownership, failure hygiene, capability claims, and
 acceptance-test mapping.
 
-Issue [#28](https://github.com/RAESystem/adapters/issues/28) composes that
+Issue [#28](https://github.com/OpenRAE/adapters/issues/28) composes that
 runtime target with the published RAES conformance report and adapter-local
 source-protocol probes. The backend conformance result remains the exact
 `BackendConformanceReport` from RAES and is serialized only through the
@@ -244,9 +255,35 @@ corpus, report schema, or research-validity claim. The
 [conformance-composition guardrails](docs/decisions/cyberbattlesim-conformance-guardrails.md)
 fix those boundaries.
 
+## PrimAITE qualification
+
+Issue [#39](https://github.com/OpenRAE/adapters/issues/39) selects the ARCD
+PrimAITE source at tag `v4.0.0` (commit
+`98617981d7f6ae2c3ffd9a8cc39944e05c9a09ea`) and one public `data_manipulation`
+protocol driven through the source-native Gymnasium entrypoint
+`primaite.session.environment.PrimaiteGymEnv`. The shipped
+[protocol](src/raes_adapters/primaite/public-protocol.md) fixes the exact
+scenario, participants (BLUE `proxy-agent`, scripted RED, probabilistic GREEN),
+`Discrete(78)` action space, flattened `Box(1652,)` observation, seed
+obligations, metrics, and the fixed-horizon truncation semantics (`terminated`
+is always false; the episode truncates at `max_episode_length=128`).
+
+The [qualification record](src/raes_adapters/primaite/qualification.json) binds
+the source identity, the canonical import-root digest (which matches the built
+wheel exactly), the MIT/Crown-copyright legal disposition, the clean-install and
+bounded do-nothing smoke, the resolved dependency graph and its permissive
+license summary, and the maintainer admission with graded claim strength. It
+also records the source's honest limitations: no index/release wheel, an
+undeclared `pkg_resources`/setuptools runtime dependency (the qualified route
+pins `setuptools==75.6.0`), a public seed seam that raises without the `rl`/torch
+stack, a `requires-python` vs classifier inconsistency, and an unpinned upstream
+dependency graph. The
+[qualification guardrails](docs/decisions/primaite-qualification-guardrails.md)
+explain why this evidence is not an adapter manifest or RAES conformance claim.
+
 ## CybORG/CAGE-2 runtime qualification
 
-Issue [#12](https://github.com/RAESystem/adapters/issues/12) selects the
+Issue [#12](https://github.com/OpenRAE/adapters/issues/12) selects the
 official CAGE Challenge 2 repository at commit
 `26ce1c1253fa9e2e73f25e6a7f2da32860c11257`, including its bundled CybORG 2.1,
 Scenario2, evaluator, wrappers, and baseline agents as one source closure. The
@@ -256,7 +293,7 @@ and sanitized red/blue/green smoke result. The accompanying
 [packaging patch](src/raes_adapters/cyborg/cage2-wheel-package-data.patch) is
 qualification evidence only; it is not silently applied or published.
 
-Issue [#15](https://github.com/RAESystem/adapters/issues/15) supplies the
+Issue [#15](https://github.com/OpenRAE/adapters/issues/15) supplies the
 provisioning path for that backend. `create_cyborg_target()` accepts
 admitted RAES provisioning plans and deterministically generates the native
 CybORG scenario: RAES switches become subnets, VM multiplicity becomes hosts,
@@ -266,7 +303,7 @@ configuration-bound realization-envelope identity remain in the RAES snapshot;
 native CybORG objects stay private. Unsupported or lossy node facts fail before
 construction.
 
-Issue [#16](https://github.com/RAESystem/adapters/issues/16) adds aggregate
+Issue [#16](https://github.com/OpenRAE/adapters/issues/16) adds aggregate
 logical-turn execution. A validated blue action is translated by exact contract
 address and drives one source-native turn; the resulting blue, green, and red
 occurrences are recorded in declared source order with shared-state, joint-action,
@@ -317,7 +354,7 @@ deterministic replay or scientific equivalence. See the
 
 ## NASim qualification
 
-Issue [#32](https://github.com/RAESystem/adapters/issues/32) selects Jonathon
+Issue [#32](https://github.com/OpenRAE/adapters/issues/32) selects Jonathon
 Schwartz's official
 [NASim](https://github.com/Jjschwartz/NetworkAttackSimulator) source at tag
 `v0.12.0` (commit `7c732bc4620d20a25b221a782adee29c2a89d800`, published as

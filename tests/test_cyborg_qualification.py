@@ -242,7 +242,7 @@ def test_selection_dependencies_and_stochastic_sources_are_explicit() -> None:
         "56e2c189d6fd4b195584f34d93f66500b30eba8eedff6fca869ed61a8ab4079a"
     )
     assert record["dependency_resolution"]["uv_lock_sha256"] == (
-        "3ce9977df839c17bf6f817d40b89cd0bc874f03d1c91330e6909c5adcfba7dcf"
+        "141df24b3118815584c1423f8bdd07b7997f7882cc30082efddde0bf982de9fe"
     )
     assert record["dependencies"]
     assert all(
@@ -295,5 +295,5 @@ def test_legal_defect_and_claim_bounded_packaging_decisions_are_explicit() -> No
         "run_evidence": "attestable",
         "outcome_reproduction": "stochastic-bounded",
     }
-    assert extras["cyborg"] == ["raes-env-packs==3.2.0"]
+    assert extras["cyborg"] == ["raes-env-packs==3.6.2"]
     assert "CybORG" not in project["project"]["dependencies"]

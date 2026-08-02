@@ -1,8 +1,8 @@
 site_name: RAES Adapters
 site_description: Adapter implementations for reproducible agentic environments.
 site_url: !ENV [READTHEDOCS_CANONICAL_URL, "https://raes-adapters.readthedocs.io/"]
-repo_url: https://github.com/RAESystem/adapters
-repo_name: RAESystem/adapters
+repo_url: https://github.com/OpenRAE/adapters
+repo_name: OpenRAE/adapters
 edit_uri: edit/dev/docs/
 docs_dir: docs
 
@@ -47,6 +47,7 @@ nav:
       - CybORG conformance-composition guardrails: decisions/cyborg-conformance-guardrails.md
       - CybORG researcher run-and-evidence command guardrails: decisions/cyborg-researcher-command-guardrails.md
       - CyberBattleSim qualification guardrails: decisions/cyberbattlesim-qualification-guardrails.md
+      - PrimAITE qualification guardrails: decisions/primaite-qualification-guardrails.md
       - NASim qualification guardrails: decisions/nasim-qualification-guardrails.md
       - NASim scenario and source-ledger guardrails: decisions/nasim-scenario-ledger-guardrails.md
       - CyberBattleSim scenario and source-ledger guardrails: decisions/cyberbattlesim-scenario-ledger-guardrails.md

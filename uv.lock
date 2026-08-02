@@ -1795,7 +1795,7 @@ wheels = [
 
 [[package]]
 name = "raes"
-version = "2.0.0"
+version = "3.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "asyncssh" },
@@ -1814,9 +1814,9 @@ dependencies = [
     { name = "uvicorn", extra = ["standard"] },
     { name = "z3-solver" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/00/d5/2444e66bd45ffdd8ffdffc2588c853bdb1025bfd3ce951448107d6275ac7/raes-2.0.0.tar.gz", hash = "sha256:12b7e338350ad11cb65a32216a4a6ea3fd3f165e7f97207e27d1bb88ddd0976d", size = 2392051, upload-time = "2026-07-27T06:59:00.395Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1d/ad/2c9a895516bb8a6c5cc72e13d3203ac6ab5f5a79b2c6e438fb7046b9acb8/raes-3.3.0.tar.gz", hash = "sha256:2a99a48a22a1c800f91d003d4089d7d4b73b1e0d32e57715ceb610f908274c74", size = 2928408, upload-time = "2026-08-02T03:01:03.02Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d3/30/29169747ee4629d733794c780f2684494a74cf2df5b7346a947ff485ec56/raes-2.0.0-py3-none-any.whl", hash = "sha256:8205f90631009a6867c861914fb0e6fa33b32f65faa15873f3dabed02c9e02c2", size = 2250915, upload-time = "2026-07-27T06:58:58.44Z" },
+    { url = "https://files.pythonhosted.org/packages/f3/ab/c743ead99fbf68f1bbcfc0a588bebb8cfbee2b79e6431ebead6333dac4dc/raes-3.3.0-py3-none-any.whl", hash = "sha256:037cee182983121f330a2812a07a6f905bbf54d5d0be2c8799ecaa5535844e65", size = 2831463, upload-time = "2026-08-02T03:01:01.244Z" },
 ]
 
 [[package]]
@@ -1857,10 +1857,10 @@ requires-dist = [
     { name = "gymnasium", marker = "extra == 'nasim'", specifier = "==0.26.3" },
     { name = "nasim", marker = "extra == 'nasim'", specifier = "==0.12.0" },
     { name = "numpy", marker = "extra == 'nasim'", specifier = "==1.26.4" },
-    { name = "raes", specifier = "==2.0.0" },
-    { name = "raes-env-packs", marker = "extra == 'cyborg'", specifier = "==3.2.0" },
+    { name = "raes", specifier = "==3.3.0" },
+    { name = "raes-env-packs", marker = "extra == 'cyborg'", specifier = "==3.6.2" },
 ]
-provides-extras = ["cyberbattlesim", "cyborg", "nasim"]
+provides-extras = ["cyberbattlesim", "primaite", "cyborg", "nasim"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1879,15 +1879,15 @@ docs = [
 
 [[package]]
 name = "raes-env-packs"
-version = "3.2.0"
+version = "3.6.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pyyaml" },
     { name = "raes" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8a/b9/c2486bfe77346715c93afe3c2e9272304e46c7213a760d3326af35d8eed7/raes_env_packs-3.2.0.tar.gz", hash = "sha256:d8020fb2dbc280d9889e443fa9bcaf5976086af0cfdf6b4cb0f54fc2942dc3bc", size = 342751, upload-time = "2026-07-31T23:49:04.435Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/63/2f/886159d97500fe27ae045612c64a3f9a1f07f0cfb8295503a531095e86e8/raes_env_packs-3.6.2.tar.gz", hash = "sha256:bff9844745cf175ca747500bfdf55efb84a4da658485a71cb21d0c21a94a7d5b", size = 1215203, upload-time = "2026-08-02T04:49:33.561Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a8/af/b54e1114ba53e74c86609e3789ca6ebb52cdc07a694cf7e6ce856c3d9f56/raes_env_packs-3.2.0-py3-none-any.whl", hash = "sha256:8fba95f896e06b8abde685553457ed927d35c355e806b76f57d82313644e6992", size = 158145, upload-time = "2026-07-31T23:49:03.184Z" },
+    { url = "https://files.pythonhosted.org/packages/c6/2b/556551e194ec577f5185feee6c9dfdd5b0c6ca970e8a1439c5afd7a40a84/raes_env_packs-3.6.2-py3-none-any.whl", hash = "sha256:7fefc42e60a4dcd6dae20d935199be6d2214f19a4c2d74a05ef3a185daaf9172", size = 1026186, upload-time = "2026-08-02T04:49:32.029Z" },
 ]
 
 [[package]]

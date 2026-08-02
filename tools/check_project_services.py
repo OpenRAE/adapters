@@ -83,7 +83,7 @@ def validate_repository(repo_root: Path) -> list[str]:
     errors: list[str] = []
 
     ground_control = _read_required(repo_root, ".ground-control.yaml", errors)
-    _require(ground_control, "github_repo: RAESystem/adapters", ".ground-control.yaml", errors)
+    _require(ground_control, "github_repo: OpenRAE/adapters", ".ground-control.yaml", errors)
     _require(ground_control, "project_key: RAESystem_adapters", ".ground-control.yaml", errors)
     _require(ground_control, "test_command: make verify", ".ground-control.yaml", errors)
     _require(ground_control, "completion_command: make verify", ".ground-control.yaml", errors)
@@ -193,8 +193,8 @@ def validate_repository(repo_root: Path) -> list[str]:
     readme = _read_required(repo_root, "README.md", errors)
     for expected in (
         "readthedocs.org/projects/raes-adapters/badge/",
-        "api.scorecard.dev/projects/github.com/RAESystem/adapters/badge",
-        "bestpractices.dev/projects?as=badge&url=https%3A%2F%2Fgithub.com%2FRAESystem%2Fadapters",
+        "api.scorecard.dev/projects/github.com/OpenRAE/adapters/badge",
+        "bestpractices.dev/projects?as=badge&url=https%3A%2F%2Fgithub.com%2FOpenRAE%2Fadapters",
     ):
         _require(readme, expected, "README.md", errors)
 
@@ -205,8 +205,8 @@ def validate_repository(repo_root: Path) -> list[str]:
         "PyPI Trusted Publisher workflow: `release-please.yml`",
         "PyPI environment: `pypi`",
         "SonarCloud project key: `RAESystem_adapters`",
-        "OpenSSF Scorecard URI: `github.com/RAESystem/adapters`",
-        "OpenSSF Best Practices lookup: `https://github.com/RAESystem/adapters`",
+        "OpenSSF Scorecard URI: `github.com/OpenRAE/adapters`",
+        "OpenSSF Best Practices lookup: `https://github.com/OpenRAE/adapters`",
     ):
         _require(services, expected, "docs/maintainers/project-services.md", errors)
 

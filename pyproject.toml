@@ -33,7 +33,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Typing :: Typed",
 ]
-dependencies = ["raes==2.0.0"]
+dependencies = ["raes==3.3.0"]
 
 [project.optional-dependencies]
 # Microsoft publishes the selected CyberBattleSim source but no index or
@@ -41,11 +41,18 @@ dependencies = ["raes==2.0.0"]
 # install the pinned simulator source separately and target construction
 # reports its absence without weakening the base installation.
 cyberbattlesim = []
+# DSTL publishes the selected PrimAITE source (tag v4.0.0) but no index or
+# release wheel. Its pins (gymnasium==0.28.1, numpy~=1.23, pydantic==2.7.0) are
+# mutually incompatible with the resolved cyberbattlesim/base graph, so the
+# adapter extra is dependency-light: users install the pinned source separately
+# and keep those pins out of the single lock. No uv `conflicts` declaration is
+# needed while the extra is empty.
+primaite = []
 # The environment-pack validator is installable. The native backend remains on
 # the documented source-install route because the official CybORG wheel still
 # lacks the qualified packaging-data fix; the command reports that limitation
 # instead of cloning source or advertising an ungoverned wheel.
-cyborg = ["raes-env-packs==3.2.0"]
+cyborg = ["raes-env-packs==3.6.2"]
 # NASim publishes an index distribution, so the extra pins it directly, together
 # with the qualified runtime (gymnasium 0.26.3 / numpy 1.26.4) so that installing
 # the extra reproduces the admitted, runnable protocol rather than a newer
@@ -59,11 +66,11 @@ nasim = ["nasim==0.12.0", "gymnasium==0.26.3", "numpy==1.26.4"]
 raes-adapters = "raes_adapters.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/RAESystem/adapters"
+Homepage = "https://github.com/OpenRAE/adapters"
 Documentation = "https://raes-adapters.readthedocs.io"
-Repository = "https://github.com/RAESystem/adapters"
-Issues = "https://github.com/RAESystem/adapters/issues"
-Changelog = "https://github.com/RAESystem/adapters/blob/main/CHANGELOG.md"
+Repository = "https://github.com/OpenRAE/adapters"
+Issues = "https://github.com/OpenRAE/adapters/issues"
+Changelog = "https://github.com/OpenRAE/adapters/blob/main/CHANGELOG.md"
 
 [build-system]
 requires = ["hatchling"]

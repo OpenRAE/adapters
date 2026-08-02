@@ -1,6 +1,6 @@
 schema_version: 1
 project: aces-adapters
-github_repo: RAESystem/adapters
+github_repo: OpenRAE/adapters
 workflow:
   test_command: make verify
   completion_command: make verify

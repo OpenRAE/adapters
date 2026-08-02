@@ -89,7 +89,7 @@ class MalformedRenameTests(unittest.TestCase):
             "import raes_backend_protocols",
             "RAES is the authority",
             # Percent-encoded URL: the "F" of "%2F" precedes the stem.
-            "bestpractices.dev/projects?as=badge&url=https%3A%2F%2Fgithub.com%2FRAESystem%2Fadapters",
+            "bestpractices.dev/projects?as=badge&url=https%3A%2F%2Fgithub.com%2FOpenRAE%2Fadapters",
         ):
             with self.subTest(sample=sample):
                 self.assertEqual([], scan_malformed(sample.encode("utf-8")), sample)

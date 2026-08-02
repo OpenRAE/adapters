@@ -199,4 +199,4 @@ def test_qualification_admits_selected_backend_and_bounds_claim_strength() -> No
     assert f"gymnasium=={pins['gymnasium']}" in extras["nasim"]
     assert f"numpy=={pins['numpy']}" in extras["nasim"]
     assert extras["cyberbattlesim"] == []
-    assert extras["cyborg"] == ["raes-env-packs==3.2.0"]
+    assert extras["cyborg"] == ["raes-env-packs==3.6.2"]

@@ -26,7 +26,7 @@
 # granting a new exception is a reviewed edit to this file.
 entries:
   - path: .ground-control.yaml
-    digest: de1c598e28e28cbc1f336cf23a4549eb7ed214812b1ad04f2b7323741abd8e33
+    digest: 63d6cedefd87fe724b1d587bfe750d38f7d55610879124b587f1184544a77ee5
     record_class: external-identity
     owner: ground-control
     rationale: >-

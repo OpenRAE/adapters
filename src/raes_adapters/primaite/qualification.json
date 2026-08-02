@@ -1,0 +1,1096 @@
+{
+  "record_version": "primaite-qualification/1",
+  "qualified_at": "2026-08-02",
+  "scope": "RAESystem/adapters#39",
+  "source": {
+    "repository": "https://github.com/Autonomous-Resilient-Cyber-Defence/PrimAITE",
+    "tag": "v4.0.0",
+    "tag_object": "f6513362e9882217fb90595de51e7ca659ee1416",
+    "commit": "98617981d7f6ae2c3ffd9a8cc39944e05c9a09ea",
+    "tree": "3928ab452c51206ba8706b3f575e31fe99eb842e",
+    "package": "primaite",
+    "version": "4.0.0",
+    "requires_python": ">=3.9,<3.13",
+    "public_index_distribution": null,
+    "index_note": "No PyPI distribution or upstream release wheel exists; the README documents wheel-from-GitHub install only."
+  },
+  "source_files": [
+    {
+      "path": "LICENSE",
+      "sha256": "669b434561703dbfa093fe2c02c2569bcfe3347caf339e5d42643e4c1b4b76e8"
+    },
+    {
+      "path": "pyproject.toml",
+      "sha256": "395aac38b3c5ad3c9b753de7f393eb728ae61def16da29728d1850ce6f841a1d"
+    },
+    {
+      "path": "setup.py",
+      "sha256": "44fd8461dc126f7afd361f79cc7691ac63bd1eae372d67f3d7f79e7b29a44904"
+    },
+    {
+      "path": "setup.cfg",
+      "sha256": "e27820e2ecf571875a202008dd09fbe9d65106484994a5afe22db8e4822ef030"
+    },
+    {
+      "path": "MANIFEST.in",
+      "sha256": "18c40c8b5802e5266f4c6529432369f48a0606db2daf92a7e3aad78c3083a63f"
+    },
+    {
+      "path": "README.md",
+      "sha256": "2c5fb5e1378fe4ec3c64520aced07ba7c05b3bdbb7609c9dc5c55b9b40ab353c"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "1aefc7638836252426d73aef97aa558693f307138c549bd18c574672a3b355cd"
+    },
+    {
+      "path": "src/primaite/VERSION",
+      "sha256": "e1d49c569ae09b2ede16e2d83820a3809b35eb6c44c13ba9b5330598d6b8f43c"
+    },
+    {
+      "path": "src/primaite/__init__.py",
+      "sha256": "4e387d180c99a456364afb0a61e49b937dfcc8352278b1929250f4d4b0def9ea"
+    },
+    {
+      "path": "src/primaite/cli.py",
+      "sha256": "82b0ab66eedc99c08b8bb7157ecff323f583f42c4e2c2e6d18cb5a5762ecf378"
+    },
+    {
+      "path": "src/primaite/session/environment.py",
+      "sha256": "2ccb132667e4b9de5bd90c2709aea24ae800748ccdc429f05476e47a4fc27773"
+    },
+    {
+      "path": "src/primaite/game/game.py",
+      "sha256": "ccfbc17fdb903e9bc96211c8542572998deab6dc7d41a34306c8b18b22b35c09"
+    },
+    {
+      "path": "src/primaite/game/agent/scripted_agents/probabilistic_agent.py",
+      "sha256": "16bbe2fa0dc5cf022caaaeb6ef0dc7bddb8b11f03a4a10d81ab3d7bbcb67999b"
+    },
+    {
+      "path": "src/primaite/config/_package_data/data_manipulation.yaml",
+      "sha256": "73c93965a32783f72f272993df4d65ab9bfcf670ba761503985199ff7e6debd6"
+    }
+  ],
+  "runtime_source_tree": {
+    "root": "primaite",
+    "include": "all regular files under src/primaite; __pycache__/*.pyc excluded; symlinks and non-regular files rejected",
+    "canonicalization": "Sorted POSIX path, NUL, lowercase SHA-256 of raw file bytes, LF.",
+    "file_count": 234,
+    "sha256": "9fe7ba158a005ead6133769336ff66e95da38c1cfe5054954be38d16d7f54dcc",
+    "installed_wheel_tree_matches_source": true
+  },
+  "runtime_artifacts": [
+    {
+      "name": "primaite",
+      "version": "4.0.0",
+      "artifact": {
+        "filename": "primaite-4.0.0-py3-none-any.whl",
+        "sha256": "06df7275d2e5334a041e075695f9ce465789989d7bcf0a7696145fecc417c926",
+        "require_direct_archive_sha256": false,
+        "runtime_identity": "complete-root-tree"
+      },
+      "roots": [
+        {
+          "path": "primaite",
+          "file_count": 234,
+          "sha256": "9fe7ba158a005ead6133769336ff66e95da38c1cfe5054954be38d16d7f54dcc"
+        }
+      ],
+      "sdist": {
+        "filename": "primaite-4.0.0.tar.gz",
+        "sha256": "1f5cf05b831687012355436efe6172fbdf1565a69bddeba759d511429b4ae844"
+      },
+      "build": "Built from the pinned source. Wheel/sdist bytes are not byte-reproducible, so runtime identity rests on commit + tree + the canonical import-root digest, not the archive bytes."
+    }
+  ],
+  "protocol": {
+    "resource": "public-protocol.md",
+    "sha256": "90b116ab86f3623fe5237b65500176cb4e46c71ee66ec6f849be0e02adee552e",
+    "selection": {
+      "scenario": {
+        "use_case": "data_manipulation",
+        "config_path": "primaite/config/_package_data/data_manipulation.yaml",
+        "config_sha256": "73c93965a32783f72f272993df4d65ab9bfcf670ba761503985199ff7e6debd6",
+        "config_metadata_version": "3.0",
+        "max_episode_length": 128
+      },
+      "entrypoint": "primaite.session.environment.PrimaiteGymEnv",
+      "participants": {
+        "blue": {
+          "ref": "defender",
+          "type": "proxy-agent",
+          "role": "rl-controlled"
+        },
+        "red": {
+          "ref": "data_manipulation_attacker",
+          "type": "red-database-corrupting-agent",
+          "role": "scripted"
+        },
+        "green": [
+          {
+            "ref": "client_1_green_user",
+            "type": "probabilistic-agent"
+          },
+          {
+            "ref": "client_2_green_user",
+            "type": "probabilistic-agent"
+          }
+        ]
+      },
+      "baseline_participant": "do-nothing (action 0) over the BLUE action space",
+      "action_space": {
+        "type": "Discrete",
+        "n": 78
+      },
+      "observation_space": {
+        "type": "Box",
+        "shape": [
+          1652
+        ],
+        "dtype": "int64",
+        "low": 0.0,
+        "high": 1.0,
+        "flattened": true
+      },
+      "reward_type": "float",
+      "seed": 20260802,
+      "termination": {
+        "terminated": "always false (hardcoded in step())",
+        "truncated_rule": "step_counter >= max_episode_length",
+        "max_episode_length": 128,
+        "terminal_cause": "fixed-horizon-truncation"
+      },
+      "metrics": [
+        "per-step-blue-reward",
+        "cumulative-blue-reward-per-episode",
+        "steps-to-fixed-horizon-truncation",
+        "terminal-cause"
+      ]
+    }
+  },
+  "runtime": {
+    "python": "3.11.15",
+    "platform": "Linux-6.8.0-117-generic-x86_64-with-glibc2.39",
+    "build": "unmodified official git checkout wheel; no-rl extra",
+    "install_route": "Build the wheel from the pinned source, install it (no rl extra) with setuptools==75.6.0 into a fresh venv, run under an isolated HOME; import creates the PrimAITE app directories.",
+    "wheel": "primaite-4.0.0-py3-none-any.whl",
+    "wheel_sha256": "06df7275d2e5334a041e075695f9ce465789989d7bcf0a7696145fecc417c926",
+    "setuptools": "75.6.0",
+    "numpy": "1.26.4",
+    "gymnasium": "0.28.1",
+    "clean_install": "passed",
+    "working_directory": "isolated-temporary-directory",
+    "home": "isolated-temporary-directory",
+    "pythonpath": "cleared",
+    "python_safe_path": true,
+    "network_after_install": "not-required",
+    "smoke": {
+      "env_class": "PrimaiteGymEnv",
+      "is_gymnasium_env": true,
+      "reset_arity": 2,
+      "step_arity": 5,
+      "reset_obs_type": "ndarray",
+      "reset_obs_shape": [
+        1652
+      ],
+      "reset_obs_dtype": "int64",
+      "reset_info_empty": true,
+      "reward_type": "float",
+      "terminated_type": "bool",
+      "truncated_type": "bool",
+      "seeded_reset": {
+        "exception_type": "KeyError",
+        "missing_module": "torch",
+        "raised": true
+      },
+      "representative_step": {
+        "action": 0,
+        "reward": 0.65,
+        "reward_type": "float",
+        "step_count": 1,
+        "terminated": false,
+        "truncated": false
+      },
+      "episode_run": {
+        "action_policy": "do-nothing-every-step",
+        "cumulative_reward": -57.05,
+        "final_step_reward": -0.8,
+        "steps_to_end": 128,
+        "terminated": false,
+        "truncated": true,
+        "observed_stable_runs": 3
+      }
+    }
+  },
+  "dependency_resolution": {
+    "resolver": "uv",
+    "python": "3.11.15",
+    "resolved_at": "2026-08-02",
+    "route": "no-rl",
+    "no_rl_dependency_count": 133,
+    "normalized_environment_sha256": "b8f86ccf3989b0a9370590bfe31fd0a99c383aaeea72978af4384693297edbdf",
+    "normalization": "sha256 of the LF-joined, lexicographically (codepoint) sorted 'name==version' lines of the resolved graph, with a trailing LF.",
+    "upstream_lockfile": null,
+    "disposition": "Dated resolved snapshot. Upstream ships no lockfile and constrains many dependencies loosely (numpy~=1.23, matplotlib>=3.7.1, PyYAML>=6.0, typer>=0.9, ipywidgets, deepdiff), so those versions drift over time. Evidence only, not a runtime authenticity claim; no second repository lockfile is introduced."
+  },
+  "dependencies_declared": {
+    "core": [
+      "gymnasium==0.28.1",
+      "jupyterlab==3.6.1",
+      "kaleido==0.2.1",
+      "matplotlib>=3.7.1",
+      "networkx==3.1",
+      "numpy~=1.23",
+      "platformdirs==3.5.1",
+      "plotly==5.15.0",
+      "polars==0.20.30",
+      "prettytable==3.8.0",
+      "PyYAML>=6.0",
+      "typer[all]>=0.9",
+      "pydantic==2.7.0",
+      "ipywidgets",
+      "deepdiff"
+    ],
+    "extras": {
+      "rl": [
+        "ray[rllib]>=2.20.0,<2.33",
+        "tensorflow~=2.12",
+        "stable-baselines3==2.1.0",
+        "sb3-contrib==2.1.0"
+      ],
+      "dev_setuptools": "setuptools==75.6.0"
+    }
+  },
+  "dependency_license_summary": {
+    "distinct_licenses": {
+      "Apache 2.0": 1,
+      "Apache License, Version 2.0": 1,
+      "Apache Software License": 9,
+      "Apache Software License; BSD License": 1,
+      "Apache-2.0": 1,
+      "Apache-2.0 AND BSD-2-Clause": 1,
+      "Apache-2.0 OR BSD-2-Clause": 1,
+      "BSD 3-Clause License": 1,
+      "BSD License": 43,
+      "BSD-2-Clause": 2,
+      "BSD-3-Clause": 8,
+      "ISC License (ISCL)": 4,
+      "MIT": 23,
+      "MIT License": 28,
+      "MIT License License (see metadata)": 1,
+      "MIT-0": 1,
+      "MIT-CMU": 1,
+      "Mozilla Public License 2.0 (MPL 2.0)": 2,
+      "PSF-2.0": 1,
+      "Python Software Foundation License": 2,
+      "UNKNOWN": 1
+    },
+    "strong_copyleft": [],
+    "unknown_license": [
+      "ypy-websocket"
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "aiofiles",
+      "version": "22.1.0",
+      "license": "Apache Software License"
+    },
+    {
+      "name": "aiosqlite",
+      "version": "0.22.1",
+      "license": "MIT License"
+    },
+    {
+      "name": "annotated-doc",
+      "version": "0.0.5",
+      "license": "MIT"
+    },
+    {
+      "name": "annotated-types",
+      "version": "0.8.0",
+      "license": "MIT"
+    },
+    {
+      "name": "anyio",
+      "version": "4.14.2",
+      "license": "MIT"
+    },
+    {
+      "name": "argon2-cffi",
+      "version": "25.1.0",
+      "license": "MIT"
+    },
+    {
+      "name": "argon2-cffi-bindings",
+      "version": "25.1.0",
+      "license": "MIT"
+    },
+    {
+      "name": "arrow",
+      "version": "1.4.0",
+      "license": "Apache Software License"
+    },
+    {
+      "name": "asttokens",
+      "version": "3.0.2",
+      "license": "Apache 2.0"
+    },
+    {
+      "name": "attrs",
+      "version": "26.1.0",
+      "license": "MIT"
+    },
+    {
+      "name": "babel",
+      "version": "2.18.0",
+      "license": "BSD License"
+    },
+    {
+      "name": "beautifulsoup4",
+      "version": "4.15.0",
+      "license": "MIT License"
+    },
+    {
+      "name": "bleach",
+      "version": "6.4.0",
+      "license": "Apache Software License"
+    },
+    {
+      "name": "cachebox",
+      "version": "5.2.3",
+      "license": "MIT License"
+    },
+    {
+      "name": "certifi",
+      "version": "2026.7.22",
+      "license": "Mozilla Public License 2.0 (MPL 2.0)"
+    },
+    {
+      "name": "cffi",
+      "version": "2.1.0",
+      "license": "MIT-0"
+    },
+    {
+      "name": "charset-normalizer",
+      "version": "3.4.9",
+      "license": "MIT"
+    },
+    {
+      "name": "cloudpickle",
+      "version": "3.1.2",
+      "license": "BSD License"
+    },
+    {
+      "name": "comm",
+      "version": "0.2.3",
+      "license": "BSD License"
+    },
+    {
+      "name": "contourpy",
+      "version": "1.3.3",
+      "license": "BSD License"
+    },
+    {
+      "name": "cycler",
+      "version": "0.12.1",
+      "license": "BSD License"
+    },
+    {
+      "name": "debugpy",
+      "version": "1.8.21",
+      "license": "MIT License"
+    },
+    {
+      "name": "deepdiff",
+      "version": "9.1.0",
+      "license": "MIT License"
+    },
+    {
+      "name": "defusedxml",
+      "version": "0.7.1",
+      "license": "Python Software Foundation License"
+    },
+    {
+      "name": "entrypoints",
+      "version": "0.4",
+      "license": "MIT License"
+    },
+    {
+      "name": "executing",
+      "version": "2.2.1",
+      "license": "MIT License"
+    },
+    {
+      "name": "Farama-Notifications",
+      "version": "0.0.6",
+      "license": "MIT License"
+    },
+    {
+      "name": "fastjsonschema",
+      "version": "2.22.1",
+      "license": "BSD License"
+    },
+    {
+      "name": "fonttools",
+      "version": "4.63.0",
+      "license": "MIT"
+    },
+    {
+      "name": "fqdn",
+      "version": "1.5.1",
+      "license": "Mozilla Public License 2.0 (MPL 2.0)"
+    },
+    {
+      "name": "gymnasium",
+      "version": "0.28.1",
+      "license": "MIT License"
+    },
+    {
+      "name": "idna",
+      "version": "3.18",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "ipykernel",
+      "version": "6.29.5",
+      "license": "BSD License"
+    },
+    {
+      "name": "ipython",
+      "version": "9.16.0",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "ipython-genutils",
+      "version": "0.2.0",
+      "license": "BSD License"
+    },
+    {
+      "name": "ipython_pygments_lexers",
+      "version": "1.1.1",
+      "license": "BSD License"
+    },
+    {
+      "name": "ipywidgets",
+      "version": "8.1.8",
+      "license": "BSD License"
+    },
+    {
+      "name": "isoduration",
+      "version": "20.11.0",
+      "license": "ISC License (ISCL)"
+    },
+    {
+      "name": "jax-jumpy",
+      "version": "1.0.0",
+      "license": "Apache Software License"
+    },
+    {
+      "name": "jedi",
+      "version": "0.20.0",
+      "license": "MIT License"
+    },
+    {
+      "name": "Jinja2",
+      "version": "3.1.6",
+      "license": "BSD License"
+    },
+    {
+      "name": "json5",
+      "version": "0.15.0",
+      "license": "Apache Software License"
+    },
+    {
+      "name": "jsonpointer",
+      "version": "3.1.1",
+      "license": "BSD License"
+    },
+    {
+      "name": "jsonschema",
+      "version": "4.26.0",
+      "license": "MIT"
+    },
+    {
+      "name": "jsonschema-specifications",
+      "version": "2025.9.1",
+      "license": "MIT"
+    },
+    {
+      "name": "jupyter-events",
+      "version": "0.12.1",
+      "license": "BSD License"
+    },
+    {
+      "name": "jupyter-ydoc",
+      "version": "0.2.5",
+      "license": "BSD 3-Clause License"
+    },
+    {
+      "name": "jupyter_client",
+      "version": "7.4.9",
+      "license": "BSD License"
+    },
+    {
+      "name": "jupyter_core",
+      "version": "5.9.1",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "jupyter_server",
+      "version": "2.20.0",
+      "license": "BSD License"
+    },
+    {
+      "name": "jupyter_server_fileid",
+      "version": "0.9.3",
+      "license": "BSD License"
+    },
+    {
+      "name": "jupyter_server_terminals",
+      "version": "0.5.4",
+      "license": "BSD License"
+    },
+    {
+      "name": "jupyter_server_ydoc",
+      "version": "0.6.1",
+      "license": "BSD License"
+    },
+    {
+      "name": "jupyterlab",
+      "version": "3.6.1",
+      "license": "BSD License"
+    },
+    {
+      "name": "jupyterlab_pygments",
+      "version": "0.3.0",
+      "license": "BSD License"
+    },
+    {
+      "name": "jupyterlab_server",
+      "version": "2.28.0",
+      "license": "BSD License"
+    },
+    {
+      "name": "jupyterlab_widgets",
+      "version": "3.0.16",
+      "license": "BSD License"
+    },
+    {
+      "name": "kaleido",
+      "version": "0.2.1",
+      "license": "MIT"
+    },
+    {
+      "name": "kiwisolver",
+      "version": "1.5.0",
+      "license": "BSD License"
+    },
+    {
+      "name": "lark",
+      "version": "1.3.1",
+      "license": "MIT License"
+    },
+    {
+      "name": "markdown-it-py",
+      "version": "4.2.0",
+      "license": "MIT License"
+    },
+    {
+      "name": "MarkupSafe",
+      "version": "3.0.3",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "matplotlib",
+      "version": "3.11.1",
+      "license": "Python Software Foundation License"
+    },
+    {
+      "name": "matplotlib-inline",
+      "version": "0.2.2",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "mdurl",
+      "version": "0.1.2",
+      "license": "MIT License"
+    },
+    {
+      "name": "mistune",
+      "version": "3.3.4",
+      "license": "BSD License"
+    },
+    {
+      "name": "nbclassic",
+      "version": "1.3.3",
+      "license": "BSD License"
+    },
+    {
+      "name": "nbclient",
+      "version": "0.11.0",
+      "license": "BSD License"
+    },
+    {
+      "name": "nbconvert",
+      "version": "7.17.1",
+      "license": "BSD License"
+    },
+    {
+      "name": "nbformat",
+      "version": "5.10.4",
+      "license": "BSD License"
+    },
+    {
+      "name": "nest-asyncio",
+      "version": "1.6.0",
+      "license": "BSD License"
+    },
+    {
+      "name": "networkx",
+      "version": "3.1",
+      "license": "BSD License"
+    },
+    {
+      "name": "notebook",
+      "version": "6.5.7",
+      "license": "BSD License"
+    },
+    {
+      "name": "notebook_shim",
+      "version": "0.2.4",
+      "license": "BSD License"
+    },
+    {
+      "name": "numpy",
+      "version": "1.26.4",
+      "license": "BSD License"
+    },
+    {
+      "name": "orderly-set",
+      "version": "5.5.0",
+      "license": "MIT License"
+    },
+    {
+      "name": "overrides",
+      "version": "7.7.0",
+      "license": "Apache License, Version 2.0"
+    },
+    {
+      "name": "packaging",
+      "version": "26.2",
+      "license": "Apache-2.0 OR BSD-2-Clause"
+    },
+    {
+      "name": "pandocfilters",
+      "version": "1.5.1",
+      "license": "BSD License"
+    },
+    {
+      "name": "parso",
+      "version": "0.8.7",
+      "license": "MIT License"
+    },
+    {
+      "name": "pexpect",
+      "version": "4.9.0",
+      "license": "ISC License (ISCL)"
+    },
+    {
+      "name": "pillow",
+      "version": "12.3.0",
+      "license": "MIT-CMU"
+    },
+    {
+      "name": "pip",
+      "version": "26.2",
+      "license": "MIT"
+    },
+    {
+      "name": "platformdirs",
+      "version": "3.5.1",
+      "license": "MIT"
+    },
+    {
+      "name": "plotly",
+      "version": "5.15.0",
+      "license": "MIT License"
+    },
+    {
+      "name": "polars",
+      "version": "0.20.30",
+      "license": "MIT License"
+    },
+    {
+      "name": "prettytable",
+      "version": "3.8.0",
+      "license": "BSD License"
+    },
+    {
+      "name": "primaite",
+      "version": "4.0.0",
+      "license": "MIT License License (see metadata)"
+    },
+    {
+      "name": "prometheus_client",
+      "version": "0.26.0",
+      "license": "Apache-2.0 AND BSD-2-Clause"
+    },
+    {
+      "name": "prompt_toolkit",
+      "version": "3.0.53",
+      "license": "BSD License"
+    },
+    {
+      "name": "psutil",
+      "version": "7.2.2",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "ptyprocess",
+      "version": "0.7.0",
+      "license": "ISC License (ISCL)"
+    },
+    {
+      "name": "pure_eval",
+      "version": "0.2.3",
+      "license": "MIT License"
+    },
+    {
+      "name": "pycparser",
+      "version": "3.0",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "pydantic",
+      "version": "2.7.0",
+      "license": "MIT"
+    },
+    {
+      "name": "pydantic_core",
+      "version": "2.18.1",
+      "license": "MIT License"
+    },
+    {
+      "name": "Pygments",
+      "version": "2.20.0",
+      "license": "BSD-2-Clause"
+    },
+    {
+      "name": "pyparsing",
+      "version": "3.3.2",
+      "license": "MIT"
+    },
+    {
+      "name": "python-dateutil",
+      "version": "2.9.0.post0",
+      "license": "Apache Software License; BSD License"
+    },
+    {
+      "name": "python-json-logger",
+      "version": "4.1.0",
+      "license": "BSD-2-Clause"
+    },
+    {
+      "name": "PyYAML",
+      "version": "6.0.3",
+      "license": "MIT License"
+    },
+    {
+      "name": "pyzmq",
+      "version": "27.1.0",
+      "license": "BSD License"
+    },
+    {
+      "name": "referencing",
+      "version": "0.37.0",
+      "license": "MIT"
+    },
+    {
+      "name": "requests",
+      "version": "2.34.2",
+      "license": "Apache Software License"
+    },
+    {
+      "name": "rfc3339-validator",
+      "version": "0.1.4",
+      "license": "MIT License"
+    },
+    {
+      "name": "rfc3986-validator",
+      "version": "0.1.1",
+      "license": "MIT License"
+    },
+    {
+      "name": "rfc3987-syntax",
+      "version": "1.1.0",
+      "license": "MIT"
+    },
+    {
+      "name": "rich",
+      "version": "15.0.0",
+      "license": "MIT License"
+    },
+    {
+      "name": "rpds-py",
+      "version": "2026.6.3",
+      "license": "MIT"
+    },
+    {
+      "name": "Send2Trash",
+      "version": "2.1.0",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "setuptools",
+      "version": "75.6.0",
+      "license": "MIT License"
+    },
+    {
+      "name": "shellingham",
+      "version": "1.5.4",
+      "license": "ISC License (ISCL)"
+    },
+    {
+      "name": "six",
+      "version": "1.17.0",
+      "license": "MIT License"
+    },
+    {
+      "name": "soupsieve",
+      "version": "2.9.1",
+      "license": "MIT"
+    },
+    {
+      "name": "stack-data",
+      "version": "0.6.3",
+      "license": "MIT License"
+    },
+    {
+      "name": "tenacity",
+      "version": "9.1.4",
+      "license": "Apache Software License"
+    },
+    {
+      "name": "terminado",
+      "version": "0.18.1",
+      "license": "BSD License"
+    },
+    {
+      "name": "tinycss2",
+      "version": "1.5.1",
+      "license": "BSD License"
+    },
+    {
+      "name": "tornado",
+      "version": "6.5.7",
+      "license": "Apache Software License"
+    },
+    {
+      "name": "traitlets",
+      "version": "5.16.0",
+      "license": "BSD License"
+    },
+    {
+      "name": "typer",
+      "version": "0.27.0",
+      "license": "MIT"
+    },
+    {
+      "name": "typing_extensions",
+      "version": "4.16.0",
+      "license": "PSF-2.0"
+    },
+    {
+      "name": "tzdata",
+      "version": "2026.3",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "uri-template",
+      "version": "1.3.0",
+      "license": "MIT License"
+    },
+    {
+      "name": "urllib3",
+      "version": "2.7.0",
+      "license": "MIT"
+    },
+    {
+      "name": "wcwidth",
+      "version": "0.8.2",
+      "license": "MIT"
+    },
+    {
+      "name": "webcolors",
+      "version": "25.10.0",
+      "license": "BSD License"
+    },
+    {
+      "name": "webencodings",
+      "version": "0.5.1",
+      "license": "BSD License"
+    },
+    {
+      "name": "websocket-client",
+      "version": "1.9.0",
+      "license": "Apache Software License"
+    },
+    {
+      "name": "wheel",
+      "version": "0.47.0",
+      "license": "MIT"
+    },
+    {
+      "name": "widgetsnbextension",
+      "version": "4.0.15",
+      "license": "BSD License"
+    },
+    {
+      "name": "y-py",
+      "version": "0.6.2",
+      "license": "MIT License"
+    },
+    {
+      "name": "ypy-websocket",
+      "version": "0.8.4",
+      "license": "UNKNOWN"
+    }
+  ],
+  "stochastic_sources": [
+    {
+      "owner": "gym-reset-seam",
+      "api": "PrimaiteGymEnv.reset(seed=20260802)",
+      "binding_status": "broken-without-torch-KeyError"
+    },
+    {
+      "owner": "python-random",
+      "api": "random.seed(seed) via set_random_seed",
+      "binding_status": "reachable-only-through-broken-reset-seam"
+    },
+    {
+      "owner": "numpy-global",
+      "api": "numpy.random.seed(seed) via set_random_seed; GREEN ProbabilisticAgent seeds default_rng from it",
+      "binding_status": "uncontrolled-for-this-scenario"
+    },
+    {
+      "owner": "torch",
+      "api": "torch.manual_seed(seed) via set_random_seed",
+      "binding_status": "absent-on-no-rl-route"
+    }
+  ],
+  "legal": {
+    "upstream_license": "MIT",
+    "license_file": "LICENSE",
+    "license_sha256": "669b434561703dbfa093fe2c02c2569bcfe3347caf339e5d42643e4c1b4b76e8",
+    "copyright": "Crown-owned copyright 2023, Defence Science and Technology Laboratory UK",
+    "license_file_finding": "The LICENSE preamble is mangled ('MIT License License ...'); GitHub reports NOASSERTION and the string propagates into the wheel metadata. The grant and warranty clauses are standard MIT.",
+    "notice_required": true,
+    "attribution": "Retain the MIT permission notice and the DSTL Crown copyright when redistributing PrimAITE source.",
+    "redistribution": "permitted-with-notice",
+    "retained_output": "permitted",
+    "raes_redistributes_source": false,
+    "raes_redistributes_note": "The primaite extra is dependency-light; RAES does not vendor PrimAITE source or its dependencies, so no attribution obligation attaches to the raes-adapters wheel beyond referencing.",
+    "external_downloads": [],
+    "model_weights": [],
+    "privacy": "Simulated, fictitious network and traffic data; no customer data.",
+    "dependency_licenses": "All resolved no-rl dependencies are permissive or weak-copyleft (MIT/BSD/Apache/ISC/PSF/MPL-2.0); none are strong copyleft (no GPL/LGPL/AGPL). One transitive dependency (ypy-websocket 0.8.4) declares no license in its metadata."
+  },
+  "patches": [],
+  "maintenance": {
+    "archived": false,
+    "default_branch": "dev",
+    "selected_tag": "v4.0.0",
+    "selected_commit": "98617981d7f6ae2c3ffd9a8cc39944e05c9a09ea",
+    "latest_release": "v4.0.0",
+    "latest_release_at": "2025-03-18",
+    "release_artifacts": [
+      "Common.Action.Observation.Space.Definition.v0.10.3.xlsx"
+    ],
+    "public_index_distribution": null,
+    "tags": [
+      "v4.0.0",
+      "v3.3.0",
+      "v3.2.0",
+      "v3.1.0",
+      "v3.0.0",
+      "v2.0.0",
+      "v.1.2.1",
+      "v1.2.0",
+      "v1.1.0",
+      "v1.0.0"
+    ]
+  },
+  "known_defects": [
+    {
+      "id": "undeclared-pkg-resources-setuptools-runtime-dep",
+      "status": "observed-in-selected-source",
+      "impact": "primaite imports pkg_resources at import time but does not declare setuptools as a runtime dependency. It breaks with setuptools>=81 (pkg_resources removed) and on default Python-3.12 venvs (no seeded setuptools). The qualified route pins setuptools==75.6.0."
+    },
+    {
+      "id": "seeded-reset-requires-torch",
+      "status": "observed-in-selected-source",
+      "impact": "set_random_seed dereferences sys.modules['torch'] unconditionally, so PrimaiteGymEnv.reset(seed=<int>) raises KeyError('torch') without the rl/torch stack. The public seed seam is unusable on the light route."
+    },
+    {
+      "id": "requires-python-vs-classifiers-inconsistency",
+      "status": "observed-in-selected-source",
+      "impact": "pyproject requires-python is >=3.9,<3.13 but the classifiers and README document support only through 3.11 (<3.12). Qualified on 3.11."
+    },
+    {
+      "id": "cli-requires-undeclared-click",
+      "status": "observed-in-selected-source",
+      "impact": "primaite.cli imports click (via utils/cli), which is not a declared dependency, so 'primaite setup' and the CLI fail on the no-rl route. The Gymnasium runtime does not require it (import creates app dirs)."
+    },
+    {
+      "id": "typer-all-extra-removed",
+      "status": "observed-in-resolution",
+      "impact": "The declared typer[all] extra no longer exists in modern typer; resolution emits a benign warning."
+    },
+    {
+      "id": "unpinned-dependency-graph",
+      "status": "observed-in-selected-source",
+      "impact": "Upstream ships no lockfile and constrains several dependencies loosely, so the resolved graph is a dated snapshot rather than a reproducible set."
+    },
+    {
+      "id": "jupyterlab-core-dependency",
+      "status": "observed-in-selected-source",
+      "impact": "jupyterlab==3.6.1 is a core (non-optional) dependency, so the no-rl install still resolves 133 packages of mostly notebook tooling."
+    },
+    {
+      "id": "green-rng-uncontrolled",
+      "status": "observed-in-selected-source",
+      "impact": "GREEN ProbabilisticAgent.rng seeds from the uncontrolled global NumPy generator and the scenario sets no game.seed, so green behaviour is not seed-controlled through the public API."
+    }
+  ],
+  "packaging": {
+    "repository_extra": "primaite",
+    "extra_dependencies": [],
+    "base_cyborg_cyberbattlesim_unchanged": true,
+    "uv_conflicts_declared": false,
+    "decision": "Publish a dependency-light adapter extra and keep simulator acquisition outside the wheel metadata.",
+    "reason": "PrimAITE publishes no index distribution or release wheel, and its pins (gymnasium==0.28.1, numpy~=1.23, pydantic==2.7.0) are mutually incompatible with the resolved cyberbattlesim and base graph. Keeping the extra empty keeps those pins out of the single uv.lock, so no uv conflicts declaration is needed yet; a future backend that resolves the PrimAITE dependencies into the lock would add one."
+  },
+  "admission": {
+    "target": "RAESystem/research#12",
+    "decision": "admitted",
+    "authority": "maintainer-selection",
+    "decided_at": "2026-08-02",
+    "limitations": [
+      "no-index-or-release-artifact",
+      "undeclared-setuptools-and-torch-runtime-deps",
+      "unpinned-dependency-graph",
+      "broken-public-seed-seam",
+      "python-support-inconsistency"
+    ],
+    "claim_strength": {
+      "source_identity": "attested",
+      "protocol_configuration": "attested",
+      "execution_controls": "partial",
+      "run_evidence": "attestable",
+      "outcome_reproduction": "stochastic-bounded"
+    },
+    "interpretation": "The maintainer-selected profile is admitted for adapter realization. Packaging gaps, undeclared runtime dependencies, an unpinned dependency graph, a broken public seed seam, and the Python-support inconsistency bound the claims RAES may attest; they do not veto the simulator."
+  }
+}
