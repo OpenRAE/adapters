@@ -41,12 +41,14 @@ dependencies = ["raes==2.0.0"]
 # install the pinned simulator source separately and target construction
 # reports its absence without weakening the base installation.
 cyberbattlesim = []
-# Reserved CybORG backend key. The selected backend is supported through the
-# documented source-install route. Issue #12 found the official wheel needs a
-# packaging-data patch that is not yet published, so the extra remains empty
-# instead of hiding that installation limitation behind a runtime clone or
-# advertising an editable checkout, install-time clone, or ungoverned wheel.
-cyborg = []
+# The environment-pack validator is installable. The native backend remains on
+# the documented source-install route because the official CybORG wheel still
+# lacks the qualified packaging-data fix; the command reports that limitation
+# instead of cloning source or advertising an ungoverned wheel.
+cyborg = ["raes-env-packs==3.2.0"]
+
+[project.scripts]
+raes-adapters = "raes_adapters.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/RAESystem/adapters"

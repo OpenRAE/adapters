@@ -230,7 +230,7 @@ class CyborgOrchestrator(object):
         history = {key: list(value) for key, value in snapshot.orchestration_history.items()}
         current = dict(results.get(policy.workflow_address, {}))
         current.update(
-            workflow_status="completed",
+            workflow_status="succeeded",
             updated_at=now,
             terminal_reason=reason,
         )

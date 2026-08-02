@@ -1,0 +1,47 @@
+schema_version: environment-pack-provenance/v3
+pack:
+  name: cage2-research
+sources:
+  - source_id: adapter-example
+    name: RAES CybORG adapter example
+    license: MIT
+    usage: reimplemented
+    attribution_required: false
+    used: Portable topology and researcher command examples.
+artifacts:
+  - artifact_id: portable-scenario
+    path: sdl/
+    classification: redistributable
+    sources:
+      - adapter-example
+    description: Portable RAES SDL scenario.
+  - artifact_id: experiment-controls
+    path: experiment/
+    classification: redistributable
+    sources:
+      - adapter-example
+    description: Published RAES experiment authoring input.
+  - artifact_id: documentation
+    path: docs/
+    classification: redistributable
+    sources:
+      - adapter-example
+    description: Example documentation and provenance.
+content_safety:
+  no_real_malware: true
+  no_real_third_party_targets: true
+  no_real_credentials: true
+  no_sensitive_data: true
+  offensive_tooling_boundary: true
+  notes: Synthetic private network only.
+review:
+  status: approved
+  gates:
+    - gate_id: licensing
+      status: approved
+    - gate_id: attribution
+      status: approved
+    - gate_id: sensitive-data
+      status: approved
+    - gate_id: offensive-tooling
+      status: approved

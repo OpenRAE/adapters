@@ -760,6 +760,12 @@ class SourceInstalledCyborgDriver(CyborgDriver):
             )
 
 
+def verify_selected_cyborg_source() -> None:
+    """Verify the selected installed source bytes without importing CybORG."""
+
+    SourceInstalledCyborgDriver._resolve_verified_package_root()
+
+
 def _project_native_action(action: object, actions: _NativeActionTypes) -> str:
     """Project a fixed selected-source action type without rendering native data."""
 
@@ -787,4 +793,5 @@ def _project_native_action(action: object, actions: _NativeActionTypes) -> str:
 __all__ = [
     "CyborgDriver",
     "SourceInstalledCyborgDriver",
+    "verify_selected_cyborg_source",
 ]

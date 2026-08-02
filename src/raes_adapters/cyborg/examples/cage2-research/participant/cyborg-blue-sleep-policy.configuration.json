@@ -1,0 +1,25 @@
+{
+  "schema_version": "participant-configuration-result/v1",
+  "participant_address": "participant.behavior.blue",
+  "manifest_ref": "participant/cyborg-blue-sleep-policy.manifest.json",
+  "manifest_digest": "sha256:55034c63715a2a354126f152ca7c23a6da879a213400760cf1ea2e54b8a0f72d",
+  "configuration": {
+    "implementation_identity": {"name": "cyborg-blue-sleep-policy", "version": "1.0.0"},
+    "manifest_version": "participant-implementation-manifest/v1",
+    "owner": {
+      "contract_id": "participant-configuration-result-v1",
+      "contract_version": "1.0.0",
+      "validator_id": "cyborg-blue-policy",
+      "validator_version": "1.0.0"
+    },
+    "values": [
+      {
+        "target_id": "blue-action-contract-address",
+        "value_type": "string",
+        "origin": "default",
+        "value": {"kind": "literal", "value": "participant.action-contract.sleep"}
+      }
+    ]
+  },
+  "configuration_digest": "sha256:4d43e418e4556824a6ed658e9b0640d82f0254f4f511c6c266ffb51aeb4e1898"
+}

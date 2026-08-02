@@ -1,0 +1,15 @@
+name: cage2-research
+title: CAGE-2 researcher example
+version: 1.0.0
+status: built
+description: A bounded CAGE-2 topology for the installed RAES adapter command.
+authors:
+  - RAES
+license: MIT
+requirement: null
+contents:
+  flag_layer: false
+  reference_triangle: false
+  profile_bundles: false
+provenance_ledger: docs/provenance-ledger.yaml
+associated_artifact_manifest: pack.content-manifest.json

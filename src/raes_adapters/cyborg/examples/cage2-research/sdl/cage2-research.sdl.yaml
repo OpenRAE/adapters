@@ -1,0 +1,16 @@
+name: cage2-research
+nodes:
+  user-net:
+    type: switch
+  user-host:
+    type: vm
+    os: linux
+infrastructure:
+  user-net:
+    properties:
+      cidr: 10.20.0.0/24
+      gateway: 10.20.0.1
+  user-host:
+    count: 1
+    links:
+      - user-net

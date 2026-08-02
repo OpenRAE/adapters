@@ -327,7 +327,9 @@ def _distributions(session: nox.Session) -> None:
     # Probe from a clean working directory with no PYTHONPATH, so nothing
     # resolves through the checkout.
     probe_cwd = workdir / "probe-cwd"
-    probe_cwd.mkdir(exist_ok=True)
+    if probe_cwd.exists():
+        shutil.rmtree(probe_cwd)
+    probe_cwd.mkdir()
     with session.chdir(probe_cwd):
         _run(
             session,
@@ -385,6 +387,64 @@ def _distributions(session: nox.Session) -> None:
             "-c",
             CYBORG_CONFORMANCE_PROBE,
             str(probe_cwd / "cyborg-conformance"),
+            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+        )
+        _run(
+            session,
+            str(cyborg_venv / "bin" / "raes-adapters"),
+            "inspect",
+            "--backend",
+            "cyborg-cage2",
+            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+        )
+        _run(
+            session,
+            str(cyborg_venv / "bin" / "raes-adapters"),
+            "validate",
+            "--mode",
+            "study",
+            "--pack",
+            "cage2-research",
+            "--pack-digest",
+            "sha256:1006e46a05a2fbafa0457743765d684dbfef652cda78733f39ea066ba34246e1",
+            "--scenario",
+            "sdl/cage2-research.sdl.yaml",
+            "--scenario-digest",
+            "sha256:926f13857da070f1ebdc3afbb3193c7c13f4aa9fe324b3eb93e1c2595871abda",
+            "--task",
+            "experiment/cage2-research.task.exp.json",
+            "--experiment",
+            "experiment/cage2-research.spec.exp.json",
+            "--red-variant",
+            "sleep",
+            "--blue-implementation",
+            "cyborg-blue-sleep-policy",
+            "--blue-manifest",
+            "participant/cyborg-blue-sleep-policy.manifest.json",
+            "--blue-selection",
+            "participant/cyborg-blue-sleep-policy.selection.json",
+            "--blue-configuration",
+            "participant/cyborg-blue-sleep-policy.configuration.json",
+            "--trial-length",
+            "2",
+            "--seed",
+            "7",
+            "--seed",
+            "11",
+            "--run-id",
+            "distribution-validation",
+            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+        )
+        _run(
+            session,
+            str(cyborg_venv / "bin" / "raes-adapters"),
+            "run",
+            "--mode",
+            "conformance",
+            "--suite",
+            "pr",
+            "--output",
+            "researcher-conformance",
             env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
         )
 
