@@ -7,20 +7,8 @@ manifest, conformance profile, or RAES semantic model.
 
 from __future__ import annotations
 
-import json
-from importlib.resources import files
-from typing import Any, cast
+from raes_adapters._qualification import backend_evidence_loaders
 
 __all__ = ["load_qualification", "read_public_protocol"]
 
-
-def load_qualification() -> dict[str, Any]:
-    """Load a fresh copy of the backend-local qualification record."""
-    resource = files(__package__).joinpath("qualification.json")
-    return cast(dict[str, Any], json.loads(resource.read_text(encoding="utf-8")))
-
-
-def read_public_protocol() -> str:
-    """Read the selected public experiment protocol verbatim."""
-    resource = files(__package__).joinpath("public-protocol.md")
-    return resource.read_text(encoding="utf-8")
+load_qualification, read_public_protocol = backend_evidence_loaders(__name__)
