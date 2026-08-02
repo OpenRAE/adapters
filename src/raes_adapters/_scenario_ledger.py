@@ -76,6 +76,17 @@ class EvidenceSelection(NamedTuple):
     ledger_resource: tuple[str, ...]
     losses_resource: tuple[str, ...]
     protocol_resource: str
+    # Optional pinned content digests for the companion resources. The scenario
+    # is already pinned by its canonical instantiated digest and the protocol by
+    # the task's artifact reference; these close the boundary over the remaining
+    # reviewed companions (task, spec, ledger, loss-disclosures) so a semantically
+    # valid edit to any of them cannot stay green without updating the immutable
+    # selection. Empty (the default) skips the pin, so a backend adopts it
+    # incrementally without forcing churn on the others.
+    task_digest: str = ""
+    spec_digest: str = ""
+    ledger_digest: str = ""
+    losses_digest: str = ""
 
 
 DISPOSITIONS = frozenset({"mapped", "excluded", "loss-disclosed"})
@@ -180,6 +191,11 @@ def read_text(package: str, *parts: str) -> str:
 def resource_is_file(package: str, name: str) -> bool:
     """Return whether the named package resource exists as a file."""
     return bool(files(package).joinpath(name).is_file())
+
+
+def content_digest(package: str, *parts: str) -> str:
+    """The ``sha256:``-prefixed digest of a package resource's UTF-8 bytes."""
+    return "sha256:" + hashlib.sha256(read_text(package, *parts).encode("utf-8")).hexdigest()
 
 
 def _yaml_safe_load(text: str) -> JsonValue:
@@ -684,6 +700,29 @@ def _spec_join_problems(
     return problems
 
 
+def _companion_pin_problems(package: str, selection: EvidenceSelection) -> list[LedgerProblem]:
+    """Join each pinned companion resource's content digest to its selection pin.
+
+    Only companions whose selection digest is set are checked, so a backend adopts
+    companion pinning incrementally. The scenario is pinned by its canonical
+    digest and the protocol by the task's artifact reference; this closes the
+    boundary over the remaining reviewed companions.
+    """
+    pinned = (
+        ("task", selection.task_resource, selection.task_digest),
+        ("spec", selection.spec_resource, selection.spec_digest),
+        ("ledger", selection.ledger_resource, selection.ledger_digest),
+        ("losses", selection.losses_resource, selection.losses_digest),
+    )
+    problems: list[LedgerProblem] = []
+    for name, parts, expected in pinned:
+        if expected and content_digest(package, *parts) != expected:
+            problems.append(
+                LedgerProblem(name, "content_digest", "resource content does not match the pin")
+            )
+    return problems
+
+
 def _protocol_artifact_problems(
     task: ExperimentTaskModel, protocol_bytes: bytes
 ) -> list[LedgerProblem]:
@@ -825,6 +864,7 @@ class ScenarioLedger(NamedTuple):
         problems += _protocol_artifact_problems(
             task, self.protocol_source(selection).encode("utf-8")
         )
+        problems += _companion_pin_problems(self.package, selection)
         return problems
 
     def validate_scenario_pipeline(
