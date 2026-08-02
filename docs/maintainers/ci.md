@@ -75,6 +75,30 @@ would add a second definition of "what to run" that can drift from the required
 gate, for negligible time saved on a suite this small. The required merge gate
 stays the complete graph.
 
+## CybORG conformance tiers
+
+The normal tests and distributions jobs run the dependency-free PR tier at the
+fixed ordered seed `(3,)`. The distributions session also builds the one wheel,
+installs its `cyborg` extra into a clean isolated environment, loads the
+installed qualification and ledger resources, runs the published RAES report
+plus adapter-local probes, and persists the report through RAES's atomic,
+redaction-gated writer.
+
+The existing CI workflow runs the broader `(3, 153)` tier on its weekly
+schedule or when `workflow_dispatch` selects `full`; the resulting canonical
+reports are uploaded as the `cyborg-conformance` artifact. Both tiers are
+hermetic and explicitly retain `native_conformance=false`. Native source
+readiness remains the separate `tools/verify_cyborg_qualification.py` evidence
+already exercised by the CybORG test environment; a hermetic injected driver
+is never relabeled as native.
+
+```bash
+uv run --frozen python -m raes_adapters.cyborg.conformance \
+  --suite pr --output-dir artifacts/cyborg-conformance
+uv run --frozen python -m raes_adapters.cyborg.conformance \
+  --suite full --output-dir artifacts/cyborg-conformance
+```
+
 ## Reproduce any failure locally
 
 Every CI job runs one `nox` session. Reproduce a red job by running that

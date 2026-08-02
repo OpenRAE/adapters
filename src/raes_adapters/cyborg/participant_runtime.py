@@ -41,6 +41,7 @@ from raes_runtime.participant_result_contracts import (  # type: ignore[import-u
 )
 from raes_runtime.registry import ReferenceTimeRuntime  # type: ignore[import-untyped]
 
+from ._diagnostics import diagnostic_address
 from .driver import _NativeTurnResult
 from .orchestrator import CyborgExecutionControl, CyborgOrchestrator, _ExecutionPolicy
 from .provisioner import CyborgProvisioner
@@ -147,7 +148,7 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
                 Diagnostic(
                     code="cyborg-backend.participant-reset.coordination-required",
                     domain="participant",
-                    address="cyborg-cage2",
+                    address=diagnostic_address("cyborg-cage2"),
                     message="CAGE-2 participant episodes must be reset together.",
                 )
             ],
@@ -217,7 +218,7 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
                 Diagnostic(
                     code="cyborg-backend.participant-restart.coordination-required",
                     domain="participant",
-                    address="cyborg-cage2",
+                    address=diagnostic_address("cyborg-cage2"),
                     message="CAGE-2 participant episodes must be restarted together.",
                 )
             ],
@@ -411,7 +412,7 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
                 Diagnostic(
                     code="cyborg-backend.participant-reset.failed",
                     domain="participant",
-                    address="cyborg-cage2",
+                    address=diagnostic_address("cyborg-cage2"),
                     message="The CAGE-2 aggregate session could not be reset.",
                 )
             ],
@@ -471,7 +472,7 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
                 Diagnostic(
                     code="cyborg-backend.action.portable-commit-failed",
                     domain="participant",
-                    address=_BLUE,
+                    address=diagnostic_address(_BLUE),
                     message="The aggregate turn could not be committed to portable runtime state.",
                 )
             ],
@@ -676,7 +677,7 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
         diagnostic = Diagnostic(
             code=f"cyborg-backend.action.{reason}",
             domain="participant",
-            address=_BLUE,
+            address=diagnostic_address(_BLUE),
             message="The action could not be admitted to the CAGE-2 execution session.",
         )
         return ParticipantNativeActionExecution(

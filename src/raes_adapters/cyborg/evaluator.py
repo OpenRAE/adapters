@@ -44,6 +44,7 @@ from raes_contracts.runtime_state import (  # type: ignore[import-untyped]
     SnapshotEntry,
 )
 
+from ._diagnostics import diagnostic_address
 from .driver import _NativeEvaluationTurn, _NativeRewardComponent
 from .manifest import CYBORG_PROFILE_ID
 from .provisioner import CyborgProvisioner
@@ -139,7 +140,7 @@ class CyborgEvaluator(_EvaluatorBase):
                     Diagnostic(
                         code="cyborg-backend.evaluation.projection-failed",
                         domain="evaluation",
-                        address="cyborg-cage2",
+                        address=diagnostic_address("cyborg-cage2"),
                         message="Committed CybORG evaluation facts could not be projected.",
                     )
                 ],
@@ -178,7 +179,7 @@ class CyborgEvaluator(_EvaluatorBase):
                 Diagnostic(
                     code="cyborg-backend.evaluation.unsupported-resource",
                     domain="evaluation",
-                    address=address,
+                    address=diagnostic_address(address),
                     message="The CybORG evaluator cannot represent this evaluation resource.",
                 )
             ],

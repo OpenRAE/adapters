@@ -24,6 +24,7 @@ from raes_contracts.runtime_state import (  # type: ignore[import-untyped]
     SnapshotEntry,
 )
 
+from ._diagnostics import diagnostic_address
 from .driver import (
     CyborgDriver,
     _NativeEvaluationContext,
@@ -623,7 +624,7 @@ def _diagnostic(code: str, message: str) -> Diagnostic:
     return Diagnostic(
         code=code,
         domain=_DOMAIN,
-        address="runtime.cyborg.provisioning",
+        address=diagnostic_address("runtime.cyborg.provisioning"),
         message=message,
         severity=Severity.ERROR,
     )

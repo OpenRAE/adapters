@@ -24,6 +24,7 @@ from raes_contracts.runtime_state import (  # type: ignore[import-untyped]
     SnapshotEntry,
 )
 
+from ._diagnostics import diagnostic_address
 from .provisioner import CyborgProvisioner
 
 _VARIANTS = frozenset({"b-line", "meander", "sleep"})
@@ -377,7 +378,12 @@ def _failure(snapshot: RuntimeSnapshot, code: str, message: str) -> ApplyResult:
         success=False,
         snapshot=snapshot,
         diagnostics=[
-            Diagnostic(code=code, domain="orchestration", address="cyborg-cage2", message=message)
+            Diagnostic(
+                code=code,
+                domain="orchestration",
+                address=diagnostic_address("cyborg-cage2"),
+                message=message,
+            )
         ],
     )
 

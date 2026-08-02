@@ -43,6 +43,7 @@ nav:
       - CybORG logical-step and action-translation guardrails: decisions/cyborg-step-control-guardrails.md
       - CybORG participant episode and observation guardrails: decisions/cyborg-participant-runtime-guardrails.md
       - CybORG reward, objective, and outcome projection guardrails: decisions/cyborg-evaluation-projection-guardrails.md
+      - CybORG conformance-composition guardrails: decisions/cyborg-conformance-guardrails.md
       - CyberBattleSim qualification guardrails: decisions/cyberbattlesim-qualification-guardrails.md
       - CyberBattleSim scenario and source-ledger guardrails: decisions/cyberbattlesim-scenario-ledger-guardrails.md
       - CyberBattleSim backend architecture guardrails: decisions/cyberbattlesim-backend-guardrails.md
