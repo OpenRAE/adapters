@@ -9,9 +9,7 @@ from importlib import metadata
 from raes_contracts.contracts import (  # type: ignore[import-untyped]
     ExperimentArtifactRefModel,
     ExperimentDerivedMeasureModel,
-    ExperimentEpisodeControlModel,
     ExperimentEvidenceRecordModel,
-    ExperimentRedVariantSelectionModel,
     ExperimentRunModel,
     ExperimentStudyModel,
     ExperimentTaskModel,
@@ -19,13 +17,6 @@ from raes_contracts.contracts import (  # type: ignore[import-untyped]
     ParticipantImplementationManifestModel,
     ParticipantImplementationProvenanceModel,
     ParticipantImplementationSelectionModel,
-)
-from raes_contracts.contracts.time_model import (  # type: ignore[import-untyped]
-    ClockDeclarationModel,
-    ExactRatioModel,
-    TimeDomainDeclarationModel,
-    TimeModelDeclarationModel,
-    TimeProgressionPolicyDeclarationModel,
 )
 from raes_contracts.diagnostics import (  # type: ignore[import-untyped]
     DiagnosticModel,
@@ -44,32 +35,30 @@ from raes_contracts.participant_configuration import (  # type: ignore[import-un
 from raes_contracts.participant_episode import (  # type: ignore[import-untyped]
     ParticipantEpisodeInitializeRequest,
 )
-from raes_contracts.planning import (  # type: ignore[import-untyped]
-    ChangeAction,
-    EvaluationOp,
-    EvaluationPlan,
-    OrchestrationOp,
-    OrchestrationPlan,
-    PlannedResource,
-    RuntimeDomain,
-)
+from raes_contracts.runtime_state import RuntimeSnapshot  # type: ignore[import-untyped]
 from raes_contracts.satisfiability import canonical_contract_digest  # type: ignore[import-untyped]
 from raes_runtime.manager import RuntimeManager  # type: ignore[import-untyped]
+from raes_runtime.registry import RuntimeTarget  # type: ignore[import-untyped]
 
 from .driver import CyborgDriver
 from .manifest import create_cyborg_manifest
+from .runtime_plans import (
+    cage2_evaluation_plan,
+    cage2_orchestration_plan,
+    cage2_time_declaration,
+)
 from .target import create_cyborg_target
 
 _BLUE = "participant.behavior.blue"
 _GREEN = "participant.behavior.green"
 _RED = "participant.behavior.red"
 _SLEEP = "participant.action-contract.sleep"
-_CLOCK = "time.clock.cage2"
 _RED_VARIANTS = frozenset({"b-line", "meander", "sleep"})
+_OBSERVATION_BOUNDARY = "participant.observation-boundary.blue"
 
 
 @dataclass(frozen=True)
-class RunControls:
+class RunControls(object):  # noqa: UP004
     """Internal, non-portable selection of already published run controls."""
 
     run_id: str
@@ -81,6 +70,16 @@ class RunControls:
     blue_configuration: ParticipantConfigurationResultModel
 
     def __post_init__(self) -> None:
+        """Reject controls not bound to the selected published contracts."""
+
+        self._validate_scalars()
+        self._validate_bindings()
+        self._validate_capabilities()
+        _blue_action_contract(self.blue_configuration)
+
+    def _validate_scalars(self) -> None:
+        """Validate safe scalar controls before native execution."""
+
         if not 1 <= len(self.run_id) <= 64 or not self.run_id.replace("-", "").isalnum():
             raise ValueError("run id is not a safe label")
         if type(self.seed) is not int or not 0 <= self.seed <= 0xFFFFFFFF:
@@ -89,6 +88,10 @@ class RunControls:
             raise ValueError("trial length must be positive")
         if self.red_variant not in _RED_VARIANTS:
             raise ValueError("red variant is unsupported")
+
+    def _validate_bindings(self) -> None:
+        """Validate participant identity and realized configuration bindings."""
+
         if self.blue_selection.participant_address != _BLUE:
             raise ValueError("blue implementation selection has the wrong participant address")
         if self.blue_manifest.implementation_kind != "policy":
@@ -112,6 +115,10 @@ class RunControls:
         )
         if realized != self.blue_configuration:
             raise ValueError("blue configuration is not realized from its admitted manifest")
+
+    def _validate_capabilities(self) -> None:
+        """Validate the selected participant surfaces against its manifest."""
+
         if self.blue_selection.selected_decision_surface_mode not in (
             self.blue_manifest.capabilities.supported_decision_surface_modes
         ):
@@ -120,11 +127,10 @@ class RunControls:
             self.blue_manifest.capabilities.supported_participant_contracts
         ):
             raise ValueError("blue participant contract selection is unsupported")
-        _blue_action_contract(self.blue_configuration)
 
 
 @dataclass(frozen=True)
-class EpisodeEvidence:
+class EpisodeEvidence(object):  # noqa: UP004
     """Internal carrier for already validated RAES evidence models."""
 
     completed_steps: int
@@ -147,6 +153,113 @@ def blue_implementation_provenance(
     )
 
 
+def _manifest_ref(
+    ref_id: str, ref_version: str, subject_kind: str, subject_id: str, subject_version: str
+) -> dict[str, object]:
+    """Build a published manifest reference for archival apparatus context."""
+
+    return {
+        "ref_kind": "manifest",
+        "ref_id": ref_id,
+        "ref_version": ref_version,
+        "subject_ref": {
+            "ref_kind": subject_kind,
+            "ref_id": subject_id,
+            "ref_version": subject_version,
+        },
+    }
+
+
+def _apparatus_context(
+    controls: RunControls,
+    captured_at: object,
+    setup_artifact: ExperimentArtifactRefModel,
+) -> dict[str, object]:
+    """Project admitted apparatus identities without exposing native state."""
+
+    backend = create_cyborg_manifest()
+    blue = controls.blue_manifest
+    processor_version = metadata.version("raes")
+    processor_ref = _manifest_ref(
+        "raes-runtime-manager",
+        "processor-manifest/v2",
+        "processor",
+        "raes-runtime-manager",
+        processor_version,
+    )
+    backend_ref = _manifest_ref(
+        backend.name, "backend-manifest/v2", "backend", backend.name, backend.version
+    )
+    participant_ref = _manifest_ref(
+        blue.identity.name,
+        "participant-implementation-manifest/v1",
+        "participant-implementation",
+        blue.identity.name,
+        blue.identity.version,
+    )
+    return {
+        "schema_version": "experiment-apparatus-context/v1",
+        "apparatus_context_id": f"apparatus-{controls.run_id}",
+        "context_version": "1.0.0",
+        "declared_at": captured_at,
+        "components": {
+            "processor": {
+                "component_kind": "processor",
+                "identity": {"name": "raes-runtime-manager", "version": processor_version},
+                "manifest_ref": processor_ref,
+                "observed": True,
+            },
+            "backend": {
+                "component_kind": "backend",
+                "identity": {"name": backend.name, "version": backend.version},
+                "manifest_ref": backend_ref,
+                "observed": True,
+            },
+            "blue-policy": {
+                "component_kind": "participant-implementation",
+                "identity": blue.identity.model_dump(mode="json"),
+                "manifest_ref": participant_ref,
+                "observed": True,
+            },
+        },
+        "selected_manifests": [processor_ref, backend_ref, participant_ref],
+        "compatibility_declarations": [
+            {
+                "ref_kind": "profile",
+                "ref_id": "cage2-cyborg-2.1-source-26ce1c1",
+                "ref_version": "26ce1c1253fa9e2e73f25e6a7f2da32860c11257",
+            }
+        ],
+        "configuration_parameters": [
+            {"name": "red-variant", "value": controls.red_variant, "value_kind": "protocol"}
+        ],
+        "stochastic_controls": [
+            {"control_id": "cyborg-seed", "role": "seed", "value": controls.seed}
+        ],
+        "clocks": [
+            {
+                "clock_id": "cage2-logical-clock",
+                "authority": "cyborg-cage2 runtime",
+                "time_domain": "logical",
+            }
+        ],
+        "measurement_channels": [
+            {
+                "ref_kind": "measurement-channel",
+                "ref_id": "cyborg-reward-projection",
+                "ref_version": "1.0.0",
+            }
+        ],
+        "observed_setup_evidence": [setup_artifact.model_dump(mode="json")],
+        "known_limitations": [
+            {
+                "category": "apparatus",
+                "note": "Native internals are withheld at the adapter boundary.",
+            }
+        ],
+    }
+
+
 def archival_run(
     *,
     controls: RunControls,
@@ -162,41 +275,6 @@ def archival_run(
     run_id = episode.evidence_records[0].run_ref.ref_id
     if not isinstance(run_id, str):
         raise ValueError("portable run identity is incomplete")
-    backend = create_cyborg_manifest()
-    blue = controls.blue_manifest
-    processor_version = metadata.version("raes")
-
-    def manifest_ref(
-        ref_id: str, ref_version: str, subject_kind: str, subject_id: str, subject_version: str
-    ) -> dict[str, object]:
-        return {
-            "ref_kind": "manifest",
-            "ref_id": ref_id,
-            "ref_version": ref_version,
-            "subject_ref": {
-                "ref_kind": subject_kind,
-                "ref_id": subject_id,
-                "ref_version": subject_version,
-            },
-        }
-
-    processor_ref = manifest_ref(
-        "raes-runtime-manager",
-        "processor-manifest/v2",
-        "processor",
-        "raes-runtime-manager",
-        processor_version,
-    )
-    backend_ref = manifest_ref(
-        backend.name, "backend-manifest/v2", "backend", backend.name, backend.version
-    )
-    participant_ref = manifest_ref(
-        blue.identity.name,
-        "participant-implementation-manifest/v1",
-        "participant-implementation",
-        blue.identity.name,
-        blue.identity.version,
-    )
     captured_at = episode.evidence_records[0].captured_at
     generated_at = episode.derived_measures[-1].generated_at
     setup_artifact = evidence_artifact.model_copy(
@@ -214,67 +292,7 @@ def archival_run(
             "ref_digest": scenario_digest,
             "ref_path": task.scenario_ref.ref_path,
         },
-        "apparatus_context": {
-            "schema_version": "experiment-apparatus-context/v1",
-            "apparatus_context_id": f"apparatus-{controls.run_id}",
-            "context_version": "1.0.0",
-            "declared_at": captured_at,
-            "components": {
-                "processor": {
-                    "component_kind": "processor",
-                    "identity": {"name": "raes-runtime-manager", "version": processor_version},
-                    "manifest_ref": processor_ref,
-                    "observed": True,
-                },
-                "backend": {
-                    "component_kind": "backend",
-                    "identity": {"name": backend.name, "version": backend.version},
-                    "manifest_ref": backend_ref,
-                    "observed": True,
-                },
-                "blue-policy": {
-                    "component_kind": "participant-implementation",
-                    "identity": blue.identity.model_dump(mode="json"),
-                    "manifest_ref": participant_ref,
-                    "observed": True,
-                },
-            },
-            "selected_manifests": [processor_ref, backend_ref, participant_ref],
-            "compatibility_declarations": [
-                {
-                    "ref_kind": "profile",
-                    "ref_id": "cage2-cyborg-2.1-source-26ce1c1",
-                    "ref_version": "26ce1c1253fa9e2e73f25e6a7f2da32860c11257",
-                }
-            ],
-            "configuration_parameters": [
-                {"name": "red-variant", "value": controls.red_variant, "value_kind": "protocol"}
-            ],
-            "stochastic_controls": [
-                {"control_id": "cyborg-seed", "role": "seed", "value": controls.seed}
-            ],
-            "clocks": [
-                {
-                    "clock_id": "cage2-logical-clock",
-                    "authority": "cyborg-cage2 runtime",
-                    "time_domain": "logical",
-                }
-            ],
-            "measurement_channels": [
-                {
-                    "ref_kind": "measurement-channel",
-                    "ref_id": "cyborg-reward-projection",
-                    "ref_version": "1.0.0",
-                }
-            ],
-            "observed_setup_evidence": [setup_artifact.model_dump(mode="json")],
-            "known_limitations": [
-                {
-                    "category": "apparatus",
-                    "note": "Native internals are withheld at the adapter boundary.",
-                }
-            ],
-        },
+        "apparatus_context": _apparatus_context(controls, captured_at, setup_artifact),
         "participant_implementation_provenance": blue_implementation_provenance(
             run_id, controls.blue_selection
         ).model_dump(mode="json"),
@@ -374,6 +392,8 @@ def archival_collection(
 
 
 def _blue_action_contract(configuration: ParticipantConfigurationResultModel) -> str:
+    """Return the executable action selected by an admitted configuration."""
+
     values = {
         item.target_id: item.value.value
         for item in configuration.configuration.values
@@ -388,16 +408,18 @@ def _blue_action_contract(configuration: ParticipantConfigurationResultModel) ->
 def _blue_action_request(
     action_instance_id: str, controls: RunControls
 ) -> ParticipantActionAdmissionRequest:
+    """Build one action request bound to the selected blue implementation."""
+
     action_contract = _blue_action_contract(controls.blue_configuration)
     return ParticipantActionAdmissionRequest(
         participant_address=_BLUE,
         action_contract_address=action_contract,
-        observation_boundary_address="participant.observation-boundary.blue",
+        observation_boundary_address=_OBSERVATION_BOUNDARY,
         action_instance_id=action_instance_id,
         implementation_manifest=controls.blue_manifest,
         implementation_selection=controls.blue_selection,
-        visible_refs=("participant.observation-boundary.blue",),
-        disclosed_refs=("participant.observation-boundary.blue",),
+        visible_refs=(_OBSERVATION_BOUNDARY,),
+        disclosed_refs=(_OBSERVATION_BOUNDARY,),
         validated_selection=ParticipantValidatedActionSelection(
             action_contract_address=action_contract,
             argument_shape_ref="participant.action-argument-shape.cage2",
@@ -409,153 +431,111 @@ def _blue_action_request(
     )
 
 
-def _time_declaration() -> TimeModelDeclarationModel:
-    domain = "time.domain.cage2"
-    policy = "time.progression.cage2"
-    return TimeModelDeclarationModel(
-        domains={
-            domain: TimeDomainDeclarationModel(
-                address=domain,
-                kind="logical",
-                tick_period_seconds=ExactRatioModel(numerator=1, denominator=1),
-                epoch="run_start",
-                visibility="runtime_only",
-                description="One tick per validated aggregate CybORG turn.",
-            )
-        },
-        clocks={
-            _CLOCK: ClockDeclarationModel(
-                address=_CLOCK,
-                time_domain_address=domain,
-                authority_kind="runtime",
-                authority_ref="cyborg-cage2-participant-runtime",
-                monotonicity="non_decreasing",
-                supports_pause=True,
-                supports_reset=True,
-                supports_jump=False,
-                description="RAES-owned CAGE-2 logical step clock.",
-            )
-        },
-        progression_policies={
-            policy: TimeProgressionPolicyDeclarationModel(
-                address=policy,
-                clock_address=_CLOCK,
-                advancement_mode="event_driven",
-                synchronization_mode="none",
-                reset_behavior="new_segment_zero",
-                replay_behavior="unsupported",
-                description="Only a committed aggregate turn advances this clock.",
-            )
-        },
-    )
+def _orchestration_plan(controls: RunControls):  # type: ignore[no-untyped-def]
+    """Return the bounded workflow for one admitted researcher run."""
 
-
-def _orchestration_plan(controls: RunControls) -> OrchestrationPlan:
     workflow = f"orchestration.workflow.{controls.run_id}"
-    episode = ExperimentEpisodeControlModel(
-        turn_order="scenario-defined",
-        termination_rule="admitted-logical-step-limit-or-source-terminal",
+    return cage2_orchestration_plan(
+        workflow=workflow,
+        name="cage2-research-run",
         max_steps=controls.max_steps,
-        termination_condition_refs=["source-ledger:wrapper-termination-cutoff"],
-    )
-    variant = ExperimentRedVariantSelectionModel(
-        variant_id=controls.red_variant,
-        agent_ref=f"participant.implementation.red-{controls.red_variant}",
-    )
-    payload: dict[str, object] = {
-        "name": "cage2-research-run",
-        "episode_control": episode.model_dump(mode="json"),
-        "red_variant_selection": variant.model_dump(mode="json"),
-        "result_contract": {
-            "state_schema_version": "workflow-step-state/v1",
-            "observable_steps": {},
-        },
-        "execution_contract": {
-            "state_schema_version": "workflow-step-state/v1",
-            "start_step": "",
-            "steps": {},
-            "step_types": {},
-            "control_edges": {},
-            "join_owners": {},
-            "call_steps": {},
-            "observable_steps": [],
-        },
-    }
-    operation = OrchestrationOp(
-        action=ChangeAction.CREATE,
-        address=workflow,
-        resource_type="workflow",
-        payload=payload,
-    )
-    return OrchestrationPlan(
-        resources={
-            workflow: PlannedResource(
-                address=workflow,
-                domain=RuntimeDomain.ORCHESTRATION,
-                resource_type="workflow",
-                payload=payload,
-            )
-        },
-        operations=[operation],
-        startup_order=[workflow],
+        red_variant=controls.red_variant,
     )
 
 
-def _evaluation_plan() -> EvaluationPlan:
-    proposition = "evaluation.proposition.compromised"
-    assertion = "evaluation.assertion.compromised"
-    objective = "evaluation.objective.defend"
-    operations = [
-        EvaluationOp(
-            action=ChangeAction.CREATE,
-            address=proposition,
-            resource_type="proposition",
-            payload={
-                "evaluation_basis": "observed_state",
-                "subject_addresses": ["provision.node.user-host"],
-                "evidence_requirement_refs": ["source-ledger:reward-components"],
-                "spec": {
-                    "predicate": {
-                        "property": "confidentiality",
-                        "operator": "lt",
-                        "value": 0.0,
-                    }
-                },
-            },
-        ),
-        EvaluationOp(
-            action=ChangeAction.CREATE,
-            address=assertion,
-            resource_type="assertion",
-            payload={"proposition_address": proposition, "polarity": "positive"},
-        ),
-        EvaluationOp(
-            action=ChangeAction.CREATE,
-            address=objective,
-            resource_type="objective",
-            payload={
-                "success_addresses": [assertion],
-                "spec": {"success": {"mode": "all"}},
-                "result_contract": {
-                    "resource_type": "objective",
-                    "supports_passed": True,
-                    "supports_score": False,
-                },
-                "execution_contract": {
-                    "resource_type": "objective",
-                    "allowed_statuses": ["pending", "running", "ready", "failed"],
-                    "history_event_types": [
-                        "evaluation_started",
-                        "evaluation_updated",
-                        "evaluation_ready",
-                        "evaluation_failed",
-                    ],
-                    "requires_start_event": True,
-                },
-            },
-        ),
-    ]
-    return EvaluationPlan(operations=operations, startup_order=[proposition, assertion, objective])
+def _start_runtime(
+    target: RuntimeTarget, scenario: object, controls: RunControls
+) -> tuple[RuntimeSnapshot, list[DiagnosticModel]]:
+    """Apply the scenario, logical clock, and bounded workflow."""
+
+    manager = RuntimeManager(target)
+    applied = manager.apply(manager.plan(scenario))
+    diagnostics = [diagnostic_model(item) for item in applied.diagnostics]
+    if not applied.success or target.time_runtime is None or target.orchestrator is None:
+        raise RuntimeError("researcher runtime admission failed")
+    timed = target.time_runtime.initialize(cage2_time_declaration(), applied.snapshot)
+    diagnostics.extend(diagnostic_model(item) for item in timed.diagnostics)
+    if not timed.success:
+        raise RuntimeError("researcher time admission failed")
+    started = target.orchestrator.start(_orchestration_plan(controls), timed.snapshot)
+    diagnostics.extend(diagnostic_model(item) for item in started.diagnostics)
+    if not started.success or target.participant_runtime is None or target.evaluator is None:
+        raise RuntimeError("researcher orchestration admission failed")
+    return started.snapshot, diagnostics
+
+
+def _initialize_participants(
+    target: RuntimeTarget,
+    snapshot: RuntimeSnapshot,
+    controls: RunControls,
+    diagnostics: list[DiagnosticModel],
+) -> RuntimeSnapshot:
+    """Initialize every aggregate participant through the published runtime."""
+
+    if target.participant_runtime is None:
+        raise RuntimeError("researcher participant runtime is unavailable")
+    for participant in (_BLUE, _GREEN, _RED):
+        initialized = target.participant_runtime.initialize(
+            ParticipantEpisodeInitializeRequest(
+                participant_address=participant,
+                episode_id=f"{controls.run_id}-{participant.rsplit('.', 1)[-1]}",
+            ),
+            snapshot,
+        )
+        diagnostics.extend(diagnostic_model(item) for item in initialized.diagnostics)
+        if not initialized.success:
+            raise RuntimeError("researcher participant admission failed")
+        snapshot = initialized.snapshot
+    return snapshot
+
+
+def _execute_steps(
+    target: RuntimeTarget,
+    snapshot: RuntimeSnapshot,
+    controls: RunControls,
+    diagnostics: list[DiagnosticModel],
+) -> tuple[RuntimeSnapshot, int]:
+    """Execute the admitted action until the declared terminal boundary."""
+
+    if target.participant_runtime is None or target.orchestrator is None:
+        raise RuntimeError("researcher execution runtime is unavailable")
+    completed_steps = 0
+    for step in range(1, controls.max_steps + 1):
+        action = target.participant_runtime.admit_action(
+            _blue_action_request(f"{controls.run_id}-blue-action-{step}", controls), snapshot
+        )
+        diagnostics.extend(diagnostic_model(item) for item in action.diagnostics)
+        if not action.success:
+            raise RuntimeError("researcher participant action failed")
+        snapshot = action.snapshot
+        completed_steps = step
+        if target.orchestrator.status()["running"] is False:
+            break
+    return snapshot, completed_steps
+
+
+def _evaluate_episode(
+    target: RuntimeTarget,
+    snapshot: RuntimeSnapshot,
+    diagnostics: list[DiagnosticModel],
+) -> tuple[
+    RuntimeSnapshot,
+    tuple[ExperimentEvidenceRecordModel, ...],
+    tuple[ExperimentDerivedMeasureModel, ...],
+]:
+    """Evaluate the final portable snapshot and return published evidence."""
+
+    if target.evaluator is None:
+        raise RuntimeError("researcher evaluator is unavailable")
+    evaluated = target.evaluator.start(cage2_evaluation_plan(), snapshot)
+    diagnostics.extend(diagnostic_model(item) for item in evaluated.diagnostics)
+    if not evaluated.success:
+        raise RuntimeError("researcher evaluation failed")
+    return (
+        evaluated.snapshot,
+        target.evaluator.evidence_records(),
+        target.evaluator.derived_measures(),
+    )
 
 
 def execute_episode(
@@ -567,58 +547,17 @@ def execute_episode(
     """Execute one selected episode and return only validated RAES evidence."""
 
     target = create_cyborg_target(seed=controls.seed, **({"driver": driver} if driver else {}))
-    manager = RuntimeManager(target)
-    planned = manager.plan(scenario)
-    applied = manager.apply(planned)
-    diagnostics = [diagnostic_model(item) for item in applied.diagnostics]
-    if not applied.success or target.time_runtime is None or target.orchestrator is None:
-        raise RuntimeError("researcher runtime admission failed")
-    snapshot = applied.snapshot
+    snapshot, diagnostics = _start_runtime(target, scenario, controls)
     completed_steps = 0
     cleanup_verified = False
     evidence_records: tuple[ExperimentEvidenceRecordModel, ...] = ()
     derived_measures: tuple[ExperimentDerivedMeasureModel, ...] = ()
     try:
-        timed = target.time_runtime.initialize(_time_declaration(), snapshot)
-        diagnostics.extend(diagnostic_model(item) for item in timed.diagnostics)
-        if not timed.success:
-            raise RuntimeError("researcher time admission failed")
-        started = target.orchestrator.start(_orchestration_plan(controls), timed.snapshot)
-        diagnostics.extend(diagnostic_model(item) for item in started.diagnostics)
-        if not started.success or target.participant_runtime is None or target.evaluator is None:
-            raise RuntimeError("researcher orchestration admission failed")
-        snapshot = started.snapshot
-        for participant in (_BLUE, _GREEN, _RED):
-            initialized = target.participant_runtime.initialize(
-                ParticipantEpisodeInitializeRequest(
-                    participant_address=participant,
-                    episode_id=f"{controls.run_id}-{participant.rsplit('.', 1)[-1]}",
-                ),
-                snapshot,
-            )
-            diagnostics.extend(diagnostic_model(item) for item in initialized.diagnostics)
-            if not initialized.success:
-                raise RuntimeError("researcher participant admission failed")
-            snapshot = initialized.snapshot
-        for step in range(1, controls.max_steps + 1):
-            action = target.participant_runtime.admit_action(
-                _blue_action_request(f"{controls.run_id}-blue-action-{step}", controls),
-                snapshot,
-            )
-            diagnostics.extend(diagnostic_model(item) for item in action.diagnostics)
-            if not action.success:
-                raise RuntimeError("researcher participant action failed")
-            snapshot = action.snapshot
-            completed_steps = step
-            if target.orchestrator.status()["running"] is False:
-                break
-        evaluated = target.evaluator.start(_evaluation_plan(), snapshot)
-        diagnostics.extend(diagnostic_model(item) for item in evaluated.diagnostics)
-        if not evaluated.success:
-            raise RuntimeError("researcher evaluation failed")
-        snapshot = evaluated.snapshot
-        evidence_records = target.evaluator.evidence_records()
-        derived_measures = target.evaluator.derived_measures()
+        snapshot = _initialize_participants(target, snapshot, controls, diagnostics)
+        snapshot, completed_steps = _execute_steps(target, snapshot, controls, diagnostics)
+        snapshot, evidence_records, derived_measures = _evaluate_episode(
+            target, snapshot, diagnostics
+        )
     finally:
         cleanup = RuntimeManager(target, initial_snapshot=snapshot).destroy()
         diagnostics.extend(diagnostic_model(item) for item in cleanup.diagnostics)

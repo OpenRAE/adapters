@@ -25,16 +25,8 @@ from raes_conformance.conformance.report import (  # type: ignore[import-untyped
     backend_conformance_report_payload,
 )
 from raes_conformance.realization import ExecutionBasis  # type: ignore[import-untyped]
-from raes_contracts.contracts import (  # type: ignore[import-untyped]
-    ExperimentEpisodeControlModel,
-    ExperimentRedVariantSelectionModel,
-)
 from raes_contracts.contracts.time_model import (  # type: ignore[import-untyped]
-    ClockDeclarationModel,
-    ExactRatioModel,
-    TimeDomainDeclarationModel,
     TimeModelDeclarationModel,
-    TimeProgressionPolicyDeclarationModel,
 )
 from raes_contracts.diagnostics import (  # type: ignore[import-untyped]
     Diagnostic,
@@ -54,13 +46,8 @@ from raes_contracts.participant_episode import (  # type: ignore[import-untyped]
     ParticipantEpisodeTerminateRequest,
 )
 from raes_contracts.planning import (  # type: ignore[import-untyped]
-    ChangeAction,
-    EvaluationOp,
     EvaluationPlan,
-    OrchestrationOp,
     OrchestrationPlan,
-    PlannedResource,
-    RuntimeDomain,
 )
 from raes_contracts.runtime_state import (  # type: ignore[import-untyped]
     ApplyResult,
@@ -90,6 +77,11 @@ from .manifest import create_cyborg_manifest
 from .orchestrator import CyborgOrchestrator
 from .participant_runtime import CyborgParticipantRuntime
 from .qualification import load_qualification
+from .runtime_plans import (
+    cage2_evaluation_plan,
+    cage2_orchestration_plan,
+    cage2_time_declaration,
+)
 from .scenario import CyborgScenarioDescriptor
 from .source_ledger import (
     CAGE2_SOURCE_26CE1C1,
@@ -534,94 +526,17 @@ def _terminate_probe_participants(
 def _probe_time_declaration() -> TimeModelDeclarationModel:
     """Return the RAES-owned logical clock used by the runtime probe."""
 
-    domain = "time.domain.cage2"
-    policy = "time.progression.cage2"
-    return TimeModelDeclarationModel(
-        domains={
-            domain: TimeDomainDeclarationModel(
-                address=domain,
-                kind="logical",
-                tick_period_seconds=ExactRatioModel(numerator=1, denominator=1),
-                epoch="run_start",
-                visibility="runtime_only",
-                description="One tick per validated aggregate CybORG turn.",
-            )
-        },
-        clocks={
-            _CLOCK: ClockDeclarationModel(
-                address=_CLOCK,
-                time_domain_address=domain,
-                authority_kind="runtime",
-                authority_ref="cyborg-cage2-participant-runtime",
-                monotonicity="non_decreasing",
-                supports_pause=True,
-                supports_reset=True,
-                supports_jump=False,
-                description="RAES-owned CAGE-2 logical step clock.",
-            )
-        },
-        progression_policies={
-            policy: TimeProgressionPolicyDeclarationModel(
-                address=policy,
-                clock_address=_CLOCK,
-                advancement_mode="event_driven",
-                synchronization_mode="none",
-                reset_behavior="new_segment_zero",
-                replay_behavior="unsupported",
-                description="Only a committed aggregate turn advances this clock.",
-            )
-        },
-    )
+    return cage2_time_declaration()
 
 
 def _probe_orchestration_plan() -> OrchestrationPlan:
     """Return the bounded one-turn workflow used by the runtime probe."""
 
-    episode = ExperimentEpisodeControlModel(
-        turn_order="scenario-defined",
-        termination_rule="admitted-logical-step-limit-or-source-terminal",
+    return cage2_orchestration_plan(
+        workflow=_WORKFLOW,
+        name="cage2-probe",
         max_steps=1,
-        termination_condition_refs=["source-ledger:wrapper-termination-cutoff"],
-    )
-    variant = ExperimentRedVariantSelectionModel(
-        variant_id="sleep",
-        agent_ref="participant.implementation.red-sleep",
-    )
-    payload: dict[str, object] = {
-        "name": "cage2-probe",
-        "episode_control": episode.model_dump(mode="json"),
-        "red_variant_selection": variant.model_dump(mode="json"),
-        "result_contract": {
-            "state_schema_version": "workflow-step-state/v1",
-            "observable_steps": {},
-        },
-        "execution_contract": {
-            "state_schema_version": "workflow-step-state/v1",
-            "start_step": "",
-            "steps": {},
-            "step_types": {},
-            "control_edges": {},
-            "join_owners": {},
-            "call_steps": {},
-            "observable_steps": [],
-        },
-    }
-    resource = PlannedResource(
-        address=_WORKFLOW,
-        domain=RuntimeDomain.ORCHESTRATION,
-        resource_type="workflow",
-        payload=payload,
-    )
-    operation = OrchestrationOp(
-        action=ChangeAction.CREATE,
-        address=_WORKFLOW,
-        resource_type="workflow",
-        payload=payload,
-    )
-    return OrchestrationPlan(
-        resources={_WORKFLOW: resource},
-        operations=[operation],
-        startup_order=[_WORKFLOW],
+        red_variant="sleep",
     )
 
 
@@ -651,52 +566,7 @@ def _probe_action_request() -> ParticipantActionAdmissionRequest:
 def _probe_evaluation_plan() -> EvaluationPlan:
     """Return a bounded objective plan over projected confidentiality evidence."""
 
-    proposition = "evaluation.proposition.compromised"
-    assertion = "evaluation.assertion.compromised"
-    objective = "evaluation.objective.defend"
-    operations = [
-        EvaluationOp(
-            action=ChangeAction.CREATE,
-            address=proposition,
-            resource_type="proposition",
-            payload={
-                "evaluation_basis": "observed_state",
-                "subject_addresses": ["provision.node.user-host"],
-                "evidence_requirement_refs": ["source-ledger:reward-components"],
-                "spec": {
-                    "predicate": {
-                        "property": "confidentiality",
-                        "operator": "lt",
-                        "value": 0.0,
-                    }
-                },
-            },
-        ),
-        EvaluationOp(
-            action=ChangeAction.CREATE,
-            address=assertion,
-            resource_type="assertion",
-            payload={"proposition_address": proposition, "polarity": "positive"},
-        ),
-        EvaluationOp(
-            action=ChangeAction.CREATE,
-            address=objective,
-            resource_type="objective",
-            payload={
-                "success_addresses": [assertion],
-                "spec": {"success": {"mode": "all"}},
-                "result_contract": {
-                    "resource_type": "objective",
-                    "supports_passed": True,
-                    "supports_score": False,
-                },
-            },
-        ),
-    ]
-    return EvaluationPlan(
-        operations=operations,
-        startup_order=[proposition, assertion, objective],
-    )
+    return cage2_evaluation_plan(include_execution_contract=False)
 
 
 def _portable_probe_output_is_safe(manifest: BackendManifest, applied: ApplyResult) -> bool:
