@@ -53,6 +53,14 @@ primaite = []
 # lacks the qualified packaging-data fix; the command reports that limitation
 # instead of cloning source or advertising an ungoverned wheel.
 cyborg = ["raes-env-packs==3.6.2"]
+# NASim publishes an index distribution, so the extra pins it directly, together
+# with the qualified runtime (gymnasium 0.26.3 / numpy 1.26.4) so that installing
+# the extra reproduces the admitted, runnable protocol rather than a newer
+# gymnasium that breaks NASim's supplied agents (they assert a Python-int action
+# index, which gymnasium >= 0.27 returns as numpy.int64). See the qualification
+# record (src/raes_adapters/nasim/qualification.json). No `conflicts` entry is
+# needed — no other extra constrains gymnasium/numpy in the single lock.
+nasim = ["nasim==0.12.0", "gymnasium==0.26.3", "numpy==1.26.4"]
 
 [project.scripts]
 raes-adapters = "raes_adapters.cli:main"

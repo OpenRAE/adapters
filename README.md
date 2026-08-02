@@ -67,6 +67,16 @@ broken public seed seam, undeclared runtime dependencies, and an unpinned
 dependency graph remain explicit limits on deterministic-replay and
 reproducibility claims.
 
+The `nasim` extra pins the published `nasim==0.12.0` distribution together with
+its qualified runtime (`gymnasium==0.26.3`, `numpy==1.26.4`), so installing
+`raes-adapters[nasim]` reproduces the admitted, runnable protocol. The
+[qualification record](src/raes_adapters/nasim/qualification.json) binds Jonathon
+Schwartz's MIT-licensed source and admits one `tiny`-benchmark bruteforce
+protocol. The runtime pins gymnasium 0.26.3 because NASim's supplied agents
+assert a Python-int action index that gymnasium >= 0.27 breaks; importing NASim
+also requires the Tk system libraries. Those limitations bound reproducibility
+claims; they do not veto the maintainer-selected backend.
+
 ## One distribution, optional simulator extras
 
 RAES owns the *contracts* an adapter must honor; how this repository packages,
@@ -128,6 +138,7 @@ raes-adapters/
       mapping/                 # pinned CAGE-2 → RAES source ledger (REP-003)
       profiles/                # conformance profile overrides
     primaite/                  # immutable qualification + selected public protocol
+    nasim/                     # immutable NASim qualification + selected public protocol
   tests/                       # pytest suite for the distribution
   release-please-config.json   # Release Please: versioning + CHANGELOG from main
   .github/workflows/           # CI + PR-title lint + Release Please publish
@@ -340,6 +351,32 @@ source reproducer supplies the separate native readiness evidence. Seed 153
 does not erase `loss-evaluation-seed-unbound`, and neither suite claims
 deterministic replay or scientific equivalence. See the
 [conformance guardrails](docs/decisions/cyborg-conformance-guardrails.md).
+
+## NASim qualification
+
+Issue [#32](https://github.com/OpenRAE/adapters/issues/32) selects Jonathon
+Schwartz's official
+[NASim](https://github.com/Jjschwartz/NetworkAttackSimulator) source at tag
+`v0.12.0` (commit `7c732bc4620d20a25b221a782adee29c2a89d800`, published as
+`nasim==0.12.0`) and one public protocol: the `tiny` static benchmark run under
+the supplied `bruteforce_agent` baseline. The shipped
+[protocol](src/raes_adapters/nasim/public-protocol.md) fixes the exact scenario,
+baseline, seed obligation, metrics, and Gymnasium `terminated`/`truncated`
+semantics; the [qualification record](src/raes_adapters/nasim/qualification.json)
+pins source, wheel, and import-root identities, the qualified dependency
+resolution, and the attainable claim strength. The
+[architecture guardrails](docs/decisions/nasim-qualification-guardrails.md)
+explain why this evidence is not an adapter manifest or RAES conformance claim.
+
+The record discloses four upstream findings that bound the claims: the supplied
+agents pass a NumPy integer action index that NASim's own `FlatActionSpace`
+rejects on gymnasium >= 0.27 (so the qualified runtime pins gymnasium 0.26.3);
+action success is drawn from the global NumPy RNG, so `make_benchmark`/`reset`
+seeds do not bind a run; the static-benchmark seed argument is ignored; and
+importing NASim requires the Tk system libraries. Source identity and protocol
+configuration are attested; execution controls are partial and outcome
+reproduction is stochastic-bounded, with no adapter, manifest, or
+outcome-equivalence claim delivered by qualification.
 
 ## Development
 

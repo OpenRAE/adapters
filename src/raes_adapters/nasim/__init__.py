@@ -1,7 +1,7 @@
-"""CyberBattleSim qualification evidence.
+"""NASim qualification evidence.
 
 This module carries the immutable source qualification and selected public
-experiment protocol for issue #25.  It does not implement an adapter, backend
+experiment protocol for issue #32.  It does not implement an adapter, backend
 manifest, conformance profile, or RAES semantic model.
 """
 
