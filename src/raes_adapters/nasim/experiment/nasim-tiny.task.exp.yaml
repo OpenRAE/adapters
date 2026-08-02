@@ -1,0 +1,128 @@
+schema_version: experiment-task/v1
+task_id: nasim-tiny-task
+task_version: 1.0.0
+title: NASim tiny bruteforce evaluation task
+description: >-
+  Published evaluation-protocol contract for the selected public NASim case
+  (tiny static benchmark, run_bruteforce_agent baseline). Carries the reward,
+  evaluator, and metric intent that RAES SDL deliberately excludes. Native
+  reward scalars, the flat action index, and the raw observation vector remain
+  source-private; only bounded measure definitions are portable.
+scenario_ref:
+  ref_kind: scenario-snapshot
+  ref_id: nasim-tiny
+  ref_digest: sha256:a826fd8f812a447dd4c8d346179163f4c5274176ca739bc2802756913a195e2d
+  ref_path: scenario/nasim-tiny.sdl.yaml
+evaluation_protocol:
+  protocol_id: nasim-tiny-protocol
+  protocol_version: 1.0.0
+  intent: >-
+    Measure attacker progress, reward, goal attainment, and terminal cause for
+    the selected admitted public protocol without asserting deterministic replay
+    or outcome equivalence.
+  unit_of_analysis: episode
+  metric_definitions:
+    steps_to_termination:
+      metric_id: steps_to_termination
+      metric_version: 1.0.0
+      name: Steps to termination
+      measured_construct: >-
+        Attacker steps to source-native goal, or 1000 when the step limit
+        truncates the episode first.
+      unit_of_analysis: episode
+      value_kind: count
+      direction: descriptive
+      evidence_requirements:
+        - ref_kind: evidence
+          ref_id: attacker-action-log
+    cumulative_attacker_reward:
+      metric_id: cumulative_attacker_reward
+      metric_version: 1.0.0
+      name: Cumulative attacker reward
+      measured_construct: >-
+        Per-episode cumulative attacker reward, where each step reward is the
+        source-native action_result.value minus action.cost; these are the
+        evaluator's scalars, not an SDL objective score or equivalence claim.
+      unit_of_analysis: episode
+      value_kind: number
+      direction: higher-is-better
+      evidence_requirements:
+        - ref_kind: evidence
+          ref_id: attacker-action-log
+    goal_reached:
+      metric_id: goal_reached
+      metric_version: 1.0.0
+      name: Goal reached
+      measured_construct: >-
+        Whether every sensitive host was compromised
+        (Network.all_sensitive_hosts_compromised) before the step limit.
+      unit_of_analysis: episode
+      value_kind: category
+      direction: descriptive
+      evidence_requirements:
+        - ref_kind: evidence
+          ref_id: host-compromise-series
+    terminal_cause:
+      metric_id: terminal_cause
+      metric_version: 1.0.0
+      name: Terminal cause
+      measured_construct: >-
+        Reconstructed terminal cause, one of goal or step-limit. These causes
+        stay distinct: terminated (goal) and truncated (step limit) are computed
+        independently upstream and are never conflated.
+      unit_of_analysis: episode
+      value_kind: category
+      direction: descriptive
+      evidence_requirements:
+        - ref_kind: evidence
+          ref_id: attacker-action-log
+  observation_requirements:
+    - ref_kind: evidence
+      ref_id: attacker-action-log
+    - ref_kind: evidence
+      ref_id: host-compromise-series
+intended_use: >-
+  Define the portable evaluation protocol for the selected public NASim case so
+  an attested run can be scored consistently.
+population_or_construct: >-
+  A single bruteforce baseline attacker on the fixed NASim tiny three-host
+  topology with no defender.
+split_and_leakage_controls:
+  partitioning_strategy: >-
+    Single held-out public protocol run of the documented bruteforce baseline
+    against the static tiny benchmark.
+apparatus_constraints:
+  notes:
+    - >-
+      The maintainer-selected profile is admitted. The supplied agents require
+      gymnasium 0.26.x, importing NASim requires Tk system libraries, and the
+      action-success stream is unbound by the environment seed; these limit
+      apparatus reconstruction and deterministic-replay claims.
+validity_notes:
+  - category: construct
+    note: >-
+      Cumulative reward is an evaluator signal, not the study metric; the
+      source reward is action_result.value minus action.cost per step.
+  - category: internal
+    note: >-
+      Action success is drawn from the global NumPy RNG (network.py:87), not the
+      gym reset seed, and make_benchmark ignores its seed for a static
+      benchmark, so no run under this protocol is a deterministic replay unless
+      numpy.random.seed is bound explicitly.
+  - category: external
+    note: >-
+      The supplied agents assert a Python int action index and break on
+      gymnasium >= 0.27, and importing NASim requires tkinter; both bound
+      reproducibility of the apparatus.
+artifact_refs:
+  - artifact_id: nasim-public-protocol
+    role: protocol
+    media_type: text/markdown
+    uri: file://public-protocol.md
+    checksum:
+      algorithm: sha256
+      value: 613be303bfe09b642441db9ea1bcc8d42d34eef309d6fb8729c11ff2c1d29853
+    size_bytes: 7676
+    created_at: "2026-08-02T00:00:00Z"
+    source: RAESystem/adapters#32 qualification
+    sensitivity: public
