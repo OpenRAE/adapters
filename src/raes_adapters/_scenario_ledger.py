@@ -33,7 +33,6 @@ import hashlib
 import json
 import re
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
 from importlib.resources import files
 from typing import NamedTuple, cast
 
@@ -709,8 +708,7 @@ def _protocol_artifact_problems(
 # --------------------------------------------------------------------------- #
 # per-backend binder
 # --------------------------------------------------------------------------- #
-@dataclass(frozen=True)
-class ScenarioLedger:
+class ScenarioLedger(NamedTuple):
     """Bind the shared validators to one backend's evidence set.
 
     The binder holds the backend package (for reading checked-in resources), the
