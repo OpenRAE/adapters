@@ -1,0 +1,52 @@
+schema_version: experiment-authoring-input/v1
+spec_id: nasim-tiny-spec
+spec_version: 1.0.0
+title: NASim tiny public run plan
+description: >-
+  Authoring input for the selected public NASim protocol. Carries the
+  episode/turn/termination control and the descriptive stochastic controls that
+  RAES SDL excludes. The stochastic controls are descriptive only: NASim binds
+  action success through the global NumPy stream rather than the environment
+  seed, so no executable random-stream binding is claimed and the determinism
+  loss is retained.
+task_ref:
+  ref_kind: task
+  ref_id: nasim-tiny-task
+intended_scenario_ref:
+  ref_kind: scenario-snapshot
+  ref_id: nasim-tiny
+  ref_digest: sha256:a826fd8f812a447dd4c8d346179163f4c5274176ca739bc2802756913a195e2d
+  ref_path: scenario/nasim-tiny.sdl.yaml
+run_plan:
+  episode_control:
+    turn_order: sequential
+    termination_rule: >-
+      After each attacker step, evaluate independently: terminated when every
+      sensitive host is compromised (goal reached), and truncated when
+      env.steps reaches the step limit (1000). The two boundaries are computed
+      independently and reported separately; the step limit is Gymnasium
+      truncation, not goal success.
+    max_steps: 1000
+    termination_condition_refs:
+      - goal-reached
+      - step-limit
+    description: >-
+      Source-native goal completion and the step-limit truncation stay distinct
+      terminal causes.
+  stochastic_controls:
+    - control_id: numpy-global-action-success
+      role: randomization
+      value: "20260802"
+      description: >-
+        numpy.random.seed(20260802) is the only stream that controls action
+        success (np.random.rand() > action.prob at network.py:87). Lost: neither
+        make_benchmark nor reset binds it for a static benchmark. Descriptive
+        only; no executable binding.
+    - control_id: gym-environment-reset
+      role: seed
+      value: "20260802"
+      description: >-
+        NASimEnv.reset(seed=20260802) seeds the gym self.np_random stream, which
+        NASim does not use to resolve action success for the static benchmark.
+        Descriptive only; no executable binding.
+  target_run_count: 1
