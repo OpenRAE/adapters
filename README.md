@@ -57,6 +57,16 @@ profile. Because no official index/release artifact exists, users install the
 pinned simulator source separately. Unbound random streams and open benchmark
 findings remain explicit limits on deterministic-replay and outcome claims.
 
+The `primaite` extra is dependency-light for the same reason. The
+[qualification record](src/raes_adapters/primaite/qualification.json) binds
+DSTL's MIT-licensed PrimAITE source (tag `v4.0.0`) and admits the selected
+`data_manipulation` profile through the source-native `PrimaiteGymEnv`. PrimAITE
+publishes no index/release wheel, so users install the pinned source separately
+(the qualified route pins `setuptools==75.6.0` to supply `pkg_resources`). A
+broken public seed seam, undeclared runtime dependencies, and an unpinned
+dependency graph remain explicit limits on deterministic-replay and
+reproducibility claims.
+
 ## One distribution, optional simulator extras
 
 RAES owns the *contracts* an adapter must honor; how this repository packages,
@@ -117,6 +127,7 @@ raes-adapters/
     cyborg/                    # CybORG qualification, patch evidence, and future backend
       mapping/                 # pinned CAGE-2 → RAES source ledger (REP-003)
       profiles/                # conformance profile overrides
+    primaite/                  # immutable qualification + selected public protocol
   tests/                       # pytest suite for the distribution
   release-please-config.json   # Release Please: versioning + CHANGELOG from main
   .github/workflows/           # CI + PR-title lint + Release Please publish
@@ -232,6 +243,32 @@ declared weakness references; they do not create another profile, fixture
 corpus, report schema, or research-validity claim. The
 [conformance-composition guardrails](docs/decisions/cyberbattlesim-conformance-guardrails.md)
 fix those boundaries.
+
+## PrimAITE qualification
+
+Issue [#39](https://github.com/RAESystem/adapters/issues/39) selects the ARCD
+PrimAITE source at tag `v4.0.0` (commit
+`98617981d7f6ae2c3ffd9a8cc39944e05c9a09ea`) and one public `data_manipulation`
+protocol driven through the source-native Gymnasium entrypoint
+`primaite.session.environment.PrimaiteGymEnv`. The shipped
+[protocol](src/raes_adapters/primaite/public-protocol.md) fixes the exact
+scenario, participants (BLUE `proxy-agent`, scripted RED, probabilistic GREEN),
+`Discrete(78)` action space, flattened `Box(1652,)` observation, seed
+obligations, metrics, and the fixed-horizon truncation semantics (`terminated`
+is always false; the episode truncates at `max_episode_length=128`).
+
+The [qualification record](src/raes_adapters/primaite/qualification.json) binds
+the source identity, the canonical import-root digest (which matches the built
+wheel exactly), the MIT/Crown-copyright legal disposition, the clean-install and
+bounded do-nothing smoke, the resolved dependency graph and its permissive
+license summary, and the maintainer admission with graded claim strength. It
+also records the source's honest limitations: no index/release wheel, an
+undeclared `pkg_resources`/setuptools runtime dependency (the qualified route
+pins `setuptools==75.6.0`), a public seed seam that raises without the `rl`/torch
+stack, a `requires-python` vs classifier inconsistency, and an unpinned upstream
+dependency graph. The
+[qualification guardrails](docs/decisions/primaite-qualification-guardrails.md)
+explain why this evidence is not an adapter manifest or RAES conformance claim.
 
 ## CybORG/CAGE-2 runtime qualification
 

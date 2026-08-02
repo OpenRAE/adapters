@@ -242,7 +242,7 @@ def test_selection_dependencies_and_stochastic_sources_are_explicit() -> None:
         "56e2c189d6fd4b195584f34d93f66500b30eba8eedff6fca869ed61a8ab4079a"
     )
     assert record["dependency_resolution"]["uv_lock_sha256"] == (
-        "ab11de440a2dca23b9aa3944af207dcb03af1ce5cb3a062407622cf6393235c7"
+        "3710e5ac5b0f81b36295cdfc24236e7b28b55ebd4721788f2accea7e70f4d244"
     )
     assert record["dependencies"]
     assert all(

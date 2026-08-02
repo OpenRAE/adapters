@@ -27,6 +27,7 @@ semantic and protocol authority.
 - [CybORG conformance-composition guardrails](decisions/cyborg-conformance-guardrails.md)
 - [CybORG researcher run-and-evidence command guardrails](decisions/cyborg-researcher-command-guardrails.md)
 - [CyberBattleSim qualification guardrails](decisions/cyberbattlesim-qualification-guardrails.md)
+- [PrimAITE qualification guardrails](decisions/primaite-qualification-guardrails.md)
 - [CyberBattleSim scenario and source-ledger guardrails](decisions/cyberbattlesim-scenario-ledger-guardrails.md)
 - [CyberBattleSim backend architecture guardrails](decisions/cyberbattlesim-backend-guardrails.md)
 - [CyberBattleSim conformance-composition guardrails](decisions/cyberbattlesim-conformance-guardrails.md)

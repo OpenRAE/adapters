@@ -1430,7 +1430,7 @@ requires-dist = [
     { name = "raes", specifier = "==2.0.0" },
     { name = "raes-env-packs", marker = "extra == 'cyborg'", specifier = "==3.2.0" },
 ]
-provides-extras = ["cyberbattlesim", "cyborg"]
+provides-extras = ["cyberbattlesim", "primaite", "cyborg"]
 
 [package.metadata.requires-dev]
 dev = [
