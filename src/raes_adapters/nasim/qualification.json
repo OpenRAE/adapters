@@ -1,0 +1,370 @@
+{
+  "record_version": "nasim-qualification/1",
+  "qualified_at": "2026-08-02",
+  "scope": "RAESystem/adapters#32",
+  "source": {
+    "repository": "https://github.com/Jjschwartz/NetworkAttackSimulator",
+    "tag": "v0.12.0",
+    "commit": "7c732bc4620d20a25b221a782adee29c2a89d800",
+    "tree": "4eedd4cc3ed9c31b17281baf447e67fcaa826298",
+    "package": "nasim",
+    "version": "0.12.0",
+    "wheel": {
+      "filename": "nasim-0.12.0-py3-none-any.whl",
+      "sha256": "4c059e64e0dd2365a6d43613ca3f83307dc0ecc47c48a39e02f590bbd01629db"
+    },
+    "sdist": {
+      "filename": "nasim-0.12.0.tar.gz",
+      "sha256": "c5da8be95c5b5bcd89b03c15baeddd794af4c4844a632b48a8cccb61a5354ec9"
+    }
+  },
+  "source_files": [
+    {
+      "path": "LICENSE.md",
+      "sha256": "1d8084ef9ea897ec462ce6c0e538f97967894699aac65c933804062714d3330a"
+    },
+    {
+      "path": "setup.py",
+      "sha256": "34e5996725be43f7c3c151ad9ef29335ecdf86f1bd7847807e88363b2a90019c"
+    },
+    {
+      "path": "README.rst",
+      "sha256": "be11e914ceb63122ecc1a71f05a21fec9003ff7c43814c8542c86eb50fd90ea2"
+    },
+    {
+      "path": "nasim/__init__.py",
+      "sha256": "7b10a01f275df7fab29b2c5b81711344a6d7ea2333d551c5aa41ad94ac63a4dd"
+    },
+    {
+      "path": "nasim/envs/environment.py",
+      "sha256": "fcbdcdb898f35dd5fbad573f615fb3d910f8de43951d698c2714dd374591ce22"
+    },
+    {
+      "path": "nasim/envs/network.py",
+      "sha256": "a7765c5480a6143ddd4bb41116ef5d6526f2fb1d3a657bf8e5a8968d6cbde058"
+    },
+    {
+      "path": "nasim/envs/action.py",
+      "sha256": "ff7d820e210c13cab237c13371b77861bb7c173918f75325c5d6954237c6207b"
+    },
+    {
+      "path": "nasim/scenarios/__init__.py",
+      "sha256": "16908982737799e3b349bd34fcf2312e2e5455c55597723d51940d01c40fd89d"
+    },
+    {
+      "path": "nasim/scenarios/benchmark/__init__.py",
+      "sha256": "1871f90d5a20b815b0d44e59de332aec98eef936a59c1d4990a6f7ce1177dc9e"
+    },
+    {
+      "path": "nasim/scenarios/benchmark/tiny.yaml",
+      "sha256": "9993dd03b027f4039a98761e94662577ce95010d4a89e9927a1fc7000acc45c5"
+    },
+    {
+      "path": "nasim/agents/bruteforce_agent.py",
+      "sha256": "3d225513ef7fb1e9f1cd5ebae94680513fbedf67c11d77bfc4f66ee6db4349e0"
+    }
+  ],
+  "runtime_source_tree": {
+    "root": "nasim",
+    "origin": "official git checkout at the selected commit",
+    "include": "all regular files; __pycache__ and *.pyc excluded; symlinks and unlisted files are rejected",
+    "file_count": 42,
+    "canonicalization": "Sorted POSIX path, NUL, lowercase SHA-256 of raw file bytes, LF.",
+    "sha256": "be7ced2eff1d1ac372fbaae806cf401bf8be1e33cdaf6201132111fed7fab370"
+  },
+  "runtime_artifacts": [
+    {
+      "name": "nasim",
+      "version": "0.12.0",
+      "artifact": {
+        "filename": "nasim-0.12.0-py3-none-any.whl",
+        "sha256": "4c059e64e0dd2365a6d43613ca3f83307dc0ecc47c48a39e02f590bbd01629db",
+        "require_direct_archive_sha256": true,
+        "runtime_identity": "complete-root-tree"
+      },
+      "roots": [
+        {
+          "path": "nasim",
+          "file_count": 36,
+          "sha256": "813821d5b055497aa23ab3108d855b42fc153568483b34f38fa557294431b173"
+        }
+      ],
+      "wheel_root_note": "The published wheel package tree (36 files) is a subset of the git nasim/ tree (42 files); the wheel omits nasim/scripts/*.py and the git-only nasim/agents/policies/dqn_tiny.pt weight."
+    },
+    {
+      "name": "gymnasium",
+      "version": "0.26.3",
+      "artifact": {
+        "filename": "Gymnasium-0.26.3-py3-none-any.whl",
+        "sha256": "4be0085252759c65b09c9fb83970ceedd02fab03b075024d8ba22eaa1a11eda1",
+        "require_direct_archive_sha256": true,
+        "runtime_identity": "complete-root-tree"
+      },
+      "roots": [
+        {
+          "path": "gymnasium",
+          "file_count": 210,
+          "sha256": "60274b82fe69538d86338491ff37a5d31f1938c54204ef08568f5eeb2b098828"
+        }
+      ]
+    },
+    {
+      "name": "numpy",
+      "version": "1.26.4",
+      "artifact": {
+        "filename": "numpy-1.26.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        "sha256": "675d61ffbfa78604709862923189bad94014bef562cc35cf61d3a07bba02a7ed",
+        "require_direct_archive_sha256": true,
+        "runtime_identity": "complete-root-tree"
+      },
+      "roots": [
+        {
+          "path": "numpy",
+          "file_count": 781,
+          "sha256": "01df3677c2ceff5479fe1559917eeeebdc0f459fb014b000ae99ba95c0029936"
+        },
+        {
+          "path": "numpy.libs",
+          "file_count": 3,
+          "sha256": "1838d6aa3a3a7a103cf785cecadfff08852af8dacbeebaca0de9c8dfaa47790c"
+        }
+      ]
+    }
+  ],
+  "protocol": {
+    "resource": "public-protocol.md",
+    "sha256": "613be303bfe09b642441db9ea1bcc8d42d34eef309d6fb8729c11ff2c1d29853",
+    "selection": {
+      "scenario": {
+        "name": "tiny",
+        "type": "static-benchmark",
+        "source_path": "nasim/scenarios/benchmark/tiny.yaml",
+        "constructor": "nasim.make_benchmark",
+        "fully_obs": true,
+        "flat_actions": true,
+        "flat_obs": true,
+        "flat_action_space_n": 18,
+        "observation_shape": [56],
+        "observation_dtype": "float32",
+        "step_limit": 1000,
+        "sensitive_hosts": ["(2, 0)", "(3, 0)"]
+      },
+      "baseline": {
+        "policy": "run_bruteforce_agent",
+        "module": "nasim.agents.bruteforce_agent",
+        "strategy": "exhaustive-round-robin-over-flat-action-space",
+        "model_weights": false
+      },
+      "evaluator": "nasim.agents.bruteforce_agent.run_bruteforce_agent",
+      "reset": {
+        "api": "NASimEnv.reset(seed=...)",
+        "returns": "(observation, info)",
+        "initial_state": "fixed (static scenario; not randomized)"
+      },
+      "seed": {
+        "value": 20260802,
+        "binding": "numpy.random.seed (global) is the only stream that controls action success"
+      },
+      "termination": {
+        "terminated": "goal_reached: all sensitive hosts compromised",
+        "truncated": "env.steps >= scenario.step_limit (1000)",
+        "independent": true
+      },
+      "metrics": [
+        "steps-to-goal-or-step-limit",
+        "cumulative-reward-per-episode",
+        "goal-reached-boolean",
+        "terminal-cause (goal vs step-limit)"
+      ]
+    }
+  },
+  "runtime": {
+    "python": "3.12.3",
+    "platform": "Linux-6.8.0-117-generic-x86_64-with-glibc2.39",
+    "build": "unmodified-official-pypi-wheel",
+    "wheel": "nasim-0.12.0-py3-none-any.whl",
+    "wheel_sha256": "4c059e64e0dd2365a6d43613ca3f83307dc0ecc47c48a39e02f590bbd01629db",
+    "clean_install": "passed",
+    "working_directory": "isolated-temporary-directory",
+    "pythonpath": "cleared",
+    "python_safe_path": true,
+    "system_requirement": "tkinter (Tk 8.6 / python3-tk) required at import; see known_defects headless-import-requires-tkinter",
+    "network_after_install": "not-required",
+    "smoke": {
+      "environment_constructor": "nasim.make_benchmark('tiny', fully_obs=True, flat_actions=True, flat_obs=True)",
+      "flat_action_space_n": 18,
+      "reset_arity": 2,
+      "step_arity": 5,
+      "observation_type": "ndarray",
+      "observation_shape": [56],
+      "observation_dtype": "float32",
+      "terminated_type": "bool",
+      "truncated_type": "bool",
+      "representative_step": {
+        "action_index": 0,
+        "action": "ServiceScan: target=(1, 0), cost=1.00, prob=1.00, req_access=USER",
+        "reward": -1.0,
+        "terminated": false,
+        "truncated": false,
+        "step_count": 1
+      },
+      "termination_probe": {
+        "baseline": "run_bruteforce_agent",
+        "seed": 20260802,
+        "steps": 47,
+        "total_reward": 153.0,
+        "goal_reached": true,
+        "terminated": true,
+        "truncated": false
+      },
+      "truncation_probe": {
+        "method": "repeat an unproductive action until the step limit",
+        "steps": 1000,
+        "terminated": false,
+        "truncated": true
+      }
+    }
+  },
+  "dependency_resolution": {
+    "resolver": "uv",
+    "python": "3.12.3",
+    "qualified_pins": {
+      "gymnasium": "0.26.3",
+      "numpy": "1.26.4"
+    },
+    "gymnasium_pin_reason": "gymnasium 0.26.3 is the last release where Discrete.n is a Python int; later releases break NASim's supplied agents (see known_defects supplied-agents-numpy-int-incompatibility-gymnasium-ge-0.27).",
+    "lock_disposition": "The single repository uv.lock resolves the nasim extra to exactly these qualified pins (nasim 0.12.0, gymnasium 0.26.3, numpy 1.26.4). No second lockfile is introduced."
+  },
+  "dependencies": [
+    { "name": "cloudpickle", "version": "3.1.2", "license": "BSD-3-Clause" },
+    { "name": "contourpy", "version": "1.3.3", "license": "BSD License" },
+    { "name": "cycler", "version": "0.12.1", "license": "BSD License" },
+    { "name": "fonttools", "version": "4.63.0", "license": "MIT" },
+    { "name": "Gymnasium", "version": "0.26.3", "license": "MIT" },
+    { "name": "gymnasium-notices", "version": "0.0.1", "license": "MIT License" },
+    { "name": "kiwisolver", "version": "1.5.0", "license": "BSD License" },
+    { "name": "matplotlib", "version": "3.11.1", "license": "Python Software Foundation License" },
+    { "name": "nasim", "version": "0.12.0", "license": "MIT" },
+    { "name": "networkx", "version": "3.6.1", "license": "BSD-3-Clause" },
+    { "name": "numpy", "version": "1.26.4", "license": "BSD License" },
+    { "name": "packaging", "version": "26.2", "license": "Apache-2.0 OR BSD-2-Clause" },
+    { "name": "pillow", "version": "12.3.0", "license": "MIT-CMU" },
+    { "name": "prettytable", "version": "3.18.0", "license": "BSD-3-Clause" },
+    { "name": "pyparsing", "version": "3.3.2", "license": "MIT" },
+    { "name": "python-dateutil", "version": "2.9.0.post0", "license": "Dual License" },
+    { "name": "PyYAML", "version": "6.0.3", "license": "MIT" },
+    { "name": "six", "version": "1.17.0", "license": "MIT" },
+    { "name": "wcwidth", "version": "0.8.2", "license": "MIT" }
+  ],
+  "stochastic_sources": [
+    {
+      "owner": "action-success-global-numpy",
+      "api": "numpy.random.rand() > action.prob (nasim/envs/network.py:87)",
+      "binding_status": "bound-only-by-explicit-global-numpy-seed; not-bound-by-make_benchmark-or-reset-seed"
+    },
+    {
+      "owner": "gym-environment-rng",
+      "api": "NASimEnv.reset(seed=...) -> self.np_random",
+      "binding_status": "seeded-but-unused-for-static-benchmark-action-resolution"
+    },
+    {
+      "owner": "scenario-generator-global-numpy",
+      "api": "numpy.random.seed(seed) (nasim/scenarios/generator.py:187)",
+      "binding_status": "not-applicable-for-static-benchmark-scenario"
+    },
+    {
+      "owner": "host-config-randomisation-global-numpy",
+      "api": "numpy.random.* (nasim/envs/host_vector.py)",
+      "binding_status": "not-applicable-standard-reset-uses-fixed-initial-state"
+    },
+    {
+      "owner": "agent-policy-rng",
+      "api": "random.random()/numpy.random (ql_agent, dqn_agent)",
+      "binding_status": "not-applicable-bruteforce-baseline-is-deterministic-order"
+    }
+  ],
+  "legal": {
+    "upstream_license": "MIT",
+    "license_file": "LICENSE.md",
+    "license_sha256": "1d8084ef9ea897ec462ce6c0e538f97967894699aac65c933804062714d3330a",
+    "copyright": "Copyright (c) 2018",
+    "copyright_holder_note": "The upstream LICENSE.md carries the year 2018 with no named holder.",
+    "notice_required": true,
+    "notice_file": null,
+    "redistribution": "permitted-with-notice",
+    "attribution": "Retain the NASim MIT license text and copyright notice.",
+    "retained_output": "permitted",
+    "external_downloads": [],
+    "model_weights": [
+      {
+        "path": "nasim/agents/policies/dqn_tiny.pt",
+        "disposition": "git-only-excluded-from-wheel",
+        "used_by_selected_protocol": false,
+        "note": "Pre-trained DQN policy for the dqn baseline; not part of the selected tiny+bruteforce profile."
+      }
+    ]
+  },
+  "patches": [],
+  "maintenance": {
+    "archived": false,
+    "development_status": "3 - Alpha (upstream README: 'Stable release. No extra development is planned, but still being maintained')",
+    "author": "Jonathon Schwartz",
+    "default_branch": "master",
+    "selected_tag": "v0.12.0",
+    "selected_commit": "7c732bc4620d20a25b221a782adee29c2a89d800",
+    "latest_release": "0.12.0",
+    "release_artifacts": ["nasim-0.12.0-py3-none-any.whl", "nasim-0.12.0.tar.gz"]
+  },
+  "known_defects": [
+    {
+      "id": "supplied-agents-numpy-int-incompatibility-gymnasium-ge-0.27",
+      "status": "observed-in-selected-source",
+      "impact": "FlatActionSpace.get_action asserts isinstance(action_idx, int) (nasim/envs/action.py:698); gymnasium >= 0.27 returns numpy.int64 from Discrete.n and Discrete.sample(), so the supplied bruteforce and random agents, and the greedy paths of ql/dqn, raise AssertionError. The qualified runtime pins gymnasium 0.26.3, the last release where Discrete.n is a Python int."
+    },
+    {
+      "id": "action-success-rng-unbound-by-env-seed",
+      "status": "observed-in-selected-source",
+      "impact": "Action success is drawn from the global numpy RNG (network.py:87), not the gym-seeded self.np_random; make_benchmark(seed) and reset(seed) do not make a run reproducible. Only an explicit numpy.random.seed() binds it."
+    },
+    {
+      "id": "static-benchmark-seed-ignored",
+      "status": "observed-in-selected-source",
+      "impact": "make_benchmark_scenario loads static YAML benchmarks via load_scenario and ignores the seed argument entirely (scenarios/__init__.py); the seed only affects generated benchmarks."
+    },
+    {
+      "id": "headless-import-requires-tkinter",
+      "status": "observed-in-selected-source",
+      "impact": "nasim/envs/render.py unconditionally imports tkinter and calls matplotlib.use('TkAgg') at import time (pulled in by environment.py), so 'import nasim' fails without the Tk system libraries even for headless/programmatic use."
+    }
+  ],
+  "packaging": {
+    "repository_extra": "nasim",
+    "extra_declaration": ["nasim==0.12.0", "gymnasium==0.26.3", "numpy==1.26.4"],
+    "publishable_distribution": true,
+    "base_cyborg_cyberbattlesim_unchanged": true,
+    "conflicts_declaration_required": false,
+    "decision": "NASim publishes an index distribution (wheel + sdist for 0.12.0), so the nasim extra pins nasim==0.12.0 directly (unlike cyberbattlesim, whose source is unpublished). It also pins the qualified gymnasium 0.26.3 / numpy 1.26.4 runtime so that installing raes-adapters[nasim] reproduces the admitted, runnable protocol instead of a later gymnasium that breaks NASim's supplied agents.",
+    "reason": "The single uv.lock holds no gymnasium/numpy/matplotlib/networkx outside this extra and no other extra constrains them, so nasim resolves independently to the pinned runtime and no uv conflicts declaration is required. raes_adapters.nasim imports none of the simulator stack, so the repository test and typecheck graph never imports NASim."
+  },
+  "admission": {
+    "target": "RAESystem/research#12",
+    "decision": "admitted",
+    "authority": "maintainer-selection",
+    "decided_at": "2026-08-02",
+    "limitations": [
+      "supplied-agents-require-gymnasium-0.26.x",
+      "action-success-rng-unbound-by-env-seed",
+      "static-benchmark-seed-ignored",
+      "headless-import-requires-tkinter",
+      "upstream-alpha-development-status"
+    ],
+    "claim_strength": {
+      "source_identity": "attested",
+      "protocol_configuration": "attested",
+      "execution_controls": "partial",
+      "run_evidence": "attestable",
+      "outcome_reproduction": "stochastic-bounded"
+    },
+    "interpretation": "The maintainer-selected profile is admitted for adapter realization. The gymnasium compatibility pin, unbound action-success RNG, ignored static-benchmark seed, tkinter import coupling, and upstream alpha status bound the claims RAES may attest; they do not veto the simulator."
+  }
+}
