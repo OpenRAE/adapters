@@ -29,6 +29,7 @@ import pytest
 from raes_adapters import _scenario_ledger as core
 from raes_adapters.cyberbattlesim import scenario_ledger as csl
 from raes_adapters.nasim import scenario_ledger as nsl
+from raes_adapters.primaite import scenario_ledger as psl
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,7 @@ class Case:
     missing_category: str
     native_symbol_example: str
     native_object_prefix: str
+    agent_target: str
 
 
 CYBERBATTLE = Case(
@@ -80,6 +82,7 @@ CYBERBATTLE = Case(
     missing_category="stochastic",
     native_symbol_example="credential_cache_matrix",
     native_object_prefix="<cyberbattle",
+    agent_target="attacker",
 )
 
 NASIM = Case(
@@ -107,9 +110,42 @@ NASIM = Case(
     missing_category="stochastic",
     native_symbol_example="FlatActionSpace",
     native_object_prefix="<nasim",
+    agent_target="attacker",
 )
 
-CASES = [CYBERBATTLE, NASIM]
+PRIMAITE = Case(
+    name="primaite",
+    ledger=psl.LEDGER,
+    scenario_name="primaite-data-manipulation",
+    pinned_digest=psl.PINNED_SCENARIO_DIGEST,
+    losses={
+        "loss-no-source-artifact": "reproducibility",
+        "loss-unbound-random-streams": "deterministic-replay",
+        "loss-abstracted-participant-interface": "outcome-equivalence",
+        "loss-abstracted-network-controls": "outcome-equivalence",
+        "loss-fixed-horizon-only-termination": "outcome-equivalence",
+    },
+    metrics=[
+        "cumulative_blue_reward",
+        "data_asset_integrity",
+        "green_service_penalty",
+        "steps_to_truncation",
+        "terminal_cause",
+    ],
+    target_run_count=3,
+    max_steps=128,
+    stochastic_controls=4,
+    mapped_row="topology-network-laydown",
+    excluded_row="actions-native-ids",
+    loss_row="stochastic-green-policy",
+    loss_row_wrong_tier="outcome-equivalence",
+    missing_category="stochastic",
+    native_symbol_example="data_manipulation_attacker",
+    native_object_prefix="<primaite",
+    agent_target="red-attacker",
+)
+
+CASES = [CYBERBATTLE, NASIM, PRIMAITE]
 
 
 @pytest.fixture(params=CASES, ids=[c.name for c in CASES])
@@ -200,7 +236,7 @@ def test_target_resolution_positive_and_negative(case: Case) -> None:
         return case.ledger.resolve_target(target, scenario=scenario)
 
     assert resolves("sdl:nodes")
-    assert resolves("sdl:agents.attacker")
+    assert resolves(f"sdl:agents.{case.agent_target}")
     assert resolves("contract:ExperimentTaskModel.evaluation_protocol")
     assert resolves("contract:ExperimentSpecModel.run_plan.episode_control")
     assert resolves("resource:qualification.json")
@@ -463,6 +499,30 @@ def test_nasim_markers_are_grounded_without_observation_keys() -> None:
     assert "observation_keys" not in smoke
     markers = NASIM.ledger.native_identifier_markers()
     assert {"servicescan", "flatactionspace", "privilegeescalation"} <= markers
+
+
+def test_primaite_markers_are_grounded_in_participant_refs() -> None:
+    # PrimAITE's selected observation is a keyless flat Box, so the scan grounds
+    # in the scripted RED and GREEN participant refs from the qualification record
+    # plus the common representation markers. The generic BLUE "defender" seat ref
+    # is deliberately not a marker (it recurs in legitimate portable vocabulary).
+    participants = PRIMAITE.ledger.load_qualification()["protocol"]["selection"]["participants"]
+    markers = PRIMAITE.ledger.native_identifier_markers()
+    assert participants["red"]["ref"].lower() in markers
+    for green in participants["green"]:
+        assert green["ref"].lower() in markers
+    assert "defender" not in markers
+
+
+def test_primaite_companion_resource_pins_reject_drift() -> None:
+    # PrimAITE pins the content of every companion resource (task, spec, ledger,
+    # loss-disclosures), so a semantically valid edit to a reviewed companion
+    # fails the selection joins even though the artifact still parses.
+    assert PRIMAITE.ledger.validate_selection_joins() == []
+    for field in ("task_digest", "spec_digest", "ledger_digest", "losses_digest"):
+        drifted = PRIMAITE.ledger.selection._replace(**{field: "sha256:" + "0" * 64})
+        problems = PRIMAITE.ledger.validate_selection_joins(drifted)
+        assert any(p.field == "content_digest" for p in problems), field
 
 
 def test_loss_heading_without_tier_is_preserved_and_flagged(case: Case) -> None:
