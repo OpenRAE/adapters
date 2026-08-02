@@ -35,6 +35,7 @@ from raes_contracts.participant_configuration import (  # type: ignore[import-un
 from raes_contracts.participant_episode import (  # type: ignore[import-untyped]
     ParticipantEpisodeInitializeRequest,
 )
+from raes_contracts.planning import OrchestrationPlan  # type: ignore[import-untyped]
 from raes_contracts.runtime_state import RuntimeSnapshot  # type: ignore[import-untyped]
 from raes_contracts.satisfiability import canonical_contract_digest  # type: ignore[import-untyped]
 from raes_runtime.manager import RuntimeManager  # type: ignore[import-untyped]
@@ -58,7 +59,7 @@ _OBSERVATION_BOUNDARY = "participant.observation-boundary.blue"
 
 
 @dataclass(frozen=True)
-class RunControls(object):  # noqa: UP004
+class RunControls(object):
     """Internal, non-portable selection of already published run controls."""
 
     run_id: str
@@ -130,7 +131,7 @@ class RunControls(object):  # noqa: UP004
 
 
 @dataclass(frozen=True)
-class EpisodeEvidence(object):  # noqa: UP004
+class EpisodeEvidence(object):
     """Internal carrier for already validated RAES evidence models."""
 
     completed_steps: int
@@ -431,7 +432,7 @@ def _blue_action_request(
     )
 
 
-def _orchestration_plan(controls: RunControls):  # type: ignore[no-untyped-def]
+def _orchestration_plan(controls: RunControls) -> OrchestrationPlan:
     """Return the bounded workflow for one admitted researcher run."""
 
     workflow = f"orchestration.workflow.{controls.run_id}"

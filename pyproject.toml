@@ -101,8 +101,10 @@ select = ["E", "F", "I", "UP", "B", "SIM", "C4"]
 "src/raes_adapters/cyberbattlesim/backend/evaluator.py" = ["UP004"]
 "src/raes_adapters/cyberbattlesim/backend/orchestrator.py" = ["UP004"]
 "src/raes_adapters/cyberbattlesim/backend/provisioner.py" = ["UP004"]
+"src/raes_adapters/cli.py" = ["UP004"]
 "src/raes_adapters/cyborg/orchestrator.py" = ["UP004"]
 "src/raes_adapters/cyborg/conformance.py" = ["UP004"]
+"src/raes_adapters/cyborg/researcher.py" = ["UP004"]
 
 [tool.mypy]
 python_version = "3.12"

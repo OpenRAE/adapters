@@ -89,7 +89,7 @@ class _CommandFailure(Exception):
 
 
 @dataclass(frozen=True)
-class _AdmittedRun(object):  # noqa: UP004
+class _AdmittedRun(object):
     """Validated authoring inputs required for native execution."""
 
     pack_digest: str
@@ -104,7 +104,7 @@ class _AdmittedRun(object):  # noqa: UP004
 
 
 @dataclass(frozen=True)
-class _CompletedRun(object):  # noqa: UP004
+class _CompletedRun(object):
     """Portable records produced by one completed native episode."""
 
     archival: ExperimentRunModel
@@ -1006,16 +1006,17 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         args = _parser().parse_args(argv)
-        return _dispatch(args)
+        result = _dispatch(args)
     except _UsageFailure:
         _emit_error("researcher.usage.invalid", "invalid command line")
-        return EXIT_USAGE
+        result = EXIT_USAGE
     except _CommandFailure as error:
         _emit_error(error.code, error.message)
-        return error.exit_code
+        result = error.exit_code
     except Exception:
         _emit_error("researcher.internal.failure", "internal command failure")
-        return EXIT_INTERNAL
+        result = EXIT_INTERNAL
+    return result
 
 
 if __name__ == "__main__":
