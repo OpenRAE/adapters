@@ -33,6 +33,7 @@ import hashlib
 import json
 import re
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
 from importlib.resources import files
 from typing import NamedTuple, cast
 
@@ -708,29 +709,21 @@ def _protocol_artifact_problems(
 # --------------------------------------------------------------------------- #
 # per-backend binder
 # --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
 class ScenarioLedger:
     """Bind the shared validators to one backend's evidence set.
 
     The binder holds the backend package (for reading checked-in resources), the
-    already-shared qualification/protocol loaders, the default evidence
-    selection, and a callable producing the backend's native-leakage markers.
-    A second case for the same backend is another :class:`EvidenceSelection`
-    passed to these methods, not an edit to this class.
+    already-shared qualification loader, the default evidence selection, and a
+    callable producing the backend's native-leakage markers. A second case for
+    the same backend is another :class:`EvidenceSelection` passed to these
+    methods, not an edit to this class.
     """
 
-    def __init__(
-        self,
-        selection: EvidenceSelection,
-        *,
-        package: str,
-        load_qualification: Callable[[], dict[str, object]],
-        native_markers: Callable[[], set[str]],
-    ) -> None:
-        """Store the backend binding for the shared loaders and validators."""
-        self.selection = selection
-        self.package = package
-        self.load_qualification = load_qualification
-        self._native_markers = native_markers
+    selection: EvidenceSelection
+    package: str
+    load_qualification: Callable[[], dict[str, object]]
+    native_markers: Callable[[], set[str]]
 
     def _select(self, selection: EvidenceSelection | None) -> EvidenceSelection:
         """Return the given selection, or the binder's default."""
@@ -787,7 +780,7 @@ class ScenarioLedger:
 
     def native_identifier_markers(self) -> set[str]:
         """Native markers to reject in portable content, grounded in provenance."""
-        return self._native_markers()
+        return self.native_markers()
 
     def native_leakage_problems(self, portable_texts: Mapping[str, str]) -> list[LedgerProblem]:
         """Return a problem for every native simulator marker in portable content."""
