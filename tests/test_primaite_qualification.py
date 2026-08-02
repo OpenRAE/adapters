@@ -212,4 +212,4 @@ def test_qualification_admits_selected_backend_and_bounds_claim_strength() -> No
     # extras remain independent and unchanged.
     assert extras["primaite"] == []
     assert extras["cyberbattlesim"] == []
-    assert extras["cyborg"] == ["raes-env-packs==3.2.0"]
+    assert extras["cyborg"] == ["raes-env-packs==3.6.2"]

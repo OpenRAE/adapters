@@ -1,8 +1,8 @@
 site_name: RAES Adapters
 site_description: Adapter implementations for reproducible agentic environments.
 site_url: !ENV [READTHEDOCS_CANONICAL_URL, "https://raes-adapters.readthedocs.io/"]
-repo_url: https://github.com/RAESystem/adapters
-repo_name: RAESystem/adapters
+repo_url: https://github.com/OpenRAE/adapters
+repo_name: OpenRAE/adapters
 edit_uri: edit/dev/docs/
 docs_dir: docs
 

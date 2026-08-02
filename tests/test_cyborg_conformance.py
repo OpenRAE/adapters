@@ -367,7 +367,16 @@ def test_suite_refuses_an_unexpected_published_failure(
     report = run_cyborg_conformance(seed=3)
     passing = next(case for case in report.cases if case.passed)
     failed = replace(passing, passed=False, outcome="failed")
-    unexpected = replace(report, cases=(failed,))
+    # raes>=3 validates the report before the suite inspects it: every cited case
+    # must be present and a passing report may not carry a failed case. Keep the
+    # full case set (complete evidence) and mark the report failed so the suite
+    # still refuses it for the genuinely-failed published case, not for an
+    # upstream-invalid payload.
+    unexpected = replace(
+        report,
+        passed=False,
+        cases=tuple(failed if case is passing else case for case in report.cases),
+    )
     monkeypatch.setattr(
         conformance_module,
         "run_cyborg_conformance",

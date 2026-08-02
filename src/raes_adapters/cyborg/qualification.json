@@ -369,7 +369,7 @@
     "python": "3.12.3",
     "requirements_sha256": "a930508faee1766fb685ffa2fdd924121fdd0c056c92144850d20383951ba301",
     "normalized_environment_sha256": "56e2c189d6fd4b195584f34d93f66500b30eba8eedff6fca869ed61a8ab4079a",
-    "uv_lock_sha256": "3710e5ac5b0f81b36295cdfc24236e7b28b55ebd4721788f2accea7e70f4d244",
+    "uv_lock_sha256": "bdfcfa9ce569fa273c9f4943a9af6ad6baa3d72c2b4e71be6a3596229ec06f4e",
     "candidate_resolution": "passed",
     "canonical_lock_disposition": "The current single uv.lock intentionally excludes the unpublished candidate CybORG artifact; the resolved environment is qualification evidence, not a second lockfile."
   },

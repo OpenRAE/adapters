@@ -33,7 +33,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Typing :: Typed",
 ]
-dependencies = ["raes==2.0.0"]
+dependencies = ["raes==3.3.0"]
 
 [project.optional-dependencies]
 # Microsoft publishes the selected CyberBattleSim source but no index or
@@ -52,17 +52,17 @@ primaite = []
 # the documented source-install route because the official CybORG wheel still
 # lacks the qualified packaging-data fix; the command reports that limitation
 # instead of cloning source or advertising an ungoverned wheel.
-cyborg = ["raes-env-packs==3.2.0"]
+cyborg = ["raes-env-packs==3.6.2"]
 
 [project.scripts]
 raes-adapters = "raes_adapters.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/RAESystem/adapters"
+Homepage = "https://github.com/OpenRAE/adapters"
 Documentation = "https://raes-adapters.readthedocs.io"
-Repository = "https://github.com/RAESystem/adapters"
-Issues = "https://github.com/RAESystem/adapters/issues"
-Changelog = "https://github.com/RAESystem/adapters/blob/main/CHANGELOG.md"
+Repository = "https://github.com/OpenRAE/adapters"
+Issues = "https://github.com/OpenRAE/adapters/issues"
+Changelog = "https://github.com/OpenRAE/adapters/blob/main/CHANGELOG.md"
 
 [build-system]
 requires = ["hatchling"]

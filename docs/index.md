@@ -17,9 +17,9 @@ semantic and protocol authority.
 
 ## Start here
 
-- [Repository overview](https://github.com/RAESystem/adapters#readme)
+- [Repository overview](https://github.com/OpenRAE/adapters#readme)
 - [Installed researcher command](researcher-command.md)
-- [Contribution guide](https://github.com/RAESystem/adapters/blob/dev/CONTRIBUTING.md)
+- [Contribution guide](https://github.com/OpenRAE/adapters/blob/dev/CONTRIBUTING.md)
 - [Architecture decisions](decisions/adrs/README.md)
 - [CybORG/CAGE-2 backend qualification guardrails](decisions/cyborg-cage2-runtime-qualification-guardrails.md)
 - [CybORG/CAGE-2 source-ledger guardrails](decisions/cyborg-cage2-source-ledger-guardrails.md)
