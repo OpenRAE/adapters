@@ -1,0 +1,503 @@
+name: primaite-data-manipulation
+version: "1.0.0"
+description: >-
+  Portable RAES model of the selected PrimAITE data_manipulation case
+  (ARCD PrimAITE v4.0.0 @ 98617981, use case data_manipulation.yaml). It encodes
+  the fixed two-subnet enterprise laydown - an office LAN of servers (directory /
+  DNS, web, database holding the protected data asset, backup, and a monitoring
+  host) bridged by a perimeter router to an endpoint LAN of two workstations -
+  and the actor roles: a scripted red data-manipulation adversary that corrupts
+  the database data asset, two green workforce users driving legitimate web and
+  database workload, and a blue defender that scans, remediates, and network-
+  controls the estate. Topology and objective truth only; numeric reward,
+  evaluator, fixed-horizon termination, and stochastic controls live in the
+  companion published experiment contracts, and native simulator state
+  (Discrete(78) action ids, the flattened Box(1652) observation, NMNE counts,
+  and traffic payloads) stays source-private.
+
+infrastructure:
+  office-switch:
+    count: 1
+    description: "Office server LAN fabric (PrimAITE switch_1 subnet)."
+    properties:
+      cidr: "192.168.1.0/24"
+      gateway: "192.168.1.1"
+  endpoint-switch:
+    count: 1
+    description: "Endpoint workstation LAN fabric (PrimAITE switch_2 subnet)."
+    properties:
+      cidr: "192.168.10.0/24"
+      gateway: "192.168.10.1"
+
+nodes:
+  perimeter-router:
+    type: switch
+    description: >-
+      Routing and firewall device bridging the office and endpoint subnets;
+      its baseline permit ACL and blue-editable rules gate inter-subnet traffic.
+  office-switch:
+    type: switch
+    description: "Office server LAN switch."
+  endpoint-switch:
+    type: switch
+    description: "Endpoint workstation LAN switch."
+  directory-server:
+    type: vm
+    description: "Directory host serving authoritative DNS for the estate domain."
+    os: linux
+    services:
+      - port: 53
+        protocol: udp
+        name: dns
+        description: "Authoritative DNS resolving the estate web domain."
+    asset_value:
+      confidentiality: medium
+      integrity: medium
+      availability: medium
+  web-host:
+    type: vm
+    description: "Web application host green users browse; also a database client."
+    os: linux
+    services:
+      - port: 80
+        protocol: tcp
+        name: http
+        description: "Public web application service."
+    asset_value:
+      confidentiality: low
+      integrity: medium
+      availability: high
+  database-host:
+    type: vm
+    description: >-
+      Database host holding the protected data asset that red corrupts and blue
+      keeps intact and reachable.
+    os: linux
+    services:
+      - port: 5432
+        protocol: tcp
+        name: postgres
+        description: "Relational database service holding the protected data asset."
+    asset_value:
+      confidentiality: high
+      integrity: critical
+      availability: high
+  backup-host:
+    type: vm
+    description: "Backup host offering file transfer for database restore."
+    os: linux
+    services:
+      - port: 21
+        protocol: tcp
+        name: ftp
+        description: "File transfer service backing the database restore path."
+    asset_value:
+      confidentiality: medium
+      integrity: high
+      availability: medium
+  monitoring-host:
+    type: vm
+    description: "Security monitoring host spanning both subnets."
+    os: linux
+    asset_value:
+      confidentiality: medium
+      integrity: medium
+      availability: medium
+  workstation-a:
+    type: vm
+    description: "Endpoint workstation; a possible red foothold and a green workload source."
+    os: linux
+    asset_value:
+      confidentiality: low
+      integrity: low
+      availability: medium
+  workstation-b:
+    type: vm
+    description: "Endpoint workstation; a possible red foothold and a green workload source."
+    os: linux
+    asset_value:
+      confidentiality: low
+      integrity: low
+      availability: medium
+
+relationships:
+  office-uplink:
+    type: connects_to
+    source: office-switch
+    target: perimeter-router
+    description: "Office LAN uplink to the perimeter router."
+  endpoint-uplink:
+    type: connects_to
+    source: endpoint-switch
+    target: perimeter-router
+    description: "Endpoint LAN uplink to the perimeter router."
+  directory-attach:
+    type: connects_to
+    source: directory-server
+    target: office-switch
+    description: "Directory host attachment to the office LAN."
+  web-attach:
+    type: connects_to
+    source: web-host
+    target: office-switch
+    description: "Web host attachment to the office LAN."
+  database-attach:
+    type: connects_to
+    source: database-host
+    target: office-switch
+    description: "Database host attachment to the office LAN."
+  backup-attach:
+    type: connects_to
+    source: backup-host
+    target: office-switch
+    description: "Backup host attachment to the office LAN."
+  monitor-office-attach:
+    type: connects_to
+    source: monitoring-host
+    target: office-switch
+    description: "Monitoring host office-side attachment."
+  monitor-endpoint-attach:
+    type: connects_to
+    source: monitoring-host
+    target: endpoint-switch
+    description: "Monitoring host endpoint-side attachment (second interface)."
+  workstation-a-attach:
+    type: connects_to
+    source: workstation-a
+    target: endpoint-switch
+    description: "Workstation A attachment to the endpoint LAN."
+  workstation-b-attach:
+    type: connects_to
+    source: workstation-b
+    target: endpoint-switch
+    description: "Workstation B attachment to the endpoint LAN."
+
+entities:
+  red-adversary:
+    description: "Scripted data-manipulation attacker corrupting the database data asset."
+    role: red
+  blue-defence:
+    description: "Blue defender preserving data-asset integrity and service availability."
+    role: blue
+  green-workforce:
+    description: "Legitimate workforce users driving web and database workload."
+    role: green
+
+action_contracts:
+  service-control:
+    semantic_version: "1.0.0"
+    behavioral_granularity: procedure
+    procedure_basis: "PrimAITE blue node-service scan/stop/start/pause/resume/restart/disable/enable actions."
+    realization_profile: "portable-scenario/v1"
+    fidelity_claim: "abstract portable projection of the source service-control actions."
+    preconditions:
+      - precondition_id: pre-service-authority
+        precondition_class: authority
+        description: "Defender is authorized to manage the target host service."
+    effects:
+      - effect_id: eff-service-state
+        effect_class: intended_effect
+        description: "The target service is scanned or moved to a requested lifecycle state."
+        target_refs:
+          - web-host
+    failure_classes:
+      - target_unavailable
+      - unsupported_action
+  data-integrity-remediation:
+    semantic_version: "1.0.0"
+    behavioral_granularity: procedure
+    procedure_basis: "PrimAITE blue node-file/node-folder scan, repair, restore, and delete actions on the data asset."
+    realization_profile: "portable-scenario/v1"
+    fidelity_claim: "abstract portable projection of the source data-asset remediation actions."
+    preconditions:
+      - precondition_id: pre-integrity-detected
+        precondition_class: interaction
+        description: "Defender detects a data-asset integrity change to remediate."
+    effects:
+      - effect_id: eff-restore-integrity
+        effect_class: intended_effect
+        description: "The protected data asset is scanned, repaired, or restored."
+        target_refs:
+          - database-host
+    failure_classes:
+      - target_unavailable
+      - unsupported_action
+  node-lifecycle:
+    semantic_version: "1.0.0"
+    behavioral_granularity: procedure
+    procedure_basis: "PrimAITE blue node os-scan, shutdown, startup, and reset actions."
+    realization_profile: "portable-scenario/v1"
+    fidelity_claim: "abstract portable projection of the source node lifecycle actions."
+    preconditions:
+      - precondition_id: pre-node-authority
+        precondition_class: authority
+        description: "Defender is authorized to change the target host power/OS state."
+    effects:
+      - effect_id: eff-node-state
+        effect_class: intended_effect
+        description: "The target host is scanned or moved to a requested power state."
+        target_refs:
+          - database-host
+    failure_classes:
+      - target_unavailable
+      - unsupported_action
+  network-access-control:
+    semantic_version: "1.0.0"
+    behavioral_granularity: procedure
+    procedure_basis: "PrimAITE blue router-acl add-rule and remove-rule actions at the perimeter router."
+    realization_profile: "portable-scenario/v1"
+    fidelity_claim: "abstract portable projection of the source firewall-rule actions."
+    preconditions:
+      - precondition_id: pre-acl-authority
+        precondition_class: authority
+        description: "Defender is authorized to edit the perimeter router access-control policy."
+    effects:
+      - effect_id: eff-access-rule
+        effect_class: intended_effect
+        description: "A reachability rule is added to or removed from the perimeter router."
+        target_refs:
+          - perimeter-router
+    failure_classes:
+      - unsupported_action
+      - authority_denied
+  interface-control:
+    semantic_version: "1.0.0"
+    behavioral_granularity: procedure
+    procedure_basis: "PrimAITE blue host-nic disable and enable actions."
+    realization_profile: "portable-scenario/v1"
+    fidelity_claim: "abstract portable projection of the source interface-control actions."
+    preconditions:
+      - precondition_id: pre-nic-authority
+        precondition_class: authority
+        description: "Defender is authorized to toggle the target host interface."
+    effects:
+      - effect_id: eff-interface-state
+        effect_class: intended_effect
+        description: "A target host network interface is enabled or disabled."
+        target_refs:
+          - monitoring-host
+    failure_classes:
+      - target_unavailable
+      - unsupported_action
+  data-manipulation:
+    semantic_version: "1.0.0"
+    behavioral_granularity: atomic
+    procedure_basis: "PrimAITE red data-manipulation bot corrupting the database data asset."
+    realization_profile: "portable-scenario/v1"
+    fidelity_claim: "abstract portable projection of the source data-corruption action."
+    preconditions:
+      - precondition_id: pre-database-reachable
+        precondition_class: target
+        description: "The database data asset is reachable from the red foothold."
+    effects:
+      - effect_id: eff-corrupt-data
+        effect_class: intended_effect
+        description: "The protected data asset is corrupted, breaking its integrity."
+        target_refs:
+          - database-host
+    failure_classes:
+      - target_unavailable
+      - authority_denied
+  green-workload:
+    semantic_version: "1.0.0"
+    behavioral_granularity: procedure
+    procedure_basis: "PrimAITE green probabilistic web-browser and database-client workload."
+    realization_profile: "portable-scenario/v1"
+    fidelity_claim: "abstract portable projection of the source legitimate workload."
+    preconditions:
+      - precondition_id: pre-service-available
+        precondition_class: interaction
+        description: "The web and database services are available to the workforce user."
+    effects:
+      - effect_id: eff-consume-service
+        effect_class: intended_effect
+        description: "A workforce user exercises the web and database services."
+        target_refs:
+          - web-host
+    failure_classes:
+      - target_unavailable
+
+observation_boundaries:
+  defender-view:
+    projection_basis: "Blue node and link status plus network-monitoring detection over both subnets."
+    redaction_policy: "Native flattened observation vector, action mask, and raw NMNE counts stay source-private."
+    latency_profile: "per-step"
+    observable_refs:
+      - office-switch
+      - endpoint-switch
+  adversary-view:
+    projection_basis: "Red local view from its foothold workstation."
+    redaction_policy: "Native discovered application and host state stays source-private."
+    latency_profile: "per-step"
+    observable_refs:
+      - workstation-a
+  workforce-view:
+    projection_basis: "Green user local application view of web and database access."
+    redaction_policy: "Native application state stays source-private."
+    latency_profile: "per-step"
+    observable_refs:
+      - workstation-b
+
+propositions:
+  data-integrity-maintained:
+    description: "The protected database data asset retains its integrity."
+    subjects:
+      - database-host
+    basis: declared_state
+    predicate:
+      kind: boolean
+      property: integrity.data_asset_maintained
+      semantic_ref: "urn:raes:primaite:data-integrity"
+      operator: equals
+      expected: true
+  web-service-available:
+    description: "The web application service is available to workforce users."
+    subjects:
+      - web-host
+    basis: declared_state
+    predicate:
+      kind: boolean
+      property: availability.web_service
+      semantic_ref: "urn:raes:primaite:web-availability"
+      operator: equals
+      expected: true
+  database-reachable:
+    description: "The database service is reachable by legitimate workforce users."
+    subjects:
+      - database-host
+    basis: declared_state
+    predicate:
+      kind: boolean
+      property: availability.database_reachable
+      semantic_ref: "urn:raes:primaite:database-availability"
+      operator: equals
+      expected: true
+
+assertions:
+  integrity-invariant:
+    description: "Data-asset integrity holds throughout the episode."
+    proposition: data-integrity-maintained
+    role: invariant
+    polarity: positive
+  integrity-breach-postcondition:
+    description: "Red breaks data-asset integrity."
+    proposition: data-integrity-maintained
+    role: postcondition
+    polarity: negative
+  web-availability-invariant:
+    description: "Web service availability holds throughout the episode."
+    proposition: web-service-available
+    role: invariant
+    polarity: positive
+  database-availability-invariant:
+    description: "Database reachability for workforce users holds throughout the episode."
+    proposition: database-reachable
+    role: invariant
+    polarity: positive
+
+objectives:
+  corrupt-data:
+    description: "Red corrupts the protected database data asset."
+    agent: red-attacker
+    actions:
+      - data-manipulation
+    targets:
+      - database-host
+    success:
+      mode: all_of
+      assertions:
+        - integrity-breach-postcondition
+  preserve-data-services:
+    description: "Blue preserves data-asset integrity and keeps web and database services available."
+    entity: blue-defence
+    targets:
+      - database-host
+      - web-host
+    success:
+      mode: all_of
+      assertions:
+        - integrity-invariant
+        - web-availability-invariant
+        - database-availability-invariant
+
+agents:
+  blue-defender:
+    entity: blue-defence
+    description: "Proxy-agent blue defender over the estate control actions."
+    actions:
+      - service-control
+      - data-integrity-remediation
+      - node-lifecycle
+      - network-access-control
+      - interface-control
+    observation_boundaries:
+      - defender-view
+    allowed_subnets:
+      - office-switch
+      - endpoint-switch
+  red-attacker:
+    entity: red-adversary
+    description: "Scripted data-manipulation adversary from an endpoint foothold."
+    actions:
+      - data-manipulation
+    initial_knowledge:
+      hosts:
+        - workstation-a
+        - workstation-b
+    observation_boundaries:
+      - adversary-view
+    allowed_subnets:
+      - endpoint-switch
+  green-user-a:
+    entity: green-workforce
+    description: "Probabilistic workforce user on workstation A."
+    actions:
+      - green-workload
+    observation_boundaries:
+      - workforce-view
+    allowed_subnets:
+      - endpoint-switch
+  green-user-b:
+    entity: green-workforce
+    description: "Probabilistic workforce user on workstation B."
+    actions:
+      - green-workload
+    observation_boundaries:
+      - workforce-view
+    allowed_subnets:
+      - endpoint-switch
+
+evidence_requirements:
+  blue-action-log:
+    description: "Portable record of blue action outcomes for adjudication."
+    source_class: participant_action
+    scope: "blue actions across the estate"
+    window: "full episode"
+    channel: log
+    sensitivity: redacted
+    redaction: redact_secrets
+    integrity: checksum
+    retention: run_lifetime
+    loss_disclosure: best_effort
+  data-integrity-series:
+    description: "Portable record of per-step data-asset integrity state."
+    source_class: scenario_state
+    scope: "database data-asset integrity over the episode"
+    window: "per-step"
+    channel: metric
+    sensitivity: plain
+    redaction: none
+    integrity: checksum
+    retention: run_lifetime
+    loss_disclosure: best_effort
+  service-availability-series:
+    description: "Portable record of per-step web and database service availability."
+    source_class: scenario_state
+    scope: "web and database availability over the episode"
+    window: "per-step"
+    channel: metric
+    sensitivity: plain
+    redaction: none
+    integrity: checksum
+    retention: run_lifetime
+    loss_disclosure: best_effort

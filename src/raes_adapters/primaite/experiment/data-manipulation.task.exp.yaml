@@ -1,0 +1,148 @@
+schema_version: experiment-task/v1
+task_id: primaite-data-manipulation-task
+task_version: 1.0.0
+title: PrimAITE data_manipulation blue-defence evaluation task
+description: >-
+  Published evaluation-protocol contract for the selected public PrimAITE case
+  (data_manipulation.yaml, RL-controlled BLUE proxy-agent defender, scripted RED
+  data-manipulation attacker, two probabilistic GREEN users). Carries the
+  reward, metric, and evaluator intent that RAES SDL deliberately excludes.
+  Native Discrete(78) action ids, the flattened Box(1652) observation, per-step
+  reward vectors, NMNE counts, and info dicts remain source-private; only bounded
+  measure definitions are portable.
+scenario_ref:
+  ref_kind: scenario-snapshot
+  ref_id: primaite-data-manipulation
+  ref_digest: sha256:8f4c20885bbc3822587b38dc6c76c77915ecd225a2d753e54a1819c8370c80da
+  ref_path: scenario/data-manipulation.sdl.yaml
+evaluation_protocol:
+  protocol_id: primaite-data-manipulation-protocol
+  protocol_version: 1.0.0
+  intent: >-
+    Measure blue reward, data-asset integrity, service availability, and terminal
+    cause for the selected admitted public protocol over its fixed 128-step
+    horizon, without asserting deterministic replay or outcome equivalence.
+  unit_of_analysis: episode
+  metric_definitions:
+    steps_to_truncation:
+      metric_id: steps_to_truncation
+      metric_version: 1.0.0
+      name: Steps to truncation
+      measured_construct: >-
+        Steps to fixed-horizon truncation. terminated() is hardcoded false, so
+        the episode ends only when step_counter reaches max_episode_length 128.
+      unit_of_analysis: episode
+      value_kind: count
+      direction: descriptive
+      evidence_requirements:
+        - ref_kind: evidence
+          ref_id: blue-action-log
+    cumulative_blue_reward:
+      metric_id: cumulative_blue_reward
+      metric_version: 1.0.0
+      name: Cumulative blue reward
+      measured_construct: >-
+        Per-episode cumulative BLUE reward. The source reward sums a
+        database-file-integrity component (weight 0.40) and the two shared GREEN
+        rewards; the observed do-nothing baseline cumulative is -57.05. This is
+        an evaluator signal, not an SDL objective score or equivalence claim.
+      unit_of_analysis: episode
+      value_kind: number
+      direction: higher-is-better
+      evidence_requirements:
+        - ref_kind: evidence
+          ref_id: blue-action-log
+    data_asset_integrity:
+      metric_id: data_asset_integrity
+      metric_version: 1.0.0
+      name: Data-asset integrity
+      measured_construct: >-
+        Per-step integrity state of the protected database data asset that RED
+        corrupts and BLUE repairs or restores; reported as a bounded scalar
+        series, never the native file contents.
+      unit_of_analysis: episode
+      value_kind: number
+      direction: target
+      evidence_requirements:
+        - ref_kind: evidence
+          ref_id: data-integrity-series
+    green_service_penalty:
+      metric_id: green_service_penalty
+      metric_version: 1.0.0
+      name: Green service penalty
+      measured_construct: >-
+        Per-episode GREEN penalty aggregating the webpage-unavailable (weight
+        0.25) and green-admin-database-unreachable (weight 0.05) components; a
+        proxy for workforce-visible web and database availability.
+      unit_of_analysis: episode
+      value_kind: number
+      direction: lower-is-better
+      evidence_requirements:
+        - ref_kind: evidence
+          ref_id: service-availability-series
+    terminal_cause:
+      metric_id: terminal_cause
+      metric_version: 1.0.0
+      name: Terminal cause
+      measured_construct: >-
+        Reconstructed terminal cause. This scenario exposes only
+        fixed-horizon-truncation; goal satisfaction, reward thresholds, and Gym
+        terminated stay distinct and are absent here.
+      unit_of_analysis: episode
+      value_kind: category
+      direction: descriptive
+      evidence_requirements:
+        - ref_kind: evidence
+          ref_id: blue-action-log
+  observation_requirements:
+    - ref_kind: evidence
+      ref_id: blue-action-log
+    - ref_kind: evidence
+      ref_id: data-integrity-series
+    - ref_kind: evidence
+      ref_id: service-availability-series
+intended_use: >-
+  Define the portable evaluation protocol for the selected public PrimAITE case
+  so an attested run can be scored consistently.
+population_or_construct: >-
+  A single RL-controlled blue defender against a scripted data-manipulation
+  attacker and two probabilistic green users on the fixed data_manipulation
+  topology.
+split_and_leakage_controls:
+  partitioning_strategy: >-
+    Single held-out public protocol run at the pinned commit; no historical
+    benchmark snapshot is combined with the selected source.
+apparatus_constraints:
+  notes:
+    - >-
+      The maintainer-selected profile is admitted. No index/release artifact, a
+      broken light-route seed seam, an unpinned dependency graph, and Python
+      support inconsistency limit installability, deterministic-replay, and
+      outcome claims.
+validity_notes:
+  - category: construct
+    note: >-
+      Cumulative reward is an evaluator signal, not the study metric; the BLUE
+      reward blends data-asset integrity with the two shared GREEN rewards.
+  - category: internal
+    note: >-
+      set_random_seed dereferences torch unconditionally, so the public
+      reset(seed=...) seam raises KeyError on the light route, and each GREEN
+      ProbabilisticAgent seeds from the uncontrolled global NumPy generator, so
+      no run under this protocol is a deterministic replay.
+  - category: external
+    note: >-
+      terminated() is hardcoded false, so only fixed-horizon truncation ends an
+      episode; there is no source-native success/failure terminal to compare.
+artifact_refs:
+  - artifact_id: primaite-public-protocol
+    role: protocol
+    media_type: text/markdown
+    uri: file://public-protocol.md
+    checksum:
+      algorithm: sha256
+      value: 90b116ab86f3623fe5237b65500176cb4e46c71ee66ec6f849be0e02adee552e
+    size_bytes: 7517
+    created_at: "2026-08-02T00:00:00Z"
+    source: RAESystem/adapters#39 qualification
+    sensitivity: public
