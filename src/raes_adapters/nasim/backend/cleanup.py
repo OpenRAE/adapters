@@ -14,7 +14,7 @@ from raes_contracts.contracts.trial_cleanup import (  # type: ignore[import-unty
     TrialOutcome,
 )
 
-from raes_adapters._gym_backend.cleanup import execute_gym_cleanup
+from raes_adapters._gym_backend.cleanup import CleanupExecution, execute_gym_cleanup
 
 from .driver import NasimDriverProtocol
 
@@ -36,10 +36,12 @@ def execute_nasim_cleanup(
         manifest,
         driver,
         "nasim",
-        receipt_id=receipt_id,
-        execution_attempt_id=execution_attempt_id,
-        trial_outcome=trial_outcome,
-        clean_state_claim=clean_state_claim,
+        CleanupExecution(
+            receipt_id=receipt_id,
+            execution_attempt_id=execution_attempt_id,
+            trial_outcome=trial_outcome,
+            clean_state_claim=clean_state_claim,
+        ),
     )
 
 

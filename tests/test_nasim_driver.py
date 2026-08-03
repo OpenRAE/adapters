@@ -286,15 +286,18 @@ def test_live_driver_isolates_numpy_and_maps_goal_termination(
 
     scan = driver.step("service-discovery", "provision.node.host-1-0")
     assert environment.stepped == [0]  # first ServiceScan
-    assert scan.source_transition and scan.processed
+    assert scan.source_transition
+    assert scan.processed
     assert scan.step_number == 1
-    assert scan.terminated is False and scan.truncated is False
+    assert scan.terminated is False
+    assert scan.truncated is False
     assert scan.terminal_cause is None
     assert numpy.random.state == ("caller-owned",)
 
     exploit = driver.step("service-exploit", "provision.node.host-3-0")
     assert environment.stepped == [0, 2]  # the Exploit targeting (3, 0)
-    assert exploit.terminated is True and exploit.truncated is False
+    assert exploit.terminated is True
+    assert exploit.truncated is False
     assert exploit.terminal_cause == "goal"
 
     evaluation = driver.evaluate()
@@ -310,8 +313,10 @@ def test_live_driver_isolates_numpy_and_maps_goal_termination(
 
     first_close = driver.close()
     second_close = driver.close()
-    assert first_close.verified and not first_close.already_closed
-    assert second_close.verified and second_close.already_closed
+    assert first_close.verified
+    assert not first_close.already_closed
+    assert second_close.verified
+    assert second_close.already_closed
     assert environment.close_calls == 1
 
 
@@ -327,7 +332,8 @@ def test_live_driver_maps_step_limit_truncation(
     driver.reset(20260802)
     step = driver.step("subnet-discovery")
 
-    assert step.terminated is False and step.truncated is True
+    assert step.terminated is False
+    assert step.truncated is True
     assert step.terminal_cause == "step-limit"
 
 

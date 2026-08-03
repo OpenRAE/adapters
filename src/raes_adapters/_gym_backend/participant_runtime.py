@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
 
@@ -84,30 +85,37 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
+@dataclass(frozen=True)
+class GymParticipantConfig(object):
+    """Backend identities the participant runtime fills into RAES contracts."""
+
+    name: str
+    action_kind_by_contract: Mapping[str, str]
+    redacted_observation_fields: Sequence[str]
+    redacted_field_refs: Sequence[str]
+
+
 class GymParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
     """Bind RAES participant lifecycle to exactly one serialized source action."""
 
     def __init__(
         self,
+        config: GymParticipantConfig,
         *,
-        name: str,
         reset_driver: Callable[[int | None], ResetFacts],
         drive_step: Callable[[str, ParticipantActionAdmissionRequest], StepFacts],
         terminal_reason: Callable[[StepFacts], ParticipantEpisodeTerminalReason],
-        action_kind_by_contract: dict[str, str],
-        redacted_observation_fields: Sequence[str],
-        redacted_field_refs: Sequence[str],
         seed: int | None = None,
     ) -> None:
         super().__init__()
-        self._name = name
+        self._name = config.name
         self._reset_driver = reset_driver
         self._drive_step = drive_step
         self._terminal_reason = terminal_reason
-        self._action_kind_by_contract = dict(action_kind_by_contract)
-        self._redacted_observation_fields = list(redacted_observation_fields)
-        self._redacted_field_refs = list(redacted_field_refs)
-        self._action_evidence_ref = f"evidence.{name}.attacker-action"
+        self._action_kind_by_contract = dict(config.action_kind_by_contract)
+        self._redacted_observation_fields = list(config.redacted_observation_fields)
+        self._redacted_field_refs = list(config.redacted_field_refs)
+        self._action_evidence_ref = f"evidence.{config.name}.attacker-action"
         self._seed = seed
         self._observations: dict[str, list[ParticipantObservationEnvelopeModel]] = {}
         self._driver_operation_refs: dict[str, str] = {}
@@ -457,4 +465,4 @@ class GymParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
         return self._driver_operation_refs.get(action_instance_id)
 
 
-__all__ = ["GymParticipantRuntime", "ResetFacts", "StepFacts"]
+__all__ = ["GymParticipantConfig", "GymParticipantRuntime", "ResetFacts", "StepFacts"]

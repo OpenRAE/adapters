@@ -10,6 +10,7 @@ from raes_contracts.participant_episode import (  # type: ignore[import-untyped]
 )
 
 from raes_adapters._gym_backend.participant_runtime import (
+    GymParticipantConfig,
     GymParticipantRuntime,
     StepFacts,
 )
@@ -63,13 +64,15 @@ class NasimParticipantRuntime(GymParticipantRuntime):
         seed: int | None = None,
     ) -> None:
         super().__init__(
-            name="nasim",
+            GymParticipantConfig(
+                name="nasim",
+                action_kind_by_contract=_ACTION_KIND_BY_CONTRACT,
+                redacted_observation_fields=_REDACTED_OBSERVATION_FIELDS,
+                redacted_field_refs=_REDACTED_FIELD_REFS,
+            ),
             reset_driver=driver.reset,
             drive_step=lambda action_kind, request: driver.step(action_kind, _target_ref(request)),
             terminal_reason=_terminal_reason,
-            action_kind_by_contract=_ACTION_KIND_BY_CONTRACT,
-            redacted_observation_fields=_REDACTED_OBSERVATION_FIELDS,
-            redacted_field_refs=_REDACTED_FIELD_REFS,
             seed=seed,
         )
 

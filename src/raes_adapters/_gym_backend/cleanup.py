@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from functools import partial
 from typing import Protocol
 
@@ -118,16 +119,22 @@ def _perform(
     )
 
 
+@dataclass(frozen=True)
+class CleanupExecution(object):
+    """The per-attempt receipt identity and outcome for one cleanup run."""
+
+    receipt_id: str
+    execution_attempt_id: str
+    trial_outcome: TrialOutcome
+    clean_state_claim: CleanStateClaimModel | None = None
+
+
 def execute_gym_cleanup(
     plan: TrialCleanupPlanModel,
     manifest: BackendManifest,
     driver: _CleanupDriver,
     name: str,
-    *,
-    receipt_id: str,
-    execution_attempt_id: str,
-    trial_outcome: TrialOutcome,
-    clean_state_claim: CleanStateClaimModel | None = None,
+    execution: CleanupExecution,
 ) -> TrialCleanupReceiptModel:
     """Execute one admitted cleanup plan without exposing native failures."""
 
@@ -137,11 +144,11 @@ def execute_gym_cleanup(
         manifest,
         operations,
         failure_result=partial(_result, name, status="failed", disposition="failed"),
-        receipt_id=receipt_id,
-        execution_attempt_id=execution_attempt_id,
-        trial_outcome=trial_outcome,
-        clean_state_claim=clean_state_claim,
+        receipt_id=execution.receipt_id,
+        execution_attempt_id=execution.execution_attempt_id,
+        trial_outcome=execution.trial_outcome,
+        clean_state_claim=execution.clean_state_claim,
     )
 
 
-__all__ = ["execute_gym_cleanup"]
+__all__ = ["CleanupExecution", "execute_gym_cleanup"]

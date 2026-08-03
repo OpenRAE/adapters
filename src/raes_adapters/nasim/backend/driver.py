@@ -414,8 +414,8 @@ class NasimDriver(object):
             return "step-limit"
         return None
 
+    @staticmethod
     def _resolve_native_action(
-        self,
         environment: _NativeEnvironment,
         action_kind: str,
         target_ref: str | None,
