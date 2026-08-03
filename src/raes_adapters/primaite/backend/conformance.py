@@ -3,24 +3,27 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import cast
 
 from raes_backend_protocols.backend_manifest import (  # type: ignore[import-untyped]
     BackendManifest,
 )
+from raes_backend_protocols.manifest import (  # type: ignore[import-untyped]
+    backend_manifest_payload,
+)
 from raes_conformance.conformance import (  # type: ignore[import-untyped]
     BackendConformanceReport,
+)
+from raes_conformance.conformance.report import (  # type: ignore[import-untyped]
+    backend_conformance_report_payload,
 )
 from raes_contracts.diagnostics import (  # type: ignore[import-untyped]
     Diagnostic,
     Severity,
 )
 
+from raes_adapters._conformance_support import affirmative_capability_pointers
 from raes_adapters.base import run_conformance_probe
-from raes_adapters.base.manifest_evidence import (
-    affirmative_capability_pointers,
-    backend_conformance_payload,
-    manifest_payload,
-)
 from raes_adapters.primaite import load_qualification
 from raes_adapters.primaite.scenario_ledger import (
     DATA_MANIPULATION,
@@ -50,7 +53,7 @@ def primaite_backend_conformance_payload(
 ) -> dict[str, object]:
     """Serialize the canonical report through the published RAES projector."""
 
-    return backend_conformance_payload(report)
+    return cast(dict[str, object], backend_conformance_report_payload(report))
 
 
 def primaite_manifest_capability_evidence(
@@ -84,9 +87,15 @@ def primaite_manifest_capability_evidence_gaps(
     path.
     """
 
-    return affirmative_capability_pointers(
-        manifest_payload(manifest, payload, create_primaite_manifest)
+    resolved = (
+        payload
+        if payload is not None
+        else cast(
+            Mapping[str, object],
+            backend_manifest_payload(manifest or create_primaite_manifest()),
+        )
     )
+    return affirmative_capability_pointers(resolved)
 
 
 def primaite_declared_weaknesses(

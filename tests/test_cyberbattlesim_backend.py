@@ -13,23 +13,12 @@ import pytest
 from raes_backend_protocols.backend_manifest import BackendManifest
 from raes_backend_protocols.manifest import backend_manifest_v2_model
 from raes_contracts.contracts import (
-    ApparatusIdentityModel,
-    CleanStateRequirementModel,
-    CleanupObligationModel,
-    CleanupResourceBoundaryModel,
-    ExecutionRetryPolicyModel,
     ExperimentCaptureSpecModel,
     ExperimentDerivedMeasureModel,
     ExperimentEvidenceRecordModel,
     ParticipantActionResultModel,
-    ParticipantExposurePolicyModel,
-    ParticipantImplementationCapabilitiesModel,
-    ParticipantImplementationCompatibilityModel,
-    ParticipantImplementationManifestModel,
-    ParticipantImplementationSelectionModel,
     TrialCleanupPlanModel,
 )
-from raes_contracts.participant_action_arguments import ParticipantValidatedActionSelection
 from raes_contracts.participant_binding import ParticipantActionAdmissionRequest
 from raes_contracts.participant_episode import (
     ParticipantEpisodeInitializeRequest,
@@ -65,6 +54,7 @@ from raes_adapters.cyberbattlesim.backend import (
     create_cyberbattlesim_target,
     execute_cyberbattlesim_cleanup,
 )
+from tests._gym_fixtures import GymFixtureConfig, action_request, cleanup_plan
 
 PARTICIPANT = "participant.behavior.attacker"
 OBSERVATION_BOUNDARY = "participant.observation-boundary.attacker-view"
@@ -155,57 +145,15 @@ class FakeDriver:
         return self.closed
 
 
-def _participant_manifest() -> ParticipantImplementationManifestModel:
-    contracts = [
-        "participant-implementation-manifest-v1",
-        "participant-implementation-provenance-v1",
-        "participant-episode-state-envelope-v1",
-        "participant-episode-history-event-stream-v1",
-        "participant-behavior-history-event-stream-v1",
-        "participant-decision-surface-v2",
-    ]
-    return ParticipantImplementationManifestModel(
-        identity=ApparatusIdentityModel(
-            name="cyberbattlesim-credential-cache-policy",
-            version="1.0.0",
-        ),
-        implementation_kind="policy",
-        supported_contract_versions=contracts,
-        compatibility=ParticipantImplementationCompatibilityModel(
-            participant_runtimes=["cyberbattlesim-participant-runtime"],
-            backends=[CYBERBATTLESIM_BACKEND_NAME],
-        ),
-        concept_bindings=[
-            {"scope": "implementation_kind", "family": "apparatus-declarations"},
-            {
-                "scope": "capabilities.supported_participant_contracts",
-                "family": "apparatus-declarations",
-            },
-            {
-                "scope": "capabilities.supported_decision_surface_modes",
-                "family": "apparatus-declarations",
-            },
-            {
-                "scope": "capabilities.tool_affordance_expectations",
-                "family": "tools-and-artifacts",
-            },
-            {
-                "scope": "capabilities.exposure_policy_kinds",
-                "family": "provenance-and-evidence",
-            },
-        ],
-        capabilities=ParticipantImplementationCapabilitiesModel(
-            supported_participant_contracts=[
-                "participant-episode-state-envelope-v1",
-                "participant-episode-history-event-stream-v1",
-                "participant-behavior-history-event-stream-v1",
-                "participant-decision-surface-v2",
-            ],
-            supported_decision_surface_modes=["policy-directed"],
-            tool_affordance_expectations=["credential-store"],
-            exposure_policy_kinds=["hidden-truth", "observation-stream"],
-        ),
-    )
+_CONFIG = GymFixtureConfig(
+    name="cyberbattlesim",
+    backend_name=CYBERBATTLESIM_BACKEND_NAME,
+    participant_address=PARTICIPANT,
+    observation_boundary=OBSERVATION_BOUNDARY,
+    action_evidence_ref=ACTION_EVIDENCE_REF,
+    implementation_name="cyberbattlesim-credential-cache-policy",
+    participant_runtime_name="cyberbattlesim-participant-runtime",
+)
 
 
 def _action_request(
@@ -213,99 +161,19 @@ def _action_request(
     *,
     action_instance_id: str = "action-1",
     disclose_action_evidence: bool = True,
+    target_addresses: tuple[str, ...] = ("provision.node.entry-client",),
 ) -> ParticipantActionAdmissionRequest:
-    manifest = _participant_manifest()
-    exposure_policy = ParticipantExposurePolicyModel(
-        policy_id="cyberbattlesim-attacker-view",
-        exposure_policy_kinds=["hidden-truth", "observation-stream"],
-        disclosed_refs=[OBSERVATION_BOUNDARY],
-        withheld_refs=["evidence.cyberbattlesim.hidden-world"],
-        visibility_scope_refs=[PARTICIPANT],
-    )
-    selection = ParticipantImplementationSelectionModel(
-        participant_address=PARTICIPANT,
-        implementation_identity=manifest.identity,
-        manifest_ref="manifest.cyberbattlesim.credential-cache-policy",
-        manifest_digest="sha256:" + "1" * 64,
-        selected_decision_surface_mode="policy-directed",
-        participant_contract_versions=[
-            "participant-episode-state-envelope-v1",
-            "participant-behavior-history-event-stream-v1",
-            "participant-decision-surface-v2",
-        ],
-        exposure_policy=exposure_policy,
-    )
-    return ParticipantActionAdmissionRequest(
-        participant_address=PARTICIPANT,
-        action_contract_address=action_contract_address,
-        observation_boundary_address=OBSERVATION_BOUNDARY,
+    return action_request(
+        _CONFIG,
+        action_contract_address,
         action_instance_id=action_instance_id,
-        implementation_manifest=manifest,
-        implementation_selection=selection,
-        visible_refs=(OBSERVATION_BOUNDARY,),
-        disclosed_refs=(OBSERVATION_BOUNDARY,),
-        observation_boundary_evidence_refs=(
-            (ACTION_EVIDENCE_REF,) if disclose_action_evidence else ()
-        ),
-        validated_selection=ParticipantValidatedActionSelection(
-            action_contract_address=action_contract_address,
-            argument_shape_ref="argument-shape.cyberbattlesim.selected-action",
-            proposal_ref=f"proposal.{action_instance_id}",
-            normalized_arguments=(),
-            loss_disclosure_refs=("loss-abstracted-topology",),
-        ),
-        target_addresses=("provision.node.entry-client",),
-        requires_terminal_outcome=True,
+        disclose_action_evidence=disclose_action_evidence,
+        target_addresses=target_addresses,
     )
 
 
 def _cleanup_plan(*, required: bool = True) -> TrialCleanupPlanModel:
-    boundary = CleanupResourceBoundaryModel(
-        boundary_id="cyberbattlesim-process",
-        resource_kind="in-process-simulator",
-        owner_ref=CYBERBATTLESIM_BACKEND_NAME,
-        resource_refs=["runtime.cyberbattlesim.selected-environment"],
-    )
-    destroy = CleanupObligationModel(
-        obligation_id="destroy-environment",
-        boundary_refs=[boundary.boundary_id],
-        action_kind="destroy",
-        triggers=["success", "failure"],
-        requirement="required" if required else "best-effort",
-        idempotency="idempotent",
-        verification_probe_refs=["probe:cyberbattlesim-closed"],
-        timeout_seconds=5,
-    )
-    verify = CleanupObligationModel(
-        obligation_id="verify-environment-closed",
-        boundary_refs=[boundary.boundary_id],
-        action_kind="verify",
-        triggers=["success", "failure"],
-        requirement="best-effort",
-        depends_on=[destroy.obligation_id],
-        idempotency="idempotent",
-        verification_probe_refs=["probe:cyberbattlesim-closed"],
-        timeout_seconds=5,
-    )
-    return TrialCleanupPlanModel(
-        plan_id="cyberbattlesim-cleanup",
-        plan_entry_id="cyberbattlesim-cleanup-entry",
-        run_id="cyberbattlesim-run",
-        clean_state=CleanStateRequirementModel(
-            mode="verified-reset",
-            boundary_refs=[boundary.boundary_id],
-            verification_probe_refs=["probe:cyberbattlesim-closed"],
-        ),
-        resource_boundaries={boundary.boundary_id: boundary},
-        cleanup_obligations={
-            destroy.obligation_id: destroy,
-            verify.obligation_id: verify,
-        },
-        retry_policy=ExecutionRetryPolicyModel(
-            max_attempts=1,
-            after_effect_policy="disallow",
-        ),
-    )
+    return cleanup_plan(_CONFIG, required=required)
 
 
 def test_backend_import_is_dependency_light_and_lazy() -> None:
@@ -1161,9 +1029,10 @@ def test_live_driver_is_lazy_seed_bounded_and_performs_exactly_one_native_step(
         imported_modules.append(name)
         return modules[name]
 
+    # The recorded tree digest names each file relative to its import root.
     runtime_tree_digest = hashlib.sha256()
     for source_path, content in sorted(source_content.items()):
-        runtime_tree_digest.update(source_path.encode())
+        runtime_tree_digest.update(source_path.split("/", 1)[1].encode())
         runtime_tree_digest.update(b"\0")
         runtime_tree_digest.update(hashlib.sha256(content).hexdigest().encode())
         runtime_tree_digest.update(b"\n")
@@ -1179,7 +1048,8 @@ def test_live_driver_is_lazy_seed_bounded_and_performs_exactly_one_native_step(
             if path == root_path or path.startswith(f"{root_path}/")
         )
         for selected_path in selected_paths:
-            digest.update(selected_path.encode())
+            relative_name = selected_path[len(root_path) + 1 :]
+            digest.update(relative_name.encode())
             digest.update(b"\0")
             digest.update(hashlib.sha256(content_by_path[selected_path]).hexdigest().encode())
             digest.update(b"\n")
@@ -1194,11 +1064,11 @@ def test_live_driver_is_lazy_seed_bounded_and_performs_exactly_one_native_step(
         for package_name in dependency_roots
     }
     monkeypatch.setattr(
-        "raes_adapters.cyberbattlesim.backend.driver.distribution",
+        "raes_adapters._source_admission.distribution",
         lambda name: distributions[name],
     )
     monkeypatch.setattr(
-        "raes_adapters.base.source_identity.find_spec",
+        "raes_adapters._source_admission.find_spec",
         lambda name: SimpleNamespace(origin=str(module_origins[name])),
     )
     selected_qualification = {

@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import hashlib
 import subprocess
 import sys
 from dataclasses import dataclass, field, replace
-from pathlib import Path
 
 import pytest
 from raes_backend_protocols.backend_manifest import BackendManifest
@@ -776,168 +774,6 @@ def test_source_protocol_diagnostics_and_declared_weaknesses_hold() -> None:
     assert any(item.startswith("loss:loss-abstracted-participant-interface") for item in weaknesses)
 
 
-def _tree_digest(content_by_path: dict[str, bytes]) -> str:
-    """Reproduce base.installed_tree_digest over a sorted portable tree."""
-
-    digest = hashlib.sha256()
-    for path in sorted(content_by_path):
-        digest.update(path.encode("utf-8"))
-        digest.update(b"\0")
-        digest.update(hashlib.sha256(content_by_path[path]).hexdigest().encode("ascii"))
-        digest.update(b"\n")
-    return digest.hexdigest()
-
-
-class _FakeDistribution:
-    def __init__(self, version: str, root: Path) -> None:
-        self.version = version
-        self._root = root
-        self.direct_url_text: str | None = None
-
-    def locate_file(self, path: str) -> Path:
-        return self._root / path
-
-    def read_text(self, filename: str) -> str | None:
-        return self.direct_url_text if filename == "direct_url.json" else None
-
-
-def _install_live_driver_fixtures(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> _FakeDistribution:
-    """Install a valid fake selected distribution + qualification for the live driver.
-
-    The live driver never imports PrimAITE and never mutates process-global state,
-    so only the installed distribution and the qualification record are faked.
-    """
-
-    tree_content = {
-        "primaite/__init__.py": b"selected primaite package",
-        "primaite/session/environment.py": b"selected primaite environment",
-        "primaite/game/game.py": b"selected primaite game",
-        "primaite/config/_package_data/data_manipulation.yaml": b"metadata:\n  version: 3.0\n",
-    }
-    root = tmp_path / "selected-distribution"
-    for path, content in tree_content.items():
-        installed = root / path
-        installed.parent.mkdir(parents=True, exist_ok=True)
-        installed.write_bytes(content)
-
-    distribution = _FakeDistribution("4.0.0", root)
-    tree_digest = _tree_digest(tree_content)
-    running = f"{sys.version_info.major}.{sys.version_info.minor}.0"
-    qualification: dict[str, object] = {
-        "source": {"package": "primaite", "version": "4.0.0", "commit": "9861798" + "0" * 33},
-        "runtime": {"python": running},
-        "source_files": [
-            {"path": f"src/{path}", "sha256": hashlib.sha256(content).hexdigest()}
-            for path, content in tree_content.items()
-            if path
-            in {
-                "primaite/__init__.py",
-                "primaite/session/environment.py",
-                "primaite/game/game.py",
-            }
-        ],
-        "runtime_source_tree": {
-            "root": "primaite",
-            "file_count": len(tree_content),
-            "sha256": tree_digest,
-        },
-        "runtime_artifacts": [
-            {
-                "name": "primaite",
-                "version": "4.0.0",
-                "artifact": {
-                    "filename": "primaite-4.0.0-py3-none-any.whl",
-                    "sha256": "1" * 64,
-                    "require_direct_archive_sha256": False,
-                    "runtime_identity": "complete-root-tree",
-                },
-                "roots": [
-                    {"path": "primaite", "file_count": len(tree_content), "sha256": tree_digest}
-                ],
-            }
-        ],
-    }
-    monkeypatch.setattr(
-        "raes_adapters.primaite.backend.driver.distribution",
-        lambda name: distribution,
-    )
-    monkeypatch.setattr(
-        "raes_adapters.primaite.backend.driver.load_qualification",
-        lambda: qualification,
-    )
-    return distribution
-
-
-def test_live_driver_verifies_source_identity_then_fails_closed(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    _install_live_driver_fixtures(monkeypatch, tmp_path)
-    driver = PrimaiteDriver()
-
-    # construct (via reset) verifies the selected identity, then fails closed with a
-    # bounded reason — it never imports PrimAITE or mutates process-global state.
-    with pytest.raises(RuntimeError, match="does not run in-process") as reset_error:
-        driver.reset(20260802)
-    message = str(reset_error.value)
-    assert "worker-process boundary" in message
-    for forbidden in _LEAKAGE_MARKERS:
-        assert forbidden not in message
-
-    for operation in (
-        lambda: driver.step(SERVICE_CONTROL),
-        driver.evaluate,
-    ):
-        with pytest.raises(RuntimeError, match="does not run in-process"):
-            operation()
-
-    # Nothing was opened in-process, so cleanup is a bounded no-op and verify_closed holds.
-    report = driver.close()
-    assert report.closed and report.verified and report.already_closed
-    assert report.workspace_removed is False
-    assert driver.verify_closed()
-
-
-def test_live_driver_refuses_unqualified_runtime(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    _install_live_driver_fixtures(monkeypatch, tmp_path)
-    unqualified = {
-        "source": {"package": "primaite", "version": "4.0.0", "commit": "9861798" + "0" * 33},
-        "runtime": {"python": "2.7.0"},
-    }
-    monkeypatch.setattr(
-        "raes_adapters.primaite.backend.driver.load_qualification",
-        lambda: unqualified,
-    )
-    with pytest.raises(RuntimeError, match="runtime is not the qualified runtime"):
-        PrimaiteDriver().construct()
-
-
-def test_live_driver_rejects_editable_install_and_source_drift(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    distribution = _install_live_driver_fixtures(monkeypatch, tmp_path)
-
-    # An editable/directory install cannot be attested.
-    distribution.direct_url_text = '{"dir_info":{"editable":true},"url":"file:///unqualified"}'
-    with pytest.raises(RuntimeError, match="runtime artifact could not be verified"):
-        PrimaiteDriver().construct()
-
-    # A tampered critical source file fails source-identity verification.
-    distribution.direct_url_text = None
-    (tmp_path / "selected-distribution" / "primaite/session/environment.py").write_bytes(
-        b"tampered"
-    )
-    with pytest.raises(RuntimeError, match="source identity could not be verified"):
-        PrimaiteDriver().construct()
-
-
 def test_diagnostic_address_passthrough_and_empty_fallback() -> None:
     from raes_adapters.primaite.backend._diagnostics import diagnostic_address
 
@@ -1057,3 +893,80 @@ def test_evaluator_metadata_only_change_clears_evidence_and_stop_resets() -> Non
     stopped = evaluator.stop(metadata_only.snapshot)
     assert stopped.success
     assert evaluator.status()["running"] is False
+
+
+def _fake_matching_qualification() -> dict[str, object]:
+    """A minimal qualification whose runtime matches the running interpreter."""
+
+    running = f"{sys.version_info.major}.{sys.version_info.minor}.0"
+    return {
+        "source": {"package": "primaite", "version": "4.0.0"},
+        "runtime": {"python": running},
+    }
+
+
+def test_live_driver_verifies_source_identity_then_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Pass the runtime gate and stub the shared source-admission verification so
+    # construct reaches — and stops at — the fail-closed refusal.
+    monkeypatch.setattr(
+        "raes_adapters.primaite.backend.driver.load_qualification",
+        _fake_matching_qualification,
+    )
+    monkeypatch.setattr(
+        "raes_adapters._source_admission.resolve_selected_distribution",
+        lambda package, expected_version: object(),
+    )
+    monkeypatch.setattr(
+        "raes_adapters._source_admission.verify_runtime_artifacts",
+        lambda *args, **kwargs: {},
+    )
+    driver = PrimaiteDriver()
+
+    with pytest.raises(RuntimeError, match="does not run in-process") as reset_error:
+        driver.reset(20260802)
+    message = str(reset_error.value)
+    assert "worker-process boundary" in message
+    for forbidden in _LEAKAGE_MARKERS:
+        assert forbidden not in message
+
+    for operation in (lambda: driver.step(SERVICE_CONTROL), driver.evaluate):
+        with pytest.raises(RuntimeError, match="does not run in-process"):
+            operation()
+
+    # Nothing was opened in-process, so cleanup is a bounded no-op and verify_closed holds.
+    report = driver.close()
+    assert report.closed and report.verified and report.already_closed
+    assert report.workspace_removed is False
+    assert driver.verify_closed()
+
+
+def test_live_driver_refuses_unqualified_runtime() -> None:
+    # The checked-in qualification is CPython 3.11; this distribution requires 3.12+,
+    # so the real runtime gate fires against the real qualification with no fakes.
+    with pytest.raises(RuntimeError, match="runtime is not the qualified runtime"):
+        PrimaiteDriver().construct()
+
+
+def test_live_driver_propagates_source_identity_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "raes_adapters.primaite.backend.driver.load_qualification",
+        _fake_matching_qualification,
+    )
+    monkeypatch.setattr(
+        "raes_adapters._source_admission.resolve_selected_distribution",
+        lambda package, expected_version: object(),
+    )
+
+    def _reject(*args: object, **kwargs: object) -> dict[str, object]:
+        raise RuntimeError("selected simulator runtime artifact could not be verified")
+
+    monkeypatch.setattr(
+        "raes_adapters._source_admission.verify_runtime_artifacts",
+        _reject,
+    )
+    with pytest.raises(RuntimeError, match="runtime artifact could not be verified"):
+        PrimaiteDriver().construct()

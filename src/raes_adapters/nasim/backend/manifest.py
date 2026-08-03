@@ -1,4 +1,11 @@
-"""Evidence-bounded CyberBattleSim backend manifest."""
+"""Evidence-bounded NASim backend manifest.
+
+The manifest declares only the RAES surfaces the adapter actually implements
+for the admitted ``tiny`` static benchmark. The native environment is fully
+observed (``fully_obs=True``); the portable participant boundary is deliberately
+narrower, so the raw observation vector, host state, action availability, and
+evaluator-only goal truth are disclosed as withheld rather than advertised.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +14,6 @@ from raes_backend_protocols.backend_manifest import (  # type: ignore[import-unt
 )
 from raes_backend_protocols.capabilities import (  # type: ignore[import-untyped]
     BackendCapabilitySet,
-    ParticipantFeatureSupport,
     ParticipantRuntimeCapabilities,
     ProvisionerCapabilities,
 )
@@ -15,7 +21,6 @@ from raes_contracts.apparatus import (  # type: ignore[import-untyped]
     RealizationSupportDeclaration,
 )
 from raes_contracts.vocabulary import (  # type: ignore[import-untyped]
-    ParticipantFeatureSupportLevel,
     RealizationSupportMode,
 )
 
@@ -26,46 +31,46 @@ from raes_adapters._manifest_support import (
     standard_evaluator_capabilities,
     standard_orchestrator_capabilities,
 )
-from raes_adapters.cyberbattlesim import load_qualification
+from raes_adapters.nasim import load_qualification
 
-CYBERBATTLESIM_BACKEND_NAME = "cyberbattlesim"
+NASIM_BACKEND_NAME = "nasim-tiny"
 
 
 def _provisioner_capabilities() -> ProvisionerCapabilities:
-    """Declare selected generated-chain provisioning support."""
+    """Declare selected static-benchmark provisioning support."""
 
     return ProvisionerCapabilities(
-        name="cyberbattlesim-provisioner",
+        name="nasim-provisioner",
         supported_node_types=frozenset({"switch", "vm"}),
-        supported_os_families=frozenset({"linux", "windows"}),
+        supported_os_families=frozenset({"linux"}),
         supported_content_types=frozenset(),
-        supported_account_features=frozenset({"groups", "auth_method"}),
+        supported_account_features=frozenset({"groups"}),
         supported_domain_profiles=frozenset(),
         supported_service_materialization_profiles=frozenset(),
-        max_total_nodes=10,
+        max_total_nodes=6,
         supports_accounts=True,
         constraints={
             "topology_realization": (
-                "selected generated chain; authored topology is representative"
+                "selected static tiny benchmark; the authored three-host topology is "
+                "realized node-for-node with no generator abstraction"
             ),
             "account_realization": (
-                "auth method and group intent map to source-generated credentials; "
-                "no source identity equivalence"
+                "authored account intent is portable scenario truth; no native "
+                "credential or access-level equivalence is claimed"
             ),
         },
     )
 
 
 def _participant_capabilities() -> ParticipantRuntimeCapabilities:
-    """Declare bounded red-participant runtime support."""
+    """Declare the bounded single red-participant runtime support."""
 
     return ParticipantRuntimeCapabilities(
-        name="cyberbattlesim-participant-runtime",
+        name="nasim-participant-runtime",
         supported_participant_roles=frozenset({"red"}),
         supported_behavior_features=frozenset(
             {
                 "action_contracts",
-                "attribution_support",
                 "behavior_history",
                 "effects",
                 "failure_classes",
@@ -73,33 +78,31 @@ def _participant_capabilities() -> ParticipantRuntimeCapabilities:
                 "outcome_interpretation",
                 "preconditions",
                 "state_transitions",
-                "temporal_contracts",
             }
         ),
-        supported_interaction_features=frozenset({"interference"}),
-        feature_support=(
-            ParticipantFeatureSupport(
-                feature="interference",
-                support_level=ParticipantFeatureSupportLevel.DISCLOSED_WEAK,
-                limitation_refs=("limitation:cyberbattlesim:source-internal-defender",),
-                disclosure_refs=("docs/decisions/cyberbattlesim-backend-guardrails.md",),
-            ),
-        ),
+        supported_interaction_features=frozenset({"shared_state_change"}),
         supports_autonomous_execution=False,
         supports_bounded_concurrency=False,
         constraints={
             "max_in_flight_native_transitions": "1",
             "native_action_coordinates": "driver-private",
+            "interaction_scope": (
+                "the single red participant mutates shared network state; the "
+                "selected tiny scenario has no defender or second participant, so no "
+                "contention, coordination, or interference is claimed"
+            ),
+            "native_observation": (
+                "the native environment is fully observed; the portable participant "
+                "view is a lossy default-deny projection that withholds the flat "
+                "observation vector, action index, host state, and info"
+            ),
             "native_target_attribution": (
-                "unavailable; request targets remain intent and are not echoed "
-                "as realized effect targets"
+                "unavailable; a requested target stays intent and is not echoed as a "
+                "realized effect target without a verified source join"
             ),
             "participant_action_scope": (
-                "connect, local-vulnerability, and remote-vulnerability attacker contracts"
-            ),
-            "source_internal_defender": (
-                "scan-and-reimage executes inside the selected source step "
-                "and is not a participant-admitted action"
+                "service-exploit, privilege-escalation, service-discovery, and "
+                "subnet-discovery attacker contracts"
             ),
         },
     )
@@ -111,19 +114,20 @@ def _capabilities() -> BackendCapabilitySet:
     return BackendCapabilitySet(
         provisioner=_provisioner_capabilities(),
         orchestrator=standard_orchestrator_capabilities(
-            "cyberbattlesim",
+            "nasim",
             {
                 "native_transition_owner": "participant-runtime",
                 "workflow_scope": "episode lifecycle and serialized participant steps",
             },
         ),
         evaluator=standard_evaluator_capabilities(
-            "cyberbattlesim",
+            "nasim",
             {
                 "reward_owner": "evaluator",
                 "outcome_reproduction": "stochastic-bounded",
-                "proposition_projection": (
-                    "binding-preserving unknown under lossy source evidence"
+                "goal_truth": (
+                    "goal attainment is evaluator-only truth, separate from reward and "
+                    "from the participant observation boundary"
                 ),
                 "objective_terminal_state": (
                     "running until a distinct mapped terminal cause is available"
@@ -131,12 +135,12 @@ def _capabilities() -> BackendCapabilitySet:
             },
         ),
         participant_runtime=_participant_capabilities(),
-        cleanup=standard_cleanup_capabilities("cyberbattlesim"),
+        cleanup=standard_cleanup_capabilities("nasim"),
     )
 
 
 def _realization_support(source_revision: str) -> tuple[RealizationSupportDeclaration, ...]:
-    """Declare the selected generated-chain realization and its disclosures."""
+    """Declare the selected static-scenario realization and its disclosures."""
 
     return (
         RealizationSupportDeclaration(
@@ -160,19 +164,25 @@ def _realization_support(source_revision: str) -> tuple[RealizationSupportDeclar
                 }
             ),
             constraints={
-                "source_profile": f"cyberbattlesim-chain-public-{source_revision[:7]}",
-                "topology": "representative authored topology maps to generated size-10 chain",
+                "source_profile": f"nasim-tiny-static-benchmark-{source_revision[:7]}",
+                "topology": (
+                    "authored three-host topology realizes the static tiny benchmark node-for-node"
+                ),
+                "observation": (
+                    "native fully observed; portable participant view is a narrower "
+                    "lossy default-deny projection"
+                ),
             },
         ),
     )
 
 
-def create_cyberbattlesim_manifest() -> BackendManifest:
-    """Return the manifest for the admitted selected source profile."""
+def create_nasim_manifest() -> BackendManifest:
+    """Return the manifest for the admitted selected NASim profile."""
 
     source_revision = read_source_revision(load_qualification)
     return assemble_manifest(
-        CYBERBATTLESIM_BACKEND_NAME,
+        NASIM_BACKEND_NAME,
         _capabilities(),
         _realization_support(source_revision),
         {
@@ -181,12 +191,13 @@ def create_cyberbattlesim_manifest() -> BackendManifest:
             "execution_controls": "partial",
             "run_evidence": "attestable",
             "outcome_reproduction": "stochastic-bounded",
-            "dependency_installation": "separately-installed-pinned-source",
+            "dependency_installation": "index-published-pinned-runtime",
+            "native_observability": "fully-observed-source-narrowed-to-lossy-participant-view",
         },
     )
 
 
 __all__ = [
-    "CYBERBATTLESIM_BACKEND_NAME",
-    "create_cyberbattlesim_manifest",
+    "NASIM_BACKEND_NAME",
+    "create_nasim_manifest",
 ]

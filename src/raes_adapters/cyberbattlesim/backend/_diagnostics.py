@@ -2,27 +2,15 @@
 
 from __future__ import annotations
 
+from raes_adapters._diagnostics import diagnostic_address as _shared_diagnostic_address
 
-def _escape_pointer_token(token: str) -> str:
-    """Escape one JSON Pointer token."""
-
-    return token.replace("~", "~0").replace("/", "~1")
+_FALLBACK = "/cyberbattlesim"
 
 
 def diagnostic_address(address: str) -> str:
-    """Project a dotted portable address into a RAES DiagnosticModel address.
+    """Project a dotted CyberBattleSim address into a RAES pointer address."""
 
-    RAES diagnostics use JSON Pointer syntax. The backend's runtime addresses
-    are dotted RAES artifact addresses, so each dot-delimited segment becomes a
-    pointer token without changing the underlying published address identity.
-    """
-
-    if address.startswith("/"):
-        return address
-    tokens = [token for token in address.replace(".", "/").split("/") if token]
-    if not tokens:
-        return "/cyberbattlesim"
-    return "/" + "/".join(_escape_pointer_token(token) for token in tokens)
+    return _shared_diagnostic_address(address, fallback=_FALLBACK)
 
 
 __all__ = ["diagnostic_address"]

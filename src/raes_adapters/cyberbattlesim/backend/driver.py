@@ -2,22 +2,13 @@
 
 from __future__ import annotations
 
-import hashlib
 import importlib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from importlib.metadata import Distribution, PackageNotFoundError, distribution
-from pathlib import Path
 from threading import RLock
 from typing import Protocol, TypedDict, cast
 
-from raes_adapters.base.source_identity import (
-    installed_root_paths,
-    installed_tree_digest,
-    is_sha256,
-    reject_unverifiable_install,
-    verify_module_origin,
-)
+from raes_adapters import _source_admission
 from raes_adapters.cyberbattlesim import load_qualification
 
 _SUPPORTED_ACTION_KINDS = frozenset(
@@ -39,9 +30,8 @@ _RUNTIME_SOURCE_PATHS = (
     "cyberbattle/_env/cyberbattle_chain.py",
     "cyberbattle/samples/chainpattern/chainpattern.py",
 )
-_QUALIFICATION_INVALID = "selected simulator qualification is invalid"
-_SOURCE_IDENTITY_INVALID = "selected simulator source identity could not be verified"
-_DEPENDENCY_IDENTITY_INVALID = "selected simulator dependency identity could not be verified"
+_RUNTIME_ARTIFACT_NAMES = frozenset({"cyberbattlesim", "gymnasium", "numpy"})
+_QUALIFICATION_INVALID = _source_admission.QUALIFICATION_INVALID
 
 
 class _ActionSpace(Protocol):
@@ -231,30 +221,39 @@ class CyberBattleSimDriver(object):
             if self._environment is not None and not self._closed:
                 return
             qualification, source, selection = self._selected_configuration()
-            try:
-                selected_distribution = distribution(source["package"])
-            except PackageNotFoundError as exc:
-                raise RuntimeError("selected simulator source is not installed") from exc
-            if selected_distribution.version != source["version"]:
-                raise RuntimeError("installed simulator version does not match the selected source")
+            selected_distribution = _source_admission.resolve_selected_distribution(
+                source["package"],
+                source["version"],
+            )
 
             if not self._artifacts_verified:
-                distributions = self._verify_runtime_artifacts(
+                distributions = _source_admission.verify_runtime_artifacts(
                     qualification,
                     selected_distribution,
+                    expected_names=_RUNTIME_ARTIFACT_NAMES,
+                    primary_name="cyberbattlesim",
                 )
-                self._verify_selected_source(qualification, selected_distribution)
-                verify_module_origin(
+                _source_admission.verify_runtime_source_tree(
+                    qualification,
+                    selected_distribution,
+                    import_root="cyberbattle",
+                )
+                _source_admission.verify_selected_source_files(
+                    qualification,
+                    selected_distribution,
+                    source_paths=_RUNTIME_SOURCE_PATHS,
+                )
+                _source_admission.verify_package_origin(
                     "cyberbattle",
                     selected_distribution,
                     "cyberbattle/__init__.py",
                 )
-                verify_module_origin(
+                _source_admission.verify_package_origin(
                     "gymnasium",
                     distributions["gymnasium"],
                     "gymnasium/__init__.py",
                 )
-                verify_module_origin(
+                _source_admission.verify_package_origin(
                     "numpy",
                     distributions["numpy"],
                     "numpy/__init__.py",
@@ -263,12 +262,12 @@ class CyberBattleSimDriver(object):
             importlib.import_module("cyberbattle")
             gymnasium = cast(_GymnasiumModule, importlib.import_module("gymnasium"))
             numpy = cast(_NumpyModule, importlib.import_module("numpy"))
-            verify_module_origin(
+            _source_admission.verify_package_origin(
                 "cyberbattle._env.cyberbattle_env",
                 selected_distribution,
                 "cyberbattle/_env/cyberbattle_env.py",
             )
-            verify_module_origin(
+            _source_admission.verify_package_origin(
                 "cyberbattle._env.defender",
                 selected_distribution,
                 "cyberbattle/_env/defender.py",
@@ -552,256 +551,6 @@ class CyberBattleSimDriver(object):
             "scan_capacity": scan_capacity,
             "scan_frequency": scan_frequency,
         }
-
-    @staticmethod
-    def _verify_selected_source(
-        qualification: dict[str, object],
-        selected_distribution: Distribution,
-    ) -> None:
-        """Verify selected source records and the complete runtime tree."""
-
-        CyberBattleSimDriver._verify_runtime_source_tree(
-            qualification,
-            selected_distribution,
-        )
-        source_files = qualification.get("source_files")
-        if not isinstance(source_files, list):
-            raise RuntimeError(_SOURCE_IDENTITY_INVALID)
-        expected: dict[str, str] = {}
-        for entry in source_files:
-            if not isinstance(entry, dict):
-                continue
-            path = entry.get("path")
-            digest = entry.get("sha256")
-            if isinstance(path, str) and isinstance(digest, str):
-                expected[path] = digest
-        try:
-            for source_path in _RUNTIME_SOURCE_PATHS:
-                expected_digest = expected[source_path]
-                installed_source = cast(
-                    Path,
-                    selected_distribution.locate_file(source_path),
-                )
-                content = installed_source.read_bytes()
-                if hashlib.sha256(content).hexdigest() != expected_digest:
-                    raise RuntimeError(_SOURCE_IDENTITY_INVALID)
-        except (KeyError, OSError) as exc:
-            raise RuntimeError(_SOURCE_IDENTITY_INVALID) from exc
-
-    @staticmethod
-    def _verify_runtime_source_tree(
-        qualification: dict[str, object],
-        selected_distribution: Distribution,
-    ) -> None:
-        """Verify every installed file under the selected source import root."""
-
-        tree = qualification.get("runtime_source_tree")
-        distribution_files = selected_distribution.files
-        if not isinstance(tree, dict) or distribution_files is None:
-            raise RuntimeError(_SOURCE_IDENTITY_INVALID)
-        expected_digest = tree.get("sha256")
-        expected_count = tree.get("file_count")
-        if not isinstance(expected_digest, str) or not isinstance(expected_count, int):
-            raise RuntimeError(_SOURCE_IDENTITY_INVALID)
-        paths = installed_root_paths(
-            selected_distribution,
-            "cyberbattle",
-            _SOURCE_IDENTITY_INVALID,
-        )
-        if len(paths) != expected_count:
-            raise RuntimeError(_SOURCE_IDENTITY_INVALID)
-        package_root = cast(
-            Path,
-            selected_distribution.locate_file("cyberbattle"),
-        ).resolve()
-        observed_digest = installed_tree_digest(
-            selected_distribution,
-            paths,
-            _SOURCE_IDENTITY_INVALID,
-            package_root=package_root,
-        )
-        if observed_digest != expected_digest:
-            raise RuntimeError(_SOURCE_IDENTITY_INVALID)
-
-    @staticmethod
-    def _verify_runtime_artifacts(
-        qualification: dict[str, object],
-        selected_distribution: Distribution,
-    ) -> dict[str, Distribution]:
-        """Verify the complete selected runtime artifact set."""
-
-        selected_versions, records = CyberBattleSimDriver._artifact_maps(qualification)
-        verified: dict[str, Distribution] = {"cyberbattlesim": selected_distribution}
-        for package_name, record in records.items():
-            dependency = CyberBattleSimDriver._verify_runtime_artifact(
-                package_name,
-                record,
-                selected_versions,
-                verified,
-            )
-            verified[package_name] = dependency
-        return verified
-
-    @staticmethod
-    def _artifact_maps(
-        qualification: dict[str, object],
-    ) -> tuple[dict[str, str], dict[str, dict[object, object]]]:
-        """Index selected dependency versions and runtime artifact records."""
-
-        artifacts = qualification.get("runtime_artifacts")
-        dependencies = qualification.get("dependencies")
-        if not isinstance(artifacts, list) or not isinstance(dependencies, list):
-            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
-        selected_versions = {
-            str(entry["name"]).casefold(): entry["version"]
-            for entry in dependencies
-            if isinstance(entry, dict)
-            and isinstance(entry.get("name"), str)
-            and isinstance(entry.get("version"), str)
-        }
-        records = {
-            str(entry["name"]).casefold(): entry
-            for entry in artifacts
-            if isinstance(entry, dict) and isinstance(entry.get("name"), str)
-        }
-        if set(records) != {"cyberbattlesim", "gymnasium", "numpy"}:
-            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
-        return selected_versions, records
-
-    @staticmethod
-    def _verify_runtime_artifact(
-        package_name: str,
-        record: dict[object, object],
-        selected_versions: dict[str, str],
-        verified: dict[str, Distribution],
-    ) -> Distribution:
-        """Verify one selected artifact record and installed distribution."""
-
-        expected_version = CyberBattleSimDriver._validate_artifact_identity(
-            package_name,
-            record,
-            selected_versions,
-        )
-        dependency = CyberBattleSimDriver._resolve_distribution(package_name, verified)
-        if dependency.version != expected_version:
-            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
-        CyberBattleSimDriver._verify_direct_installation(record, dependency)
-        CyberBattleSimDriver._verify_artifact_roots(record, dependency)
-        return dependency
-
-    @staticmethod
-    def _validate_artifact_identity(
-        package_name: str,
-        record: dict[object, object],
-        selected_versions: dict[str, str],
-    ) -> str:
-        """Validate one artifact's declared version and identity policy."""
-
-        expected_version = record.get("version")
-        artifact = record.get("artifact")
-        if not isinstance(expected_version, str) or not isinstance(artifact, dict):
-            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
-        valid = (
-            isinstance(artifact.get("filename"), str)
-            and is_sha256(artifact.get("sha256"))
-            and isinstance(artifact.get("require_direct_archive_sha256"), bool)
-            and artifact.get("runtime_identity") == "complete-root-tree"
-            and selected_versions.get(package_name) == expected_version
-        )
-        if not valid:
-            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
-        return expected_version
-
-    @staticmethod
-    def _resolve_distribution(
-        package_name: str,
-        verified: dict[str, Distribution],
-    ) -> Distribution:
-        """Resolve an installed distribution without leaking package metadata."""
-
-        dependency = verified.get(package_name)
-        if dependency is not None:
-            return dependency
-        try:
-            return distribution(package_name)
-        except PackageNotFoundError as exc:
-            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID) from exc
-
-    @staticmethod
-    def _verify_direct_installation(
-        record: dict[object, object],
-        selected_distribution: Distribution,
-    ) -> None:
-        """Reject unverifiable editable/VCS installs and check archive identity."""
-
-        expected_digest, require_archive_digest = CyberBattleSimDriver._direct_artifact_policy(
-            record
-        )
-        reject_unverifiable_install(
-            selected_distribution,
-            _DEPENDENCY_IDENTITY_INVALID,
-            expected_archive_sha256=expected_digest,
-            require_archive_digest=require_archive_digest,
-        )
-
-    @staticmethod
-    def _direct_artifact_policy(record: dict[object, object]) -> tuple[str, bool]:
-        """Read the selected archive digest policy from an artifact record."""
-
-        artifact = record.get("artifact")
-        if not isinstance(artifact, dict):
-            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
-        expected_digest = artifact.get("sha256")
-        require_archive_digest = artifact.get("require_direct_archive_sha256")
-        if not isinstance(expected_digest, str):
-            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
-        if not isinstance(require_archive_digest, bool):
-            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
-        return expected_digest, require_archive_digest
-
-    @staticmethod
-    def _verify_artifact_roots(
-        record: dict[object, object],
-        selected_distribution: Distribution,
-    ) -> None:
-        """Verify every declared import root for one runtime artifact."""
-
-        roots = record.get("roots")
-        if not isinstance(roots, list) or not roots:
-            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
-        for root in roots:
-            if not isinstance(root, dict):
-                raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
-            CyberBattleSimDriver._verify_artifact_root(root, selected_distribution)
-
-    @staticmethod
-    def _verify_artifact_root(
-        root: dict[object, object],
-        selected_distribution: Distribution,
-    ) -> None:
-        """Verify one complete installed import-root tree."""
-
-        root_path = root.get("path")
-        expected_count = root.get("file_count")
-        expected_digest = root.get("sha256")
-        if not isinstance(root_path, str) or not isinstance(expected_count, int):
-            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
-        if not is_sha256(expected_digest):
-            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
-        paths = installed_root_paths(
-            selected_distribution,
-            root_path,
-            _DEPENDENCY_IDENTITY_INVALID,
-        )
-        if len(paths) != expected_count:
-            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
-        observed_digest = installed_tree_digest(
-            selected_distribution,
-            paths,
-            _DEPENDENCY_IDENTITY_INVALID,
-        )
-        if observed_digest != expected_digest:
-            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
 
     def _next_operation_ref(self, operation: str) -> str:
         self._operation_count += 1

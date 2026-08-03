@@ -1,4 +1,4 @@
-"""Verified cleanup execution for the in-process CyberBattleSim driver."""
+"""Verified cleanup execution for the in-process NASim driver."""
 
 from __future__ import annotations
 
@@ -16,13 +16,13 @@ from raes_contracts.contracts.trial_cleanup import (  # type: ignore[import-unty
 
 from raes_adapters._gym_backend.cleanup import CleanupExecution, execute_gym_cleanup
 
-from .driver import CyberBattleSimDriverProtocol
+from .driver import NasimDriverProtocol
 
 
-def execute_cyberbattlesim_cleanup(
+def execute_nasim_cleanup(
     plan: TrialCleanupPlanModel,
     manifest: BackendManifest,
-    driver: CyberBattleSimDriverProtocol,
+    driver: NasimDriverProtocol,
     *,
     receipt_id: str,
     execution_attempt_id: str,
@@ -35,7 +35,7 @@ def execute_cyberbattlesim_cleanup(
         plan,
         manifest,
         driver,
-        "cyberbattlesim",
+        "nasim",
         CleanupExecution(
             receipt_id=receipt_id,
             execution_attempt_id=execution_attempt_id,
@@ -45,4 +45,4 @@ def execute_cyberbattlesim_cleanup(
     )
 
 
-__all__ = ["execute_cyberbattlesim_cleanup"]
+__all__ = ["execute_nasim_cleanup"]

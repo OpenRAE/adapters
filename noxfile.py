@@ -113,6 +113,84 @@ assert payload["passed"] is True
 assert payload["native_conformance"] is False
 assert payload["cases"]
 """
+
+NASIM_CONFORMANCE_PROBE = r"""
+from raes_adapters.nasim.backend import (
+    NasimCleanupReport,
+    NasimEvaluation,
+    NasimResetReport,
+    NasimStep,
+    nasim_backend_conformance_payload,
+    run_nasim_conformance,
+)
+from raes_adapters.nasim.scenario_ledger import validate_all
+
+
+class Driver:
+    def __init__(self):
+        self.closed = False
+        self.step_count = 0
+
+    def construct(self):
+        self.closed = False
+
+    def reset(self, seed):
+        self.closed = False
+        self.step_count = 0
+        return NasimResetReport(
+            operation_ref="driver.reset.clean-install",
+            applied_streams=(
+                ("numpy-global-action-success", "gym-environment-reset") if seed is not None else ()
+            ),
+            unbound_streams=(
+                () if seed is not None else ("numpy-global-action-success", "gym-environment-reset")
+            ),
+        )
+
+    def step(self, action_kind, target_ref=None):
+        self.step_count += 1
+        return NasimStep(
+            operation_ref=f"driver.step.{self.step_count}",
+            step_number=self.step_count,
+            source_transition=True,
+            processed=True,
+            terminated=False,
+            truncated=False,
+            terminal_cause=None,
+        )
+
+    def evaluate(self):
+        return NasimEvaluation(
+            execution_ref="driver.reset.clean-install",
+            projection_ref="driver.reset.clean-install.evaluation.1",
+            step_count=self.step_count,
+            cumulative_reward=0.0,
+            terminated=False,
+            truncated=False,
+            terminal_cause=None,
+        )
+
+    def close(self):
+        already_closed = self.closed
+        self.closed = True
+        return NasimCleanupReport(
+            operation_ref="driver.close.clean-install",
+            closed=True,
+            verified=True,
+            already_closed=already_closed,
+        )
+
+    def verify_closed(self):
+        return self.closed
+
+
+assert validate_all() == []
+report = run_nasim_conformance(driver=Driver(), seed=20260802)
+payload = nasim_backend_conformance_payload(report)
+assert payload["passed"] is True
+assert payload["native_conformance"] is False
+assert payload["cases"]
+"""
 CYBORG_CONFORMANCE_PROBE = r"""
 import json
 import sys
@@ -361,6 +439,31 @@ def _distributions(session: nox.Session) -> None:
             "-I",
             "-c",
             CYBERBATTLESIM_CONFORMANCE_PROBE,
+            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+        )
+
+    session.log("clean install: nasim extra conformance")
+    nasim_venv = workdir / "venv-nasim"
+    _run(session, "uv", "venv", "--quiet", "--clear", str(nasim_venv))
+    _run(
+        session,
+        "uv",
+        "pip",
+        "install",
+        "--quiet",
+        "--python",
+        str(nasim_venv),
+        "--find-links",
+        str(dist),
+        f"{wheels[0]}[nasim]",
+    )
+    with session.chdir(probe_cwd):
+        _run(
+            session,
+            str(nasim_venv / "bin" / "python"),
+            "-I",
+            "-c",
+            NASIM_CONFORMANCE_PROBE,
             env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
         )
 

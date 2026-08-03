@@ -12,52 +12,31 @@ concurrent request or an exception before restore would break tenant isolation).
 
 That worker boundary is not implemented here, and the qualified runtime is
 CPython 3.11 while this distribution requires 3.12+. So the live driver verifies
-the selected source identity and then **fails closed** rather than pretending to
-run or mutating global state. The injected ``FakeDriver`` in the test suite
-proves every portable mechanic; a real live run awaits the worker boundary and
-bounded 3.12 qualification evidence.
+the selected source identity through the shared ``_source_admission`` plumbing
+and then **fails closed** rather than pretending to run or mutating global state.
+The injected ``FakeDriver`` in the test suite proves every portable mechanic; a
+real live run awaits the worker boundary and bounded 3.12 qualification evidence.
 """
 
 from __future__ import annotations
 
-import hashlib
 import sys
 from dataclasses import dataclass
-from importlib.metadata import Distribution, PackageNotFoundError, distribution
-from pathlib import Path
 from threading import RLock
 from typing import NoReturn, Protocol, cast
 
-from raes_adapters.base.source_identity import (
-    installed_root_paths,
-    installed_tree_digest,
-    is_sha256,
-    reject_unverifiable_install,
-)
+from raes_adapters import _source_admission
 from raes_adapters.primaite import load_qualification
 
-_QUALIFICATION_INVALID = "selected simulator qualification is invalid"
-_SOURCE_IDENTITY_INVALID = "selected simulator source identity could not be verified"
-_ARTIFACT_IDENTITY_INVALID = "selected simulator runtime artifact could not be verified"
+_QUALIFICATION_INVALID = _source_admission.QUALIFICATION_INVALID
 _RUNTIME_UNQUALIFIED = "selected simulator runtime is not the qualified runtime"
-_SOURCE_NOT_INSTALLED = "selected simulator source is not installed"
-_SOURCE_VERSION_MISMATCH = "installed simulator version does not match the selected source"
 _INPROCESS_UNSUPPORTED = (
     "the selected PrimAITE live target does not run in-process: it writes to platform "
     "application directories on import and exposes no explicit path binding, so safe "
     "isolation requires a reviewed worker-process boundary (redirect env set at child "
     "launch) that is not implemented, and the qualified runtime is CPython 3.11"
 )
-
-# Critical selected-source files whose exact bytes are re-verified before the
-# fail-closed refusal, beyond the complete-tree digest.
-_CRITICAL_SOURCE_PATHS = (
-    "primaite/__init__.py",
-    "primaite/session/environment.py",
-    "primaite/game/game.py",
-)
 _SOURCE_PACKAGE = "primaite"
-_SOURCE_ROOT = "primaite"
 
 
 @dataclass(frozen=True)
@@ -140,12 +119,12 @@ class PrimaiteDriverProtocol(Protocol):
 class PrimaiteDriver(object):
     """Source-verifying, fail-closed live driver for the selected profile.
 
-    It verifies the selected PrimAITE distribution version, complete import-root
-    tree, critical source-file bytes, and runtime artifact identity, then refuses
-    in-process construction: a real run needs the worker-process isolation
-    boundary and 3.12 qualification described in the module docstring. It never
-    imports PrimAITE (which would write to the platform home) and never mutates
-    process-global ``HOME`` or the working directory.
+    It verifies the selected PrimAITE distribution version and the complete
+    runtime artifact identity through the shared ``_source_admission`` plumbing,
+    then refuses in-process construction: a real run needs the worker-process
+    isolation boundary and 3.12 qualification described in the module docstring.
+    It never imports PrimAITE (which would write to the platform home) and never
+    mutates process-global ``HOME`` or the working directory.
     """
 
     def __init__(self) -> None:
@@ -159,9 +138,16 @@ class PrimaiteDriver(object):
         with self._lock:
             qualification, source = self._selected_source()
             self._verify_qualified_runtime(qualification)
-            selected_distribution = self._require_distribution(source)
-            self._verify_selected_source(qualification, selected_distribution)
-            self._verify_runtime_artifact(qualification, selected_distribution)
+            selected_distribution = _source_admission.resolve_selected_distribution(
+                source["package"],
+                source["version"],
+            )
+            _source_admission.verify_runtime_artifacts(
+                qualification,
+                selected_distribution,
+                expected_names=frozenset({_SOURCE_PACKAGE}),
+                primary_name=_SOURCE_PACKAGE,
+            )
             raise RuntimeError(_INPROCESS_UNSUPPORTED)
 
     def reset(self, seed: int | None) -> DriverResetReport:
@@ -199,9 +185,8 @@ class PrimaiteDriver(object):
         with self._lock:
             return self._closed
 
-    # -- source identity ---------------------------------------------------- #
     @staticmethod
-    def _selected_source() -> tuple[dict[str, object], dict[str, object]]:
+    def _selected_source() -> tuple[dict[str, object], dict[str, str]]:
         """Load and normalize the maintainer-selected native source identity."""
 
         qualification = cast(dict[str, object], load_qualification())
@@ -232,138 +217,6 @@ class PrimaiteDriver(object):
         qualified = (int(parts[0]), int(parts[1]))
         if sys.version_info[:2] != qualified:
             raise RuntimeError(_RUNTIME_UNQUALIFIED)
-
-    @staticmethod
-    def _require_distribution(source: dict[str, object]) -> Distribution:
-        """Resolve the installed selected distribution at the qualified version."""
-
-        try:
-            selected_distribution = distribution(str(source["package"]))
-        except PackageNotFoundError as exc:
-            raise RuntimeError(_SOURCE_NOT_INSTALLED) from exc
-        if selected_distribution.version != source["version"]:
-            raise RuntimeError(_SOURCE_VERSION_MISMATCH)
-        return selected_distribution
-
-    @staticmethod
-    def _verify_selected_source(
-        qualification: dict[str, object],
-        selected_distribution: Distribution,
-    ) -> None:
-        """Verify the complete import-root tree and critical source-file bytes."""
-
-        tree = qualification.get("runtime_source_tree")
-        if not isinstance(tree, dict):
-            raise RuntimeError(_SOURCE_IDENTITY_INVALID)
-        expected_digest = tree.get("sha256")
-        expected_count = tree.get("file_count")
-        if not is_sha256(expected_digest) or not isinstance(expected_count, int):
-            raise RuntimeError(_SOURCE_IDENTITY_INVALID)
-        paths = installed_root_paths(selected_distribution, _SOURCE_ROOT, _SOURCE_IDENTITY_INVALID)
-        if len(paths) != expected_count:
-            raise RuntimeError(_SOURCE_IDENTITY_INVALID)
-        package_root = cast(Path, selected_distribution.locate_file(_SOURCE_ROOT)).resolve()
-        observed = installed_tree_digest(
-            selected_distribution,
-            paths,
-            _SOURCE_IDENTITY_INVALID,
-            package_root=package_root,
-        )
-        if observed != expected_digest:
-            raise RuntimeError(_SOURCE_IDENTITY_INVALID)
-        PrimaiteDriver._verify_critical_source_files(qualification, selected_distribution)
-
-    @staticmethod
-    def _verify_critical_source_files(
-        qualification: dict[str, object],
-        selected_distribution: Distribution,
-    ) -> None:
-        """Re-verify the exact bytes of the critical selected-source files."""
-
-        source_files = qualification.get("source_files")
-        if not isinstance(source_files, list):
-            raise RuntimeError(_SOURCE_IDENTITY_INVALID)
-        expected: dict[str, str] = {}
-        for entry in source_files:
-            if not isinstance(entry, dict):
-                continue
-            path = entry.get("path")
-            digest = entry.get("sha256")
-            if isinstance(path, str) and isinstance(digest, str):
-                # source_files paths are recorded under src/; the installed tree
-                # roots at ``primaite/``.
-                expected[path.removeprefix("src/")] = digest
-        try:
-            for source_path in _CRITICAL_SOURCE_PATHS:
-                installed = cast(Path, selected_distribution.locate_file(source_path))
-                observed = hashlib.sha256(installed.read_bytes()).hexdigest()
-                if observed != expected[source_path]:
-                    raise RuntimeError(_SOURCE_IDENTITY_INVALID)
-        except (KeyError, OSError) as exc:
-            raise RuntimeError(_SOURCE_IDENTITY_INVALID) from exc
-
-    @staticmethod
-    def _verify_runtime_artifact(
-        qualification: dict[str, object],
-        selected_distribution: Distribution,
-    ) -> None:
-        """Verify the single selected runtime artifact (PrimAITE root only).
-
-        Gymnasium, NumPy, and setuptools are observed dependency evidence, not
-        separately attested runtime artifacts, so only the PrimAITE artifact and
-        its import roots are re-verified here.
-        """
-
-        artifacts = qualification.get("runtime_artifacts")
-        if not isinstance(artifacts, list) or len(artifacts) != 1:
-            raise RuntimeError(_ARTIFACT_IDENTITY_INVALID)
-        record = artifacts[0]
-        if not isinstance(record, dict) or record.get("name") != _SOURCE_PACKAGE:
-            raise RuntimeError(_ARTIFACT_IDENTITY_INVALID)
-        artifact = record.get("artifact")
-        if not isinstance(artifact, dict) or not is_sha256(artifact.get("sha256")):
-            raise RuntimeError(_ARTIFACT_IDENTITY_INVALID)
-        require_archive = artifact.get("require_direct_archive_sha256")
-        if not isinstance(require_archive, bool):
-            raise RuntimeError(_ARTIFACT_IDENTITY_INVALID)
-        reject_unverifiable_install(
-            selected_distribution,
-            _ARTIFACT_IDENTITY_INVALID,
-            expected_archive_sha256=cast(str, artifact.get("sha256")),
-            require_archive_digest=require_archive,
-        )
-        PrimaiteDriver._verify_artifact_roots(record, selected_distribution)
-
-    @staticmethod
-    def _verify_artifact_roots(
-        record: dict[object, object],
-        selected_distribution: Distribution,
-    ) -> None:
-        """Verify every declared import-root tree for the selected artifact."""
-
-        roots = record.get("roots")
-        if not isinstance(roots, list) or not roots:
-            raise RuntimeError(_ARTIFACT_IDENTITY_INVALID)
-        for root in roots:
-            if not isinstance(root, dict):
-                raise RuntimeError(_ARTIFACT_IDENTITY_INVALID)
-            root_path = root.get("path")
-            expected_count = root.get("file_count")
-            expected_digest = root.get("sha256")
-            if not isinstance(root_path, str) or not isinstance(expected_count, int):
-                raise RuntimeError(_ARTIFACT_IDENTITY_INVALID)
-            if not is_sha256(expected_digest):
-                raise RuntimeError(_ARTIFACT_IDENTITY_INVALID)
-            paths = installed_root_paths(
-                selected_distribution, root_path, _ARTIFACT_IDENTITY_INVALID
-            )
-            if len(paths) != expected_count:
-                raise RuntimeError(_ARTIFACT_IDENTITY_INVALID)
-            observed = installed_tree_digest(
-                selected_distribution, paths, _ARTIFACT_IDENTITY_INVALID
-            )
-            if observed != expected_digest:
-                raise RuntimeError(_ARTIFACT_IDENTITY_INVALID)
 
     def _next_operation_ref(self, operation: str) -> str:
         self._operation_count += 1
