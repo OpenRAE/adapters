@@ -136,6 +136,7 @@ def verify_runtime_source_tree(
         selected_distribution,
         paths,
         SOURCE_IDENTITY_INVALID,
+        root_path=import_root,
         package_root=package_root,
     )
     if observed_digest != expected_digest:
@@ -348,6 +349,7 @@ def _verify_artifact_root(
         selected_distribution,
         paths,
         DEPENDENCY_IDENTITY_INVALID,
+        root_path=root_path,
     )
     if observed_digest != expected_digest:
         raise RuntimeError(DEPENDENCY_IDENTITY_INVALID)
@@ -369,13 +371,19 @@ def _runtime_root_paths(
     paths: list[str] = []
     try:
         for installed_path in installed_root.rglob("*"):
+            relative_path = installed_path.relative_to(installed_root)
+            # Interpreter bytecode caches are created on import and are not part
+            # of the recorded clean-install tree ("__pycache__ and *.pyc
+            # excluded"); skip them before the symlink/file checks so an imported
+            # runtime still matches the qualified digest.
+            if "__pycache__" in relative_path.parts or relative_path.suffix in {".pyc", ".pyo"}:
+                continue
             if installed_path.is_symlink():
                 raise RuntimeError(identity_error)
             if installed_path.is_dir():
                 continue
             if not installed_path.is_file():
                 raise RuntimeError(identity_error)
-            relative_path = installed_path.relative_to(installed_root)
             paths.append(str(portable_root / PurePosixPath(relative_path.as_posix())))
     except OSError as exc:
         raise RuntimeError(identity_error) from exc
@@ -387,11 +395,18 @@ def _installed_tree_digest(
     paths: Sequence[str],
     identity_error: str,
     *,
+    root_path: str,
     package_root: Path | None = None,
 ) -> str:
-    """Hash sorted installed paths and contents into a portable tree identity."""
+    """Hash sorted installed paths and contents into a portable tree identity.
+
+    The recorded tree digest names each file by its path relative to the import
+    root, so this hashes ``relative_name`` while still locating each file by its
+    root-prefixed distribution path.
+    """
 
     digest = hashlib.sha256()
+    root_prefix = PurePosixPath(root_path)
     try:
         for artifact_path in paths:
             portable_path = PurePosixPath(artifact_path)
@@ -401,7 +416,8 @@ def _installed_tree_digest(
             if package_root is not None and not installed_path.is_relative_to(package_root):
                 raise RuntimeError(identity_error)
             content_digest = hashlib.sha256(installed_path.read_bytes()).hexdigest()
-            digest.update(artifact_path.encode("utf-8"))
+            relative_name = portable_path.relative_to(root_prefix).as_posix()
+            digest.update(relative_name.encode("utf-8"))
             digest.update(b"\0")
             digest.update(content_digest.encode("ascii"))
             digest.update(b"\n")
