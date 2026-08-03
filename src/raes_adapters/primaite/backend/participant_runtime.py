@@ -232,6 +232,21 @@ class PrimaiteParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
                 status="failed",
             )
         self._driver_operation_refs[request.action_instance_id] = step.operation_ref
+        rejection = self._step_rejection(request, snapshot, episode_id=episode_id, step=step)
+        if rejection is not None:
+            return rejection
+        return self._accepted_action(request, snapshot, episode_id=episode_id, step=step)
+
+    def _step_rejection(
+        self,
+        request: ParticipantActionAdmissionRequest,
+        snapshot: RuntimeSnapshot,
+        *,
+        episode_id: str,
+        step: DriverStep,
+    ) -> ParticipantNativeActionExecution | None:
+        """Reject an unrepresentable or unavailable transition before acceptance."""
+
         if not step.representable:
             return self._rejected_action(
                 request,
@@ -253,7 +268,7 @@ class PrimaiteParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
                 code="primaite.participant.action-unavailable",
                 message="No source transition was available for the admitted participant action.",
             )
-        return self._accepted_action(request, snapshot, episode_id=episode_id, step=step)
+        return None
 
     def _accepted_action(
         self,

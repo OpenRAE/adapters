@@ -105,7 +105,7 @@ class PrimaiteDriverProtocol(Protocol):
 
     def construct(self) -> None: ...
 
-    def reset(self, seed: int | None) -> DriverResetReport: ...
+    def reset(self, seed: int | None, /) -> DriverResetReport: ...
 
     def step(self, action_contract: str) -> DriverStep: ...
 
@@ -150,17 +150,19 @@ class PrimaiteDriver(object):
             )
             raise RuntimeError(_INPROCESS_UNSUPPORTED)
 
-    def reset(self, seed: int | None) -> DriverResetReport:
+    def reset(self, _seed: int | None) -> DriverResetReport:
         """Refuse an in-process reset after verifying the selected identity."""
 
         self.construct()
 
-    def step(self, action_contract: str) -> DriverStep:
+    @staticmethod
+    def step(action_contract: str) -> DriverStep:
         """Refuse an in-process step; the live target never constructs."""
 
         raise RuntimeError(_INPROCESS_UNSUPPORTED)
 
-    def evaluate(self) -> DriverEvaluation:
+    @staticmethod
+    def evaluate() -> DriverEvaluation:
         """Refuse an in-process evaluation; the live target never constructs."""
 
         raise RuntimeError(_INPROCESS_UNSUPPORTED)

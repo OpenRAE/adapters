@@ -21,6 +21,7 @@ from ._diagnostics import diagnostic_address
 from .driver import PrimaiteDriverProtocol
 
 _SUPPORTED_RESOURCE_TYPES = frozenset({"network", "node"})
+_SELECTED_SCENARIO_ADDRESS = "/provision/primaite/selected-scenario"
 
 
 class PrimaiteProvisioner(object):
@@ -42,7 +43,8 @@ class PrimaiteProvisioner(object):
         self._driver = driver
         self._realization_envelope = realization_envelope
 
-    def validate(self, plan: ProvisioningPlan) -> list[Diagnostic]:
+    @staticmethod
+    def validate(plan: ProvisioningPlan) -> list[Diagnostic]:
         diagnostics = list(plan.diagnostics)
         for operation in plan.operations:
             if operation.resource_type not in _SUPPORTED_RESOURCE_TYPES:
@@ -71,14 +73,14 @@ class PrimaiteProvisioner(object):
             diagnostic = Diagnostic(
                 code="primaite.provisioning.realization-envelope-missing",
                 domain="provisioning",
-                address="/provision/primaite/selected-scenario",
+                address=_SELECTED_SCENARIO_ADDRESS,
                 message="Provisioning plan is missing the selected realization envelope identity.",
             )
         elif plan.realization_envelope != self._realization_envelope:
             diagnostic = Diagnostic(
                 code="primaite.provisioning.realization-envelope-mismatch",
                 domain="provisioning",
-                address="/provision/primaite/selected-scenario",
+                address=_SELECTED_SCENARIO_ADDRESS,
                 message="Provisioning plan does not target the selected PrimAITE realization.",
             )
         elif (
@@ -88,7 +90,7 @@ class PrimaiteProvisioner(object):
             diagnostic = Diagnostic(
                 code="primaite.provisioning.realization-envelope-baseline-mismatch",
                 domain="provisioning",
-                address="/provision/primaite/selected-scenario",
+                address=_SELECTED_SCENARIO_ADDRESS,
                 message="Runtime snapshot does not belong to the selected PrimAITE realization.",
             )
         return [] if diagnostic is None else [diagnostic]
@@ -171,7 +173,7 @@ class PrimaiteProvisioner(object):
                 Diagnostic(
                     code="primaite.provisioning.construct-failed",
                     domain="provisioning",
-                    address="/provision/primaite/selected-scenario",
+                    address=_SELECTED_SCENARIO_ADDRESS,
                     message="The selected PrimAITE source could not be constructed.",
                 )
             )

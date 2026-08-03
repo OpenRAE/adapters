@@ -56,19 +56,16 @@ def primaite_backend_conformance_payload(
     return cast(dict[str, object], backend_conformance_report_payload(report))
 
 
-def primaite_manifest_capability_evidence(
-    manifest: BackendManifest | None = None,
-    *,
-    payload: Mapping[str, object] | None = None,
-) -> dict[str, tuple[str, ...]]:
+def primaite_manifest_capability_evidence() -> dict[str, tuple[str, ...]]:
     """Return production capability evidence for the backend — deliberately none.
 
-    No affirmative runtime capability is production-evidenced. The live
-    ``PrimaiteDriver`` fails closed (it cannot execute in-process), so any passing
-    target-conformance report necessarily came from an injected test double, and a
-    fake driver cannot upgrade a live-runtime claim. Every declared capability is
-    therefore reported as an open gap by
-    :func:`primaite_manifest_capability_evidence_gaps` rather than certified here.
+    No affirmative runtime capability is production-evidenced, and none can be
+    derived from a manifest or its payload: the live ``PrimaiteDriver`` fails closed
+    (it cannot execute in-process), so any passing target-conformance report
+    necessarily came from an injected test double, and a fake driver cannot upgrade
+    a live-runtime claim. Every declared capability is therefore reported as an open
+    gap by :func:`primaite_manifest_capability_evidence_gaps` rather than certified
+    here, so this evidence set is unconditionally empty.
     """
 
     return {}

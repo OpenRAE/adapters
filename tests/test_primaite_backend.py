@@ -937,7 +937,9 @@ def test_live_driver_verifies_source_identity_then_fails_closed(
 
     # Nothing was opened in-process, so cleanup is a bounded no-op and verify_closed holds.
     report = driver.close()
-    assert report.closed and report.verified and report.already_closed
+    assert report.closed
+    assert report.verified
+    assert report.already_closed
     assert report.workspace_removed is False
     assert driver.verify_closed()
 
@@ -945,8 +947,9 @@ def test_live_driver_verifies_source_identity_then_fails_closed(
 def test_live_driver_refuses_unqualified_runtime() -> None:
     # The checked-in qualification is CPython 3.11; this distribution requires 3.12+,
     # so the real runtime gate fires against the real qualification with no fakes.
+    driver = PrimaiteDriver()
     with pytest.raises(RuntimeError, match="runtime is not the qualified runtime"):
-        PrimaiteDriver().construct()
+        driver.construct()
 
 
 def test_live_driver_propagates_source_identity_failure(
@@ -968,5 +971,6 @@ def test_live_driver_propagates_source_identity_failure(
         "raes_adapters._source_admission.verify_runtime_artifacts",
         _reject,
     )
+    driver = PrimaiteDriver()
     with pytest.raises(RuntimeError, match="runtime artifact could not be verified"):
-        PrimaiteDriver().construct()
+        driver.construct()
