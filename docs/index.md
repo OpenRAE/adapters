@@ -28,6 +28,7 @@ semantic and protocol authority.
 - [CybORG researcher run-and-evidence command guardrails](decisions/cyborg-researcher-command-guardrails.md)
 - [CyberBattleSim qualification guardrails](decisions/cyberbattlesim-qualification-guardrails.md)
 - [PrimAITE qualification guardrails](decisions/primaite-qualification-guardrails.md)
+- [PrimAITE scenario and source-ledger guardrails](decisions/primaite-scenario-ledger-guardrails.md)
 - [NASim qualification guardrails](decisions/nasim-qualification-guardrails.md)
 - [NASim scenario and source-ledger guardrails](decisions/nasim-scenario-ledger-guardrails.md)
 - [NASim backend architecture guardrails](decisions/nasim-backend-guardrails.md)

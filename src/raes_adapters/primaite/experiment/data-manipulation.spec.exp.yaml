@@ -1,0 +1,62 @@
+schema_version: experiment-authoring-input/v1
+spec_id: primaite-data-manipulation-spec
+spec_version: 1.0.0
+title: PrimAITE data_manipulation public run plan
+description: >-
+  Authoring input for the selected public PrimAITE protocol. Carries the
+  fixed-horizon episode control and the four descriptive stochastic controls
+  that RAES SDL excludes. The stochastic controls are descriptive only: the
+  light route's public seed seam is broken and GREEN policy randomness is
+  uncontrolled, so no executable random-stream binding is claimed and the
+  determinism loss is retained.
+task_ref:
+  ref_kind: task
+  ref_id: primaite-data-manipulation-task
+intended_scenario_ref:
+  ref_kind: scenario-snapshot
+  ref_id: primaite-data-manipulation
+  ref_digest: sha256:8f4c20885bbc3822587b38dc6c76c77915ecd225a2d753e54a1819c8370c80da
+  ref_path: scenario/data-manipulation.sdl.yaml
+run_plan:
+  episode_control:
+    turn_order: sequential
+    termination_rule: >-
+      PrimaiteGame.step() sets terminated=False unconditionally; the episode
+      ends only by truncation when step_counter >= max_episode_length. There is
+      no source-native success/failure terminal, so fixed-horizon truncation is
+      distinct from goal satisfaction, a reward threshold, and Gym terminated.
+    max_steps: 128
+    termination_condition_refs:
+      - fixed-horizon-truncation
+    description: >-
+      Fixed 128-step horizon; the RED attacker begins at step 25 with frequency
+      20 and variance 5, and both GREEN users act every step.
+  stochastic_controls:
+    - control_id: gym-reset-seam
+      role: seed
+      value: "20260802"
+      description: >-
+        PrimaiteGymEnv.reset(seed=20260802) via set_random_seed. Lost: the light
+        route raises KeyError('torch') because set_random_seed dereferences
+        torch unconditionally. Descriptive only; no executable binding.
+    - control_id: python-random
+      role: randomization
+      value: "20260802"
+      description: >-
+        random.seed(20260802) for scripted RED start/frequency/variance timing.
+        Reachable only through the broken reset seam. Descriptive only; no
+        executable binding.
+    - control_id: numpy-global
+      role: randomization
+      value: "20260802"
+      description: >-
+        numpy.random.seed(20260802). Each GREEN ProbabilisticAgent seeds its own
+        generator from the uncontrolled global NumPy RNG and the scenario sets no
+        game.seed. Descriptive only; no executable binding.
+    - control_id: torch
+      role: seed
+      value: "20260802"
+      description: >-
+        torch.manual_seed(20260802) via set_random_seed. Absent on the qualified
+        no-rl route. Descriptive only; no executable binding.
+  target_run_count: 3
