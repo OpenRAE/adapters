@@ -29,6 +29,7 @@ semantic and protocol authority.
 - [CyberBattleSim qualification guardrails](decisions/cyberbattlesim-qualification-guardrails.md)
 - [PrimAITE qualification guardrails](decisions/primaite-qualification-guardrails.md)
 - [PrimAITE scenario and source-ledger guardrails](decisions/primaite-scenario-ledger-guardrails.md)
+- [PrimAITE backend architecture guardrails](decisions/primaite-backend-guardrails.md)
 - [CyberBattleSim scenario and source-ledger guardrails](decisions/cyberbattlesim-scenario-ledger-guardrails.md)
 - [CyberBattleSim backend architecture guardrails](decisions/cyberbattlesim-backend-guardrails.md)
 - [CyberBattleSim conformance-composition guardrails](decisions/cyberbattlesim-conformance-guardrails.md)

@@ -3,19 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from typing import cast
 
 from raes_backend_protocols.backend_manifest import (  # type: ignore[import-untyped]
     BackendManifest,
 )
-from raes_backend_protocols.manifest import (  # type: ignore[import-untyped]
-    backend_manifest_payload,
-)
 from raes_conformance.conformance import (  # type: ignore[import-untyped]
     BackendConformanceReport,
-)
-from raes_conformance.conformance.report import (  # type: ignore[import-untyped]
-    backend_conformance_report_payload,
 )
 from raes_contracts.diagnostics import (  # type: ignore[import-untyped]
     Diagnostic,
@@ -24,6 +17,11 @@ from raes_contracts.diagnostics import (  # type: ignore[import-untyped]
 )
 
 from raes_adapters.base import run_conformance_probe
+from raes_adapters.base.manifest_evidence import (
+    backend_conformance_payload,
+    declared_capability_evidence,
+    manifest_payload,
+)
 from raes_adapters.cyberbattlesim import load_qualification
 from raes_adapters.cyberbattlesim.scenario_ledger import (
     CYBERBATTLE_CHAIN,
@@ -94,7 +92,6 @@ _CAPABILITY_PROBE_REQUIREMENTS: Mapping[str, tuple[str, ...]] = {
         _SOURCE_PROTOCOL_EVIDENCE,
     ),
 }
-_NON_CAPABILITY_KEYS = frozenset({"constraints", "name"})
 
 
 def run_cyberbattlesim_conformance(
@@ -117,7 +114,7 @@ def cyberbattlesim_backend_conformance_payload(
 ) -> dict[str, object]:
     """Serialize the canonical report through the published RAES projector."""
 
-    return cast(dict[str, object], backend_conformance_report_payload(report))
+    return backend_conformance_payload(report)
 
 
 def cyberbattlesim_manifest_capability_evidence(
@@ -129,17 +126,11 @@ def cyberbattlesim_manifest_capability_evidence(
 ) -> dict[str, tuple[str, ...]]:
     """Return evidence references for declared affirmative manifest surfaces."""
 
-    passed_evidence_refs = set(
-        _passed_probe_evidence_refs(
-            conformance_report,
-            source_diagnostics,
-        )
+    evidence, _gaps = declared_capability_evidence(
+        manifest_payload(manifest, payload, create_cyberbattlesim_manifest),
+        _CAPABILITY_PROBE_REQUIREMENTS,
+        _passed_probe_evidence_refs(conformance_report, source_diagnostics),
     )
-    evidence: dict[str, tuple[str, ...]] = {}
-    for pointer in _affirmative_capability_pointers(_manifest_payload(manifest, payload)):
-        requirements = _CAPABILITY_PROBE_REQUIREMENTS.get(pointer)
-        if requirements is not None and set(requirements) <= passed_evidence_refs:
-            evidence[pointer] = requirements
     return evidence
 
 
@@ -152,17 +143,12 @@ def cyberbattlesim_manifest_capability_evidence_gaps(
 ) -> tuple[str, ...]:
     """Return declared affirmative capability surfaces with no probe evidence."""
 
-    evidence = cyberbattlesim_manifest_capability_evidence(
-        manifest,
-        payload=payload,
-        conformance_report=conformance_report,
-        source_diagnostics=source_diagnostics,
+    _evidence, gaps = declared_capability_evidence(
+        manifest_payload(manifest, payload, create_cyberbattlesim_manifest),
+        _CAPABILITY_PROBE_REQUIREMENTS,
+        _passed_probe_evidence_refs(conformance_report, source_diagnostics),
     )
-    return tuple(
-        pointer
-        for pointer in _affirmative_capability_pointers(_manifest_payload(manifest, payload))
-        if pointer not in evidence
-    )
+    return gaps
 
 
 def cyberbattlesim_declared_weaknesses(
@@ -228,20 +214,6 @@ def cyberbattlesim_source_protocol_diagnostics(
     return tuple(diagnostics)
 
 
-def _manifest_payload(
-    manifest: BackendManifest | None,
-    payload: Mapping[str, object] | None,
-) -> Mapping[str, object]:
-    """Resolve an explicit payload or serialize a manifest."""
-
-    if payload is not None:
-        return payload
-    return cast(
-        Mapping[str, object],
-        backend_manifest_payload(manifest or create_cyberbattlesim_manifest()),
-    )
-
-
 def _passed_probe_evidence_refs(
     conformance_report: BackendConformanceReport | None,
     source_diagnostics: Iterable[Diagnostic],
@@ -263,80 +235,6 @@ def _passed_probe_evidence_refs(
     ):
         refs.append(_SOURCE_PROTOCOL_EVIDENCE)
     return tuple(refs)
-
-
-def _affirmative_capability_pointers(payload: Mapping[str, object]) -> tuple[str, ...]:
-    """Return JSON pointers for manifest capability values that declare support."""
-
-    capabilities = payload.get("capabilities")
-    if not isinstance(capabilities, Mapping):
-        return ()
-    pointers: list[str] = []
-    for name, value in sorted(capabilities.items(), key=lambda item: str(item[0])):
-        if not _is_affirmative_capability_value(value):
-            continue
-        surface = f"/capabilities/{_escape_pointer_token(str(name))}"
-        if isinstance(value, Mapping):
-            nested = tuple(
-                _iter_affirmative_capability_pointers(
-                    cast(Mapping[object, object], value),
-                    surface,
-                )
-            )
-            pointers.extend(nested or (surface,))
-        else:
-            pointers.append(surface)
-    return tuple(pointers)
-
-
-def _iter_affirmative_capability_pointers(
-    value: Mapping[object, object],
-    base_pointer: str,
-) -> Iterable[str]:
-    """Yield nested affirmative capability pointers below a manifest surface."""
-
-    for key, child in sorted(value.items(), key=lambda item: str(item[0])):
-        if key in _NON_CAPABILITY_KEYS or not _is_affirmative_capability_value(child):
-            continue
-        pointer = f"{base_pointer}/{_escape_pointer_token(str(key))}"
-        if isinstance(child, Mapping):
-            nested = tuple(
-                _iter_affirmative_capability_pointers(
-                    cast(Mapping[object, object], child),
-                    pointer,
-                )
-            )
-            yield from nested or (pointer,)
-        else:
-            yield pointer
-
-
-def _is_affirmative_capability_value(value: object) -> bool:
-    """Return whether a manifest capability value makes an affirmative claim."""
-
-    if value in (None, False):
-        affirmative = False
-    elif value is True:
-        affirmative = True
-    elif isinstance(value, str | int | float):
-        affirmative = bool(value)
-    elif isinstance(value, list | tuple | set | frozenset):
-        affirmative = any(_is_affirmative_capability_value(item) for item in value)
-    elif isinstance(value, Mapping):
-        affirmative = any(
-            _is_affirmative_capability_value(child)
-            for key, child in cast(Mapping[object, object], value).items()
-            if key not in _NON_CAPABILITY_KEYS
-        )
-    else:
-        affirmative = False
-    return affirmative
-
-
-def _escape_pointer_token(token: str) -> str:
-    """Escape one token for inclusion in a JSON Pointer."""
-
-    return token.replace("~", "~0").replace("/", "~1")
 
 
 __all__ = [

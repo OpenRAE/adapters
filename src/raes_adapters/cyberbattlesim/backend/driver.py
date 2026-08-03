@@ -4,15 +4,20 @@ from __future__ import annotations
 
 import hashlib
 import importlib
-import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from importlib.metadata import Distribution, PackageNotFoundError, distribution
-from importlib.util import find_spec
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from threading import RLock
 from typing import Protocol, TypedDict, cast
 
+from raes_adapters.base.source_identity import (
+    installed_root_paths,
+    installed_tree_digest,
+    is_sha256,
+    reject_unverifiable_install,
+    verify_module_origin,
+)
 from raes_adapters.cyberbattlesim import load_qualification
 
 _SUPPORTED_ACTION_KINDS = frozenset(
@@ -239,17 +244,17 @@ class CyberBattleSimDriver(object):
                     selected_distribution,
                 )
                 self._verify_selected_source(qualification, selected_distribution)
-                self._verify_package_origin(
+                verify_module_origin(
                     "cyberbattle",
                     selected_distribution,
                     "cyberbattle/__init__.py",
                 )
-                self._verify_package_origin(
+                verify_module_origin(
                     "gymnasium",
                     distributions["gymnasium"],
                     "gymnasium/__init__.py",
                 )
-                self._verify_package_origin(
+                verify_module_origin(
                     "numpy",
                     distributions["numpy"],
                     "numpy/__init__.py",
@@ -258,12 +263,12 @@ class CyberBattleSimDriver(object):
             importlib.import_module("cyberbattle")
             gymnasium = cast(_GymnasiumModule, importlib.import_module("gymnasium"))
             numpy = cast(_NumpyModule, importlib.import_module("numpy"))
-            self._verify_package_origin(
+            verify_module_origin(
                 "cyberbattle._env.cyberbattle_env",
                 selected_distribution,
                 "cyberbattle/_env/cyberbattle_env.py",
             )
-            self._verify_package_origin(
+            verify_module_origin(
                 "cyberbattle._env.defender",
                 selected_distribution,
                 "cyberbattle/_env/defender.py",
@@ -598,7 +603,7 @@ class CyberBattleSimDriver(object):
         expected_count = tree.get("file_count")
         if not isinstance(expected_digest, str) or not isinstance(expected_count, int):
             raise RuntimeError(_SOURCE_IDENTITY_INVALID)
-        paths = CyberBattleSimDriver._runtime_root_paths(
+        paths = installed_root_paths(
             selected_distribution,
             "cyberbattle",
             _SOURCE_IDENTITY_INVALID,
@@ -609,7 +614,7 @@ class CyberBattleSimDriver(object):
             Path,
             selected_distribution.locate_file("cyberbattle"),
         ).resolve()
-        observed_digest = CyberBattleSimDriver._installed_tree_digest(
+        observed_digest = installed_tree_digest(
             selected_distribution,
             paths,
             _SOURCE_IDENTITY_INVALID,
@@ -617,37 +622,6 @@ class CyberBattleSimDriver(object):
         )
         if observed_digest != expected_digest:
             raise RuntimeError(_SOURCE_IDENTITY_INVALID)
-
-    @staticmethod
-    def _installed_tree_digest(
-        selected_distribution: Distribution,
-        paths: Sequence[str],
-        identity_error: str,
-        *,
-        package_root: Path | None = None,
-    ) -> str:
-        """Hash sorted installed paths and contents into a portable tree identity."""
-
-        digest = hashlib.sha256()
-        try:
-            for artifact_path in paths:
-                portable_path = PurePosixPath(artifact_path)
-                if portable_path.is_absolute() or ".." in portable_path.parts:
-                    raise RuntimeError(identity_error)
-                installed_path = cast(
-                    Path,
-                    selected_distribution.locate_file(artifact_path),
-                ).resolve()
-                if package_root is not None and not installed_path.is_relative_to(package_root):
-                    raise RuntimeError(identity_error)
-                content_digest = hashlib.sha256(installed_path.read_bytes()).hexdigest()
-                digest.update(artifact_path.encode("utf-8"))
-                digest.update(b"\0")
-                digest.update(content_digest.encode("ascii"))
-                digest.update(b"\n")
-        except OSError as exc:
-            raise RuntimeError(identity_error) from exc
-        return digest.hexdigest()
 
     @staticmethod
     def _verify_runtime_artifacts(
@@ -729,7 +703,7 @@ class CyberBattleSimDriver(object):
             raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
         valid = (
             isinstance(artifact.get("filename"), str)
-            and CyberBattleSimDriver._is_sha256(artifact.get("sha256"))
+            and is_sha256(artifact.get("sha256"))
             and isinstance(artifact.get("require_direct_archive_sha256"), bool)
             and artifact.get("runtime_identity") == "complete-root-tree"
             and selected_versions.get(package_name) == expected_version
@@ -760,30 +734,15 @@ class CyberBattleSimDriver(object):
     ) -> None:
         """Reject unverifiable editable/VCS installs and check archive identity."""
 
-        direct_url_text = CyberBattleSimDriver._direct_url_text(selected_distribution)
-        if direct_url_text is None:
-            return
         expected_digest, require_archive_digest = CyberBattleSimDriver._direct_artifact_policy(
             record
         )
-        direct_url = CyberBattleSimDriver._load_direct_url(direct_url_text)
-        if not {"dir_info", "vcs_info"}.isdisjoint(direct_url):
-            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
-        observed_digest = CyberBattleSimDriver._archive_sha256(direct_url)
-        if require_archive_digest and observed_digest != expected_digest:
-            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
-
-    @staticmethod
-    def _direct_url_text(selected_distribution: Distribution) -> str | None:
-        """Read optional direct-install provenance from a distribution."""
-
-        read_text = getattr(selected_distribution, "read_text", None)
-        if not callable(read_text):
-            return None
-        direct_url_text = read_text("direct_url.json")
-        if direct_url_text is not None and not isinstance(direct_url_text, str):
-            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
-        return direct_url_text
+        reject_unverifiable_install(
+            selected_distribution,
+            _DEPENDENCY_IDENTITY_INVALID,
+            expected_archive_sha256=expected_digest,
+            require_archive_digest=require_archive_digest,
+        )
 
     @staticmethod
     def _direct_artifact_policy(record: dict[object, object]) -> tuple[str, bool]:
@@ -799,32 +758,6 @@ class CyberBattleSimDriver(object):
         if not isinstance(require_archive_digest, bool):
             raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
         return expected_digest, require_archive_digest
-
-    @staticmethod
-    def _load_direct_url(direct_url_text: str) -> dict[object, object]:
-        """Decode a direct-install provenance record as a JSON object."""
-
-        try:
-            direct_url = json.loads(direct_url_text)
-        except (TypeError, json.JSONDecodeError) as exc:
-            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID) from exc
-        if not isinstance(direct_url, dict):
-            raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
-        return direct_url
-
-    @staticmethod
-    def _archive_sha256(direct_url: dict[object, object]) -> object:
-        """Read modern or legacy SHA-256 metadata from a direct archive."""
-
-        archive_info = direct_url.get("archive_info")
-        hashes = archive_info.get("hashes") if isinstance(archive_info, dict) else None
-        legacy_hash = archive_info.get("hash") if isinstance(archive_info, dict) else None
-        observed_digest = hashes.get("sha256") if isinstance(hashes, dict) else None
-        if observed_digest is None and isinstance(legacy_hash, str):
-            algorithm, separator, digest = legacy_hash.partition("=")
-            if algorithm == "sha256" and separator:
-                observed_digest = digest
-        return observed_digest
 
     @staticmethod
     def _verify_artifact_roots(
@@ -853,79 +786,22 @@ class CyberBattleSimDriver(object):
         expected_digest = root.get("sha256")
         if not isinstance(root_path, str) or not isinstance(expected_count, int):
             raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
-        if not CyberBattleSimDriver._is_sha256(expected_digest):
+        if not is_sha256(expected_digest):
             raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
-        paths = CyberBattleSimDriver._runtime_root_paths(
+        paths = installed_root_paths(
             selected_distribution,
             root_path,
             _DEPENDENCY_IDENTITY_INVALID,
         )
         if len(paths) != expected_count:
             raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
-        observed_digest = CyberBattleSimDriver._installed_tree_digest(
+        observed_digest = installed_tree_digest(
             selected_distribution,
             paths,
             _DEPENDENCY_IDENTITY_INVALID,
         )
         if observed_digest != expected_digest:
             raise RuntimeError(_DEPENDENCY_IDENTITY_INVALID)
-
-    @staticmethod
-    def _runtime_root_paths(
-        selected_distribution: Distribution,
-        root_path: str,
-        identity_error: str = _DEPENDENCY_IDENTITY_INVALID,
-    ) -> list[str]:
-        """Enumerate a real, symlink-free installed import-root tree."""
-
-        portable_root = PurePosixPath(root_path)
-        if portable_root.is_absolute() or ".." in portable_root.parts:
-            raise RuntimeError(identity_error)
-        installed_root = cast(
-            Path,
-            selected_distribution.locate_file(root_path),
-        )
-        if installed_root.is_symlink() or not installed_root.is_dir():
-            raise RuntimeError(identity_error)
-        paths: list[str] = []
-        try:
-            for installed_path in installed_root.rglob("*"):
-                if installed_path.is_symlink():
-                    raise RuntimeError(identity_error)
-                if installed_path.is_dir():
-                    continue
-                if not installed_path.is_file():
-                    raise RuntimeError(identity_error)
-                relative_path = installed_path.relative_to(installed_root)
-                paths.append(str(portable_root / PurePosixPath(relative_path.as_posix())))
-        except OSError as exc:
-            raise RuntimeError(identity_error) from exc
-        return sorted(paths)
-
-    @staticmethod
-    def _is_sha256(value: object) -> bool:
-        """Return whether a value is a lowercase SHA-256 digest."""
-
-        return (
-            isinstance(value, str)
-            and len(value) == 64
-            and all(character in "0123456789abcdef" for character in value)
-        )
-
-    @staticmethod
-    def _verify_package_origin(
-        module_name: str,
-        selected_distribution: Distribution,
-        expected_relative_path: str,
-    ) -> None:
-        module_spec = find_spec(module_name)
-        origin = module_spec.origin if module_spec is not None else None
-        expected = cast(
-            Path,
-            selected_distribution.locate_file(expected_relative_path),
-        ).resolve()
-        if not isinstance(origin, str) or Path(origin).resolve() != expected:
-            raise RuntimeError("selected simulator module origin could not be verified")
 
     def _next_operation_ref(self, operation: str) -> str:
         self._operation_count += 1

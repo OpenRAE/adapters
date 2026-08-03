@@ -1198,7 +1198,7 @@ def test_live_driver_is_lazy_seed_bounded_and_performs_exactly_one_native_step(
         lambda name: distributions[name],
     )
     monkeypatch.setattr(
-        "raes_adapters.cyberbattlesim.backend.driver.find_spec",
+        "raes_adapters.base.source_identity.find_spec",
         lambda name: SimpleNamespace(origin=str(module_origins[name])),
     )
     selected_qualification = {
