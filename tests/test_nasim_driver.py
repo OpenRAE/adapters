@@ -121,7 +121,8 @@ def _runtime_root_record(root_path: str, content_by_path: dict[str, bytes]) -> d
         path for path in content_by_path if path == root_path or path.startswith(f"{root_path}/")
     )
     for selected_path in selected_paths:
-        digest.update(selected_path.encode())
+        relative_name = selected_path[len(root_path) + 1 :]
+        digest.update(relative_name.encode())
         digest.update(b"\0")
         digest.update(hashlib.sha256(content_by_path[selected_path]).hexdigest().encode())
         digest.update(b"\n")
@@ -154,6 +155,12 @@ def _install_environment(
         installed = source_root / source_path
         installed.parent.mkdir(parents=True, exist_ok=True)
         installed.write_bytes(content)
+    # Interpreter bytecode caches appear once a runtime is imported; they are not
+    # in the recorded clean tree and must be excluded from admission (else any
+    # imported install fails). Plant one so the digest/count check must skip it.
+    bytecode = source_root / "nasim" / "__pycache__" / "__init__.cpython-312.pyc"
+    bytecode.parent.mkdir(parents=True, exist_ok=True)
+    bytecode.write_bytes(b"compiled bytecode that must not affect admission")
     dependency_roots = {
         "gymnasium": tmp_path / "gymnasium-distribution",
         "numpy": tmp_path / "numpy-distribution",
