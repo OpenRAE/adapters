@@ -1,4 +1,4 @@
-"""CyberBattleSim conformance composition over published RAES report shapes."""
+"""NASim conformance composition over published RAES report shapes."""
 
 from __future__ import annotations
 
@@ -17,23 +17,23 @@ from raes_adapters._gym_backend.conformance import (
     GymConformanceConfig,
     standard_probe_requirements,
 )
-from raes_adapters.cyberbattlesim import load_qualification
-from raes_adapters.cyberbattlesim.scenario_ledger import (
-    CYBERBATTLE_CHAIN,
+from raes_adapters.nasim import load_qualification
+from raes_adapters.nasim.scenario_ledger import (
+    NASIM_TINY,
     EvidenceSelection,
     load_loss_disclosures,
     validate_all,
 )
 
-from .driver import CyberBattleSimDriverProtocol
-from .manifest import create_cyberbattlesim_manifest
-from .target import create_cyberbattlesim_target
+from .driver import NasimDriverProtocol
+from .manifest import create_nasim_manifest
+from .target import create_nasim_target
 
-_BACKEND_EVIDENCE = "evidence.cyberbattlesim.backend-conformance"
-_SOURCE_EVIDENCE = "evidence.cyberbattlesim.source-protocol.validated"
-_SOURCE_FAILED = "cyberbattlesim.source-protocol.validation-failed"
+_BACKEND_EVIDENCE = "evidence.nasim.backend-conformance"
+_SOURCE_EVIDENCE = "evidence.nasim.source-protocol.validated"
+_SOURCE_FAILED = "nasim.source-protocol.validation-failed"
 _CONFIG = GymConformanceConfig(
-    name="cyberbattlesim",
+    name="nasim",
     backend_evidence=_BACKEND_EVIDENCE,
     source_evidence=_SOURCE_EVIDENCE,
     source_validation_failed=_SOURCE_FAILED,
@@ -41,32 +41,31 @@ _CONFIG = GymConformanceConfig(
         _BACKEND_EVIDENCE,
         _SOURCE_EVIDENCE,
         participant_dual=(
-            "feature_support",
             "supported_behavior_features",
             "supported_interaction_features",
             "supported_participant_roles",
         ),
     ),
-    default_selection=CYBERBATTLE_CHAIN,
-    create_target=create_cyberbattlesim_target,
-    create_manifest=create_cyberbattlesim_manifest,
+    default_selection=NASIM_TINY,
+    create_target=create_nasim_target,
+    create_manifest=create_nasim_manifest,
     load_qualification=load_qualification,
     validate_all=validate_all,
     load_loss_disclosures=load_loss_disclosures,
 )
 
 
-def run_cyberbattlesim_conformance(
+def run_nasim_conformance(
     *,
-    driver: CyberBattleSimDriverProtocol | None = None,
+    driver: NasimDriverProtocol | None = None,
     seed: int | None = None,
 ) -> BackendConformanceReport:
-    """Run the published RAES target conformance probe for CyberBattleSim."""
+    """Run the published RAES target conformance probe for NASim."""
 
     return gym.run_conformance(_CONFIG, driver, seed)
 
 
-def cyberbattlesim_backend_conformance_payload(
+def nasim_backend_conformance_payload(
     report: BackendConformanceReport,
 ) -> dict[str, object]:
     """Serialize the canonical report through the published RAES projector."""
@@ -74,7 +73,7 @@ def cyberbattlesim_backend_conformance_payload(
     return gym.conformance_payload(report)
 
 
-def cyberbattlesim_manifest_capability_evidence(
+def nasim_manifest_capability_evidence(
     manifest: BackendManifest | None = None,
     *,
     payload: Mapping[str, object] | None = None,
@@ -88,7 +87,7 @@ def cyberbattlesim_manifest_capability_evidence(
     )
 
 
-def cyberbattlesim_manifest_capability_evidence_gaps(
+def nasim_manifest_capability_evidence_gaps(
     manifest: BackendManifest | None = None,
     *,
     payload: Mapping[str, object] | None = None,
@@ -102,16 +101,16 @@ def cyberbattlesim_manifest_capability_evidence_gaps(
     )
 
 
-def cyberbattlesim_declared_weaknesses(
-    selection: EvidenceSelection = CYBERBATTLE_CHAIN,
+def nasim_declared_weaknesses(
+    selection: EvidenceSelection = NASIM_TINY,
 ) -> tuple[str, ...]:
     """Return declared source-protocol limitations and loss disclosures."""
 
     return gym.declared_weaknesses(_CONFIG, selection)
 
 
-def cyberbattlesim_source_protocol_diagnostics(
-    selection: EvidenceSelection = CYBERBATTLE_CHAIN,
+def nasim_source_protocol_diagnostics(
+    selection: EvidenceSelection = NASIM_TINY,
 ) -> tuple[Diagnostic, ...]:
     """Validate source-protocol evidence and emit RAES diagnostics."""
 
@@ -119,10 +118,10 @@ def cyberbattlesim_source_protocol_diagnostics(
 
 
 __all__ = [
-    "cyberbattlesim_backend_conformance_payload",
-    "cyberbattlesim_declared_weaknesses",
-    "cyberbattlesim_manifest_capability_evidence",
-    "cyberbattlesim_manifest_capability_evidence_gaps",
-    "cyberbattlesim_source_protocol_diagnostics",
-    "run_cyberbattlesim_conformance",
+    "nasim_backend_conformance_payload",
+    "nasim_declared_weaknesses",
+    "nasim_manifest_capability_evidence",
+    "nasim_manifest_capability_evidence_gaps",
+    "nasim_source_protocol_diagnostics",
+    "run_nasim_conformance",
 ]
