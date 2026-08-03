@@ -1029,9 +1029,10 @@ def test_live_driver_is_lazy_seed_bounded_and_performs_exactly_one_native_step(
         imported_modules.append(name)
         return modules[name]
 
+    # The recorded tree digest names each file relative to its import root.
     runtime_tree_digest = hashlib.sha256()
     for source_path, content in sorted(source_content.items()):
-        runtime_tree_digest.update(source_path.encode())
+        runtime_tree_digest.update(source_path.split("/", 1)[1].encode())
         runtime_tree_digest.update(b"\0")
         runtime_tree_digest.update(hashlib.sha256(content).hexdigest().encode())
         runtime_tree_digest.update(b"\n")
@@ -1047,7 +1048,8 @@ def test_live_driver_is_lazy_seed_bounded_and_performs_exactly_one_native_step(
             if path == root_path or path.startswith(f"{root_path}/")
         )
         for selected_path in selected_paths:
-            digest.update(selected_path.encode())
+            relative_name = selected_path[len(root_path) + 1 :]
+            digest.update(relative_name.encode())
             digest.update(b"\0")
             digest.update(hashlib.sha256(content_by_path[selected_path]).hexdigest().encode())
             digest.update(b"\n")
