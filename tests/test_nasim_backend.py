@@ -572,6 +572,10 @@ def test_evaluator_reads_distinct_facts_without_advancing_or_leaking_to_particip
         raw_content.content_checksum.value
         == hashlib.sha256(raw_content.payload_summary.encode("utf-8")).hexdigest()
     )
+    # The per-run terminal facts are retained as evaluator evidence, not only as
+    # a static limitation.
+    assert "terminated=False" in raw_content.payload_summary
+    assert "truncated=False" in raw_content.payload_summary
     portable_evaluation = str(
         {
             "evidence": evidence_records[0].model_dump(mode="json"),

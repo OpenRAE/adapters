@@ -62,6 +62,15 @@ class _DriverEvaluationFacts(Protocol):
     @property
     def projection_ref(self) -> str: ...
 
+    @property
+    def terminated(self) -> bool: ...
+
+    @property
+    def truncated(self) -> bool: ...
+
+    @property
+    def terminal_cause(self) -> str | None: ...
+
 
 class _EvaluatorDriver(Protocol):
     """The driver surface the evaluator reads (never advances)."""
@@ -83,6 +92,9 @@ def _summary(facts: _DriverEvaluationFacts) -> EvaluatorSummary:
         cumulative_reward=facts.cumulative_reward,
         execution_ref=facts.execution_ref,
         projection_ref=facts.projection_ref,
+        terminated=facts.terminated,
+        truncated=facts.truncated,
+        terminal_cause=facts.terminal_cause,
     )
 
 

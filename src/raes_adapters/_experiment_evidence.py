@@ -39,12 +39,20 @@ _EVIDENCE_RECORD_VERSION = "1.0.0"
 
 @dataclass(frozen=True)
 class EvaluatorSummary(object):
-    """Sanitized, evaluator-owned run facts shared by every gym backend."""
+    """Sanitized, evaluator-owned run facts shared by every gym backend.
+
+    ``terminated`` and ``truncated`` are retained as distinct evaluator evidence
+    so a per-run terminal fact (for example, truncation that fired alongside a
+    goal) survives into the portable record rather than only a static limitation.
+    """
 
     step_count: int
     cumulative_reward: float
     execution_ref: str
     projection_ref: str
+    terminated: bool = False
+    truncated: bool = False
+    terminal_cause: str | None = None
 
 
 @dataclass(frozen=True)
@@ -182,7 +190,9 @@ def _evidence_record(
     payload_summary = (
         "Sanitized evaluator summary: "
         f"{summary.step_count} source transitions and cumulative "
-        f"reward {summary.cumulative_reward:.17g}."
+        f"reward {summary.cumulative_reward:.17g}; "
+        f"terminated={summary.terminated} truncated={summary.truncated} "
+        f"terminal_cause={summary.terminal_cause}."
     )
     return ExperimentEvidenceRecordModel(
         schema_version="experiment-evidence-record/v1",

@@ -303,6 +303,11 @@ def test_live_driver_isolates_numpy_and_maps_goal_termination(
     assert evaluation.terminated is True
     assert evaluation.terminal_cause == "goal"
 
+    # The fake environment emits native observation/info payloads; none of that
+    # native data may survive into the sanitized driver outputs.
+    for sanitized in (scan, exploit, evaluation):
+        assert "must-not-cross" not in str(sanitized)
+
     first_close = driver.close()
     second_close = driver.close()
     assert first_close.verified and not first_close.already_closed
@@ -324,6 +329,22 @@ def test_live_driver_maps_step_limit_truncation(
 
     assert step.terminated is False and step.truncated is True
     assert step.terminal_cause == "step-limit"
+
+
+def test_live_driver_fails_before_mutation_on_unresolvable_target(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    driver, environment, _numpy = _install_environment(monkeypatch, tmp_path, step_results=[])
+    driver.reset(20260802)
+
+    # A supplied target that does not resolve to a native coordinate must not
+    # silently degrade to the first action of the class on some other host.
+    step = driver.step("service-exploit", "provision.node.switch-core")
+
+    assert step.source_transition is False
+    assert step.processed is False
+    assert environment.stepped == []
 
 
 def test_live_driver_rejects_unsupported_action_and_requires_reset(

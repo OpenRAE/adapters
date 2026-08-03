@@ -230,11 +230,10 @@ class NasimDriver(object):
                 )
                 if find_spec("_tkinter") is None:
                     raise RuntimeError(_TK_UNAVAILABLE)
-            # Importing ``nasim`` pulls ``tkinter`` at import time (a disclosed
-            # upstream defect); the Tk check above precedes it.
-            nasim = cast(_NasimModule, importlib.import_module("nasim"))
-            numpy = cast(_NumpyModule, importlib.import_module("numpy"))
-            if not self._artifacts_verified:
+                # Verify the top-level module origins resolve inside the selected
+                # distributions BEFORE importing NASim. ``find_spec`` does not
+                # execute a top-level module, so a shadowing package on the path
+                # is rejected before its import-time code can run.
                 _source_admission.verify_package_origin(
                     "nasim", selected_distribution, "nasim/__init__.py"
                 )
@@ -244,6 +243,13 @@ class NasimDriver(object):
                 _source_admission.verify_package_origin(
                     "numpy", distributions["numpy"], "numpy/__init__.py"
                 )
+            # Importing ``nasim`` pulls ``tkinter`` at import time (a disclosed
+            # upstream defect); the Tk and origin checks above precede it.
+            nasim = cast(_NasimModule, importlib.import_module("nasim"))
+            numpy = cast(_NumpyModule, importlib.import_module("numpy"))
+            if not self._artifacts_verified:
+                # Submodule origins can only be resolved once the parent import
+                # has run; their file contents were already digest-verified above.
                 _source_admission.verify_package_origin(
                     "nasim.envs.action", selected_distribution, "nasim/envs/action.py"
                 )
@@ -418,6 +424,11 @@ class NasimDriver(object):
 
         native_class = _NATIVE_ACTION_CLASS[action_kind]
         target_coordinate = _target_coordinate(target_ref)
+        # A target that was supplied but does not resolve to a native coordinate
+        # is a malformed selection: fail before mutation rather than silently
+        # attacking the first action of the class on some other host.
+        if target_ref is not None and target_coordinate is None:
+            return None
         action_space = environment.action_space
         for index in range(action_space.n):
             action = action_space.get_action(index)
