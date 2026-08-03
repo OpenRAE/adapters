@@ -26,6 +26,9 @@ __all__ = [
     "LEDGER",
     "NASIM_TINY",
     "PINNED_SCENARIO_DIGEST",
+    "EvidenceSelection",
+    "load_loss_disclosures",
+    "validate_all",
 ]
 
 NASIM_TINY = EvidenceSelection(
@@ -79,3 +82,8 @@ LEDGER = ScenarioLedger(
     load_qualification=load_qualification,
     native_markers=_native_markers,
 )
+
+# Backend importers (``backend/conformance.py``, ``backend/evaluator.py``) use
+# these selection-bound entry points; keep them as module-level names.
+load_loss_disclosures = LEDGER.load_loss_disclosures
+validate_all = LEDGER.validate_all
