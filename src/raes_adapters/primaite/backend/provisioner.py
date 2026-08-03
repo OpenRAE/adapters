@@ -9,30 +9,30 @@ from raes_contracts.diagnostics import Diagnostic  # type: ignore[import-untyped
 from raes_contracts.planning import (  # type: ignore[import-untyped]
     ChangeAction,
     ProvisioningPlan,
-    RuntimeDomain,
 )
 from raes_contracts.runtime_state import (  # type: ignore[import-untyped]
     ApplyResult,
     RuntimeSnapshot,
-    SnapshotEntry,
 )
 
-from ._diagnostics import diagnostic_address
+from raes_adapters._gym_backend.provisioner import GymProvisioner
+
 from .driver import PrimaiteDriverProtocol
 
-_SUPPORTED_RESOURCE_TYPES = frozenset({"network", "node"})
 _SELECTED_SCENARIO_ADDRESS = "/provision/primaite/selected-scenario"
 
 
-class PrimaiteProvisioner(object):
-    """Realize the fixed selected scenario while preserving portable intent.
+class PrimaiteProvisioner(GymProvisioner):
+    """Realize the fixed selected scenario, bound to its realization envelope.
 
-    The provisioner is bound to the selected realization envelope. It accepts only
-    a plan that joins to that realization (and a baseline snapshot that belongs to
-    it), never synthesizes a native topology from SDL, and never stores a native
-    handle in the portable target: it records planned RAES state plus the selected
-    realization identity and constructs one aggregate native session through the
-    private driver.
+    The neutral :class:`GymProvisioner` realizes the selected source and preserves
+    ownership on failure. PrimAITE additionally binds every plan and baseline to
+    the selected realization envelope identity: a plan that omits or mismatches
+    the realization, or a baseline that does not belong to it, is refused before
+    any construction, and a successful apply stamps the selected realization onto
+    the snapshot. The profile realizes a network/node topology; the shared
+    provisioner's wider supported-resource set is harmless because the selected
+    fixed SDL never emits other resource types.
     """
 
     def __init__(
@@ -40,26 +40,36 @@ class PrimaiteProvisioner(object):
         driver: PrimaiteDriverProtocol,
         realization_envelope: RealizationEnvelopeIdentityModel,
     ) -> None:
-        self._driver = driver
+        super().__init__(driver, "primaite")
         self._realization_envelope = realization_envelope
 
-    @staticmethod
-    def validate(plan: ProvisioningPlan) -> list[Diagnostic]:
-        diagnostics = list(plan.diagnostics)
-        for operation in plan.operations:
-            if operation.resource_type not in _SUPPORTED_RESOURCE_TYPES:
-                diagnostics.append(
-                    Diagnostic(
-                        code="primaite.provisioning.unsupported-resource",
-                        domain="provisioning",
-                        address=diagnostic_address(operation.address),
-                        message=(
-                            "The selected PrimAITE profile does not realize this "
-                            "provisioning resource type."
-                        ),
-                    )
-                )
-        return diagnostics
+    def apply(self, plan: ProvisioningPlan, snapshot: RuntimeSnapshot) -> ApplyResult:
+        """Realize the plan, then stamp the selected realization on a mutating success."""
+
+        result = super().apply(plan, snapshot)
+        mutated = any(operation.action != ChangeAction.UNCHANGED for operation in plan.operations)
+        if not (result.success and mutated):
+            return result
+        return ApplyResult(
+            success=True,
+            snapshot=result.snapshot.with_entries(
+                dict(result.snapshot.entries),
+                realization_envelope=self._realization_envelope,
+            ),
+            diagnostics=result.diagnostics,
+            changed_addresses=result.changed_addresses,
+        )
+
+    def _preflight(
+        self,
+        plan: ProvisioningPlan,
+        snapshot: RuntimeSnapshot,
+        diagnostics: list[Diagnostic],
+    ) -> ApplyResult | None:
+        """Refuse a plan or baseline that does not join the selected realization first."""
+
+        diagnostics.extend(self._identity_diagnostics(plan, snapshot))
+        return super()._preflight(plan, snapshot, diagnostics)
 
     def _identity_diagnostics(
         self,
@@ -94,91 +104,6 @@ class PrimaiteProvisioner(object):
                 message="Runtime snapshot does not belong to the selected PrimAITE realization.",
             )
         return [] if diagnostic is None else [diagnostic]
-
-    def apply(
-        self,
-        plan: ProvisioningPlan,
-        snapshot: RuntimeSnapshot,
-    ) -> ApplyResult:
-        """Apply the fixed selected construction and portable state changes."""
-
-        diagnostics = self.validate(plan)
-        diagnostics.extend(self._identity_diagnostics(plan, snapshot))
-        preflight = self._preflight(plan, snapshot, diagnostics)
-        if preflight is not None:
-            return preflight
-
-        entries = dict(snapshot.entries)
-        changed_addresses: list[str] = []
-        for operation in plan.operations:
-            if operation.action == ChangeAction.UNCHANGED:
-                continue
-            if operation.action == ChangeAction.DELETE:
-                entries.pop(operation.address, None)
-                changed_addresses.append(operation.address)
-                continue
-            entries[operation.address] = SnapshotEntry(
-                address=operation.address,
-                domain=RuntimeDomain.PROVISIONING,
-                resource_type=operation.resource_type,
-                payload=operation.payload,
-                ordering_dependencies=operation.ordering_dependencies,
-                refresh_dependencies=operation.refresh_dependencies,
-                status="applied",
-            )
-            changed_addresses.append(operation.address)
-
-        return ApplyResult(
-            success=True,
-            snapshot=snapshot.with_entries(
-                entries,
-                realization_envelope=self._realization_envelope,
-            ),
-            diagnostics=diagnostics,
-            changed_addresses=changed_addresses,
-        )
-
-    def _preflight(
-        self,
-        plan: ProvisioningPlan,
-        snapshot: RuntimeSnapshot,
-        diagnostics: list[Diagnostic],
-    ) -> ApplyResult | None:
-        """Return a terminal validation, no-op, or construction result."""
-
-        if any(diagnostic.is_error for diagnostic in diagnostics):
-            return ApplyResult(success=False, snapshot=snapshot, diagnostics=diagnostics)
-        mutating_operations = [
-            operation for operation in plan.operations if operation.action != ChangeAction.UNCHANGED
-        ]
-        if not mutating_operations:
-            return ApplyResult(success=True, snapshot=snapshot, diagnostics=diagnostics)
-        should_construct = any(
-            operation.action in {ChangeAction.CREATE, ChangeAction.UPDATE}
-            for operation in plan.operations
-        )
-        return self._construct_failure(snapshot, diagnostics) if should_construct else None
-
-    def _construct_failure(
-        self,
-        snapshot: RuntimeSnapshot,
-        diagnostics: list[Diagnostic],
-    ) -> ApplyResult | None:
-        """Construct the fixed selected source and bound any native failure."""
-
-        try:
-            self._driver.construct()
-        except Exception:
-            diagnostics.append(
-                Diagnostic(
-                    code="primaite.provisioning.construct-failed",
-                    domain="provisioning",
-                    address=_SELECTED_SCENARIO_ADDRESS,
-                    message="The selected PrimAITE source could not be constructed.",
-                )
-            )
-            return ApplyResult(success=False, snapshot=snapshot, diagnostics=diagnostics)
-        return None
 
 
 __all__ = ["PrimaiteProvisioner"]

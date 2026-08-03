@@ -1,417 +1,149 @@
 """Evaluator-only projection of sanitized PrimAITE run facts.
 
 The evaluator reads the one committed driver fact without advancing the source.
-It emits a bounded cumulative-BLUE-reward measure and unknown proposition truth:
-``terminated`` is hard-coded false in the source, so no source terminal supports
-an asserted objective outcome, and every proposition remains ``unknown`` under
-lossy evidence.
+The neutral :class:`GymEvaluator` already realizes the portable evaluation
+lifecycle (unsupported-resource rejection, unknown proposition truth, result and
+history projection, capture-spec and evidence construction), so PrimAITE
+parameterizes it and overrides only what claim integrity requires: it
+**withholds** the cumulative BLUE reward. The source reward's member-evidence
+closure is incomplete, so the result stays ``RUNNING`` with no score, no
+reward-valued derived measure is projected, and the evidence record discloses the
+withholding rather than the reward value.
 """
 
 from __future__ import annotations
 
-import hashlib
-from datetime import UTC, datetime
-
 from raes_contracts.contracts import (  # type: ignore[import-untyped]
-    EvaluationHistoryEventModel,
     EvaluationResultStateModel,
-    ExperimentCaptureRequirementModel,
-    ExperimentCaptureSpecModel,
-    ExperimentCaptureSpecReferenceModel,
-    ExperimentCaptureWindowModel,
-    ExperimentChecksumModel,
-    ExperimentDerivedMeasureModel,
-    ExperimentEvidenceRecordModel,
-    ExperimentMeasurementChannelReferenceModel,
-    ExperimentReferenceModel,
-    ExperimentTaskReferenceModel,
-    ExperimentValidityNoteModel,
-    PropositionLossDisclosureModel,
-    PropositionTruthResultModel,
 )
-from raes_contracts.contracts.experiment_capture import (  # type: ignore[import-untyped]
-    ExperimentRawEvidenceContentModel,
-)
-from raes_contracts.diagnostics import Diagnostic  # type: ignore[import-untyped]
 from raes_contracts.evaluation import (  # type: ignore[import-untyped]
-    EvaluationHistoryEventType,
     EvaluationResultContract,
     EvaluationResultStatus,
 )
-from raes_contracts.planning import (  # type: ignore[import-untyped]
-    ChangeAction,
-    EvaluationOp,
-    EvaluationPlan,
-    RuntimeDomain,
-)
-from raes_contracts.runtime_state import (  # type: ignore[import-untyped]
-    ApplyResult,
-    RuntimeSnapshot,
-    SnapshotEntry,
-)
+from raes_contracts.planning import EvaluationOp  # type: ignore[import-untyped]
 
+from raes_adapters._experiment_evidence import (
+    EvaluatorEvidenceConfig,
+    EvaluatorSummary,
+    build_capture_spec,
+    build_evidence_only,
+)
+from raes_adapters._gym_backend.evaluator import GymEvaluator
 from raes_adapters.primaite import load_qualification
 from raes_adapters.primaite.scenario_ledger import DATA_MANIPULATION
 
-from ._diagnostics import diagnostic_address
-from .driver import DriverEvaluation, PrimaiteDriverProtocol
+from .driver import PrimaiteDriverProtocol
 
 EVALUATION_EVIDENCE_REF = "evidence-record.primaite.evaluator-summary"
 
-_EVIDENCE_RECORD_VERSION = "1.0.0"
-_CAPTURE_SPEC_ID = "primaite-evaluator-capture"
-_CAPTURE_REQUIREMENT_ID = "primaite-evaluator-summary"
-_CAPTURE_WINDOW_ID = "primaite-selected-episode"
 _TASK_ID = DATA_MANIPULATION.task_id
-_SUPPORTED_RESOURCE_TYPES = frozenset(
-    {"condition-binding", "proposition", "assertion", "objective"}
+# The measure identities below name what a live, evidence-closed run *would*
+# measure; PrimAITE withholds the reward, so no derived measure is built from
+# them. They are retained so the neutral evidence config stays fully specified.
+_EVIDENCE_CONFIG = EvaluatorEvidenceConfig(
+    task_id=_TASK_ID,
+    evidence_ref=EVALUATION_EVIDENCE_REF,
+    capture_spec_id="primaite-evaluator-capture",
+    capture_requirement_id="primaite-evaluator-summary",
+    capture_window_id="primaite-selected-episode",
+    source_protocol_ref_id="primaite-data-manipulation",
+    provenance_ref_id="qualification.primaite.selected-source",
+    measure_id_base="measure.primaite.cumulative-blue-reward",
+    metric_ref_id="cumulative_blue_reward",
+    method_id="primaite-cumulative-reward",
+    method_name="Source cumulative BLUE reward",
+    method_description=(
+        "The cumulative BLUE reward is withheld pending source-member evidence closure."
+    ),
+    capture_title="PrimAITE evaluator summary capture",
+    capture_description=(
+        "Capture the sanitized evaluator-owned summary for the selected serialized "
+        "source transition."
+    ),
+    capture_window_description=(
+        "One read-only evaluator projection after the current serialized source transition."
+    ),
+    capture_requirement_title="Sanitized evaluator summary",
+    channel_ref_id="primaite-evaluation-history",
+    redaction_policy="redaction.primaite.evaluator-summary",
+    validity_note=(
+        "The capture attests one observed summary; it does not establish deterministic replay."
+    ),
+    validity_mitigation="Record broken, absent, and unbound stochastic streams with the run.",
+    loss_disclosure=(
+        "Source-native observation vector, action availability, info, reward components, "
+        "hidden state, and traffic are withheld."
+    ),
+    limitations=("The cumulative BLUE reward is withheld pending source-member evidence closure.",),
+    capture_notes=(
+        "Native observation vector, action ids, info, reward components, hidden state, and "
+        "traffic remain driver-private.",
+    ),
 )
 
 
-def _now_iso() -> str:
-    """Return a portable UTC timestamp."""
+def _source_revision() -> str:
+    """Read the selected source revision used in evidence provenance."""
 
-    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
-
-
-def _scoped_id(base: str, projection_ref: str) -> str:
-    """Scope an artifact identity to one evaluator projection."""
-
-    if not projection_ref:
-        raise RuntimeError("PrimAITE evaluation projection identity is unavailable")
-    identity_digest = hashlib.sha256(projection_ref.encode("utf-8")).hexdigest()
-    return f"{base}.{identity_digest}"
+    qualification = load_qualification()
+    source = qualification.get("source")
+    source_revision = source.get("commit") if isinstance(source, dict) else None
+    if not isinstance(source_revision, str):
+        raise RuntimeError("selected simulator qualification is invalid")
+    return source_revision
 
 
-class PrimaiteEvaluator(object):
-    """Read evaluator-owned facts without advancing the source environment."""
+def _withheld_payload_summary(summary: EvaluatorSummary) -> str:
+    """Disclose the withheld reward without leaking its value."""
+
+    return (
+        "Sanitized evaluator summary: "
+        f"{summary.step_count} source transitions; terminal cause "
+        f"{summary.terminal_cause or 'none'}; cumulative BLUE reward withheld "
+        "pending source-member evidence closure."
+    )
+
+
+class PrimaiteEvaluator(GymEvaluator):
+    """Read evaluator-owned facts without advancing or scoring the source."""
 
     def __init__(self, driver: PrimaiteDriverProtocol) -> None:
-        self._driver = driver
-        self._running = False
-        self._startup_order: list[str] = []
-        self._results: dict[str, dict[str, object]] = {}
-        self._history: dict[str, list[dict[str, object]]] = {}
-        self._capture_spec: ExperimentCaptureSpecModel | None = None
-        self._evidence_records: tuple[ExperimentEvidenceRecordModel, ...] = ()
-        self._derived_measures: tuple[ExperimentDerivedMeasureModel, ...] = ()
+        super().__init__(driver, "primaite", _EVIDENCE_CONFIG, _source_revision)
 
-    def start(self, plan: EvaluationPlan, snapshot: RuntimeSnapshot) -> ApplyResult:
-        """Apply an evaluation plan and project evaluator-owned source facts."""
+    def _record_projection(self, summary: EvaluatorSummary, now: str) -> None:
+        """Emit a withheld evidence record and no derived measure for one projection."""
 
-        terminal_result = self._terminal_result(plan, snapshot)
-        if terminal_result is not None:
-            return terminal_result
-        evaluation, projection_failure = self._evaluation_projection(plan, snapshot)
-        if projection_failure is not None:
-            return projection_failure
-        return self._apply_projection(plan, snapshot, evaluation)
-
-    @staticmethod
-    def _terminal_result(plan: EvaluationPlan, snapshot: RuntimeSnapshot) -> ApplyResult | None:
-        """Return an unsupported failure or unchanged-plan success when terminal."""
-
-        unsupported = PrimaiteEvaluator._unsupported_result(plan, snapshot)
-        if unsupported is not None:
-            return unsupported
-        if not PrimaiteEvaluator._has_mutations(plan):
-            return ApplyResult(success=True, snapshot=snapshot)
-        return None
-
-    @staticmethod
-    def _unsupported_result(plan: EvaluationPlan, snapshot: RuntimeSnapshot) -> ApplyResult | None:
-        """Return a portable failure for the first unsupported resource."""
-
-        operation = next(
-            (
-                item
-                for item in plan.operations
-                if item.resource_type not in _SUPPORTED_RESOURCE_TYPES
+        self._capture_spec = build_capture_spec(self._config, summary, now)
+        self._evidence_records = (
+            build_evidence_only(
+                self._config,
+                summary,
+                now,
+                self._source_revision(),
+                payload_summary=_withheld_payload_summary(summary),
             ),
-            None,
         )
-        if operation is None:
-            return None
-        return ApplyResult(
-            success=False,
-            snapshot=snapshot,
-            diagnostics=[
-                Diagnostic(
-                    code="primaite.evaluation.unsupported-resource",
-                    domain="evaluation",
-                    address=diagnostic_address(operation.address),
-                    message=(
-                        "The selected PrimAITE profile does not support this evaluation "
-                        "resource type."
-                    ),
-                )
-            ],
-        )
-
-    @staticmethod
-    def _has_mutations(plan: EvaluationPlan) -> bool:
-        """Return whether a plan changes evaluator-owned state."""
-
-        return any(operation.action != ChangeAction.UNCHANGED for operation in plan.operations)
-
-    @staticmethod
-    def _needs_projection(plan: EvaluationPlan) -> bool:
-        """Return whether source facts are required by this plan."""
-
-        return any(
-            operation.action in {ChangeAction.CREATE, ChangeAction.UPDATE}
-            and operation.resource_type in {"condition-binding", "objective"}
-            for operation in plan.operations
-        )
-
-    def _evaluation_projection(
-        self,
-        plan: EvaluationPlan,
-        snapshot: RuntimeSnapshot,
-    ) -> tuple[DriverEvaluation, ApplyResult | None]:
-        """Read and record one evaluator projection when the plan requires it."""
-
-        if not self._needs_projection(plan):
-            self._clear_evidence()
-            return self._empty_evaluation(), None
-        try:
-            evaluation = self._driver.evaluate()
-        except Exception:
-            return self._empty_evaluation(), self._projection_failure(snapshot)
-        captured_at = _now_iso()
-        self._capture_spec = self._capture_specification(evaluation, captured_at)
-        self._evidence_records = (self._experiment_evidence(evaluation, captured_at),)
         # No derived measure: the source reward is withheld pending evidence closure.
         self._derived_measures = ()
-        return evaluation, None
 
-    def _clear_evidence(self) -> None:
-        """Clear evaluator evidence when no source projection is needed."""
-
-        self._capture_spec = None
-        self._evidence_records = ()
-        self._derived_measures = ()
-
-    @staticmethod
-    def _empty_evaluation() -> DriverEvaluation:
-        """Return the non-source placeholder used for metadata-only changes."""
-
-        return DriverEvaluation(
-            execution_ref="primaite.no-execution",
-            projection_ref="primaite.no-projection",
-            step_count=0,
-            cumulative_reward=0.0,
-            terminated=False,
-            truncated=False,
-            terminal_cause=None,
-        )
-
-    @staticmethod
-    def _projection_failure(snapshot: RuntimeSnapshot) -> ApplyResult:
-        """Return a bounded source-projection failure."""
-
-        return ApplyResult(
-            success=False,
-            snapshot=snapshot,
-            diagnostics=[
-                Diagnostic(
-                    code="primaite.evaluation.projection-failed",
-                    domain="evaluation",
-                    address="/evaluation/primaite/selected-profile",
-                    message="The PrimAITE evaluator could not project the selected run facts.",
-                )
-            ],
-        )
-
-    def _apply_projection(
-        self,
-        plan: EvaluationPlan,
-        snapshot: RuntimeSnapshot,
-        evaluation: DriverEvaluation,
-    ) -> ApplyResult:
-        """Apply normalized evaluator state and truth projections."""
-
-        needs_projection = self._needs_projection(plan)
-        evidence_ref = (
-            _scoped_id(EVALUATION_EVIDENCE_REF, evaluation.projection_ref)
-            if needs_projection
-            else None
-        )
-        entries, results, history, truth_results, changed = self._apply_operations(
-            plan, snapshot, evaluation, evidence_ref
-        )
-        self._apply_truth_results(plan, truth_results, evidence_ref, needs_projection)
-        self._running = bool(plan.resources or plan.operations)
-        self._startup_order = list(plan.startup_order)
-        self._results = results
-        self._history = history
-        return ApplyResult(
-            success=True,
-            snapshot=snapshot.with_entries(
-                entries,
-                evaluation_results=results,
-                evaluation_history=history,
-                proposition_truth_results=truth_results,
-            ),
-            changed_addresses=changed,
-        )
-
-    def _apply_operations(
-        self,
-        plan: EvaluationPlan,
-        snapshot: RuntimeSnapshot,
-        evaluation: DriverEvaluation,
-        evidence_ref: str | None,
-    ) -> tuple[
-        dict[str, SnapshotEntry],
-        dict[str, dict[str, object]],
-        dict[str, list[dict[str, object]]],
-        dict[str, dict[str, object]],
-        list[str],
-    ]:
-        """Apply create, update, and delete operations to copied state maps."""
-
-        entries = dict(snapshot.entries)
-        results = dict(snapshot.evaluation_results)
-        history = {address: list(events) for address, events in snapshot.evaluation_history.items()}
-        truth_results = dict(snapshot.proposition_truth_results)
-        changed: list[str] = []
-        now = _now_iso()
-        for operation in plan.operations:
-            if operation.action == ChangeAction.UNCHANGED:
-                continue
-            if operation.action == ChangeAction.DELETE:
-                self._delete_operation(operation, entries, results, history, truth_results)
-            else:
-                self._upsert_operation(
-                    operation, entries, results, history, evaluation, now, evidence_ref
-                )
-            changed.append(operation.address)
-        return entries, results, history, truth_results, changed
-
-    @staticmethod
-    def _delete_operation(
-        operation: EvaluationOp,
-        entries: dict[str, SnapshotEntry],
-        results: dict[str, dict[str, object]],
-        history: dict[str, list[dict[str, object]]],
-        truth_results: dict[str, dict[str, object]],
-    ) -> None:
-        """Delete one evaluator resource and all owned result state."""
-
-        entries.pop(operation.address, None)
-        results.pop(operation.address, None)
-        history.pop(operation.address, None)
-        truth_results.pop(operation.address, None)
-
-    def _upsert_operation(
-        self,
-        operation: EvaluationOp,
-        entries: dict[str, SnapshotEntry],
-        results: dict[str, dict[str, object]],
-        history: dict[str, list[dict[str, object]]],
-        evaluation: DriverEvaluation,
-        now: str,
-        evidence_ref: str | None,
-    ) -> None:
-        """Create or update one evaluator resource and typed result state."""
-
-        is_truth_resource = operation.resource_type in {"proposition", "assertion"}
-        entries[operation.address] = SnapshotEntry(
-            address=operation.address,
-            domain=RuntimeDomain.EVALUATION,
-            resource_type=operation.resource_type,
-            payload=operation.payload,
-            ordering_dependencies=operation.ordering_dependencies,
-            refresh_dependencies=operation.refresh_dependencies,
-            status="admitted" if is_truth_resource else "evaluating",
-        )
-        if is_truth_resource:
-            return
-        result_state = self._result_state(operation, evaluation, now, evidence_ref)
-        results[operation.address] = result_state.model_dump(mode="json")
-        history[operation.address] = [
-            event.model_dump(mode="json") for event in self._history_events(result_state, now)
-        ]
-
-    @staticmethod
-    def _apply_truth_results(
-        plan: EvaluationPlan,
-        truth_results: dict[str, dict[str, object]],
-        evidence_ref: str | None,
-        needs_projection: bool,
-    ) -> None:
-        """Project admitted assertions as bounded unknown truth outcomes."""
-
-        proposition_bases = {
-            operation.address: operation.payload.get("evaluation_basis")
-            for operation in plan.operations
-            if operation.resource_type == "proposition"
-        }
-        for operation in plan.operations:
-            truth_result = PrimaiteEvaluator._truth_result(
-                operation, proposition_bases, evidence_ref, needs_projection
-            )
-            if truth_result is not None:
-                truth_results[operation.address] = truth_result.model_dump(mode="json")
-
-    @staticmethod
-    def _truth_result(
-        operation: EvaluationOp,
-        proposition_bases: dict[str, object],
-        evidence_ref: str | None,
-        needs_projection: bool,
-    ) -> PropositionTruthResultModel | None:
-        """Build one bounded unknown truth result when an assertion is well formed."""
-
-        if (
-            operation.action in {ChangeAction.DELETE, ChangeAction.UNCHANGED}
-            or operation.resource_type != "assertion"
-        ):
-            return None
-        proposition_address = operation.payload.get("proposition_address")
-        polarity = operation.payload.get("polarity")
-        evaluation_basis = proposition_bases.get(str(proposition_address))
-        valid = (
-            isinstance(proposition_address, str)
-            and polarity in {"positive", "negative"}
-            and evaluation_basis in {"declared_state", "observed_state"}
-        )
-        if not valid:
-            return None
-        return PropositionTruthResultModel(
-            result_id=f"truth.{operation.address}",
-            proposition_address=proposition_address,
-            assertion_address=operation.address,
-            assertion_polarity=polarity,
-            proposition_outcome="unknown",
-            assertion_outcome="unknown",
-            evaluation_basis=evaluation_basis,
-            indeterminacy_reason="lossy_evidence" if needs_projection else "missing_evidence",
-            evidence_refs=[evidence_ref] if evidence_ref is not None else [],
-            loss_disclosures=[
-                PropositionLossDisclosureModel(kind="lossy", within_admissible_bound=True)
-            ],
-        )
-
-    @staticmethod
     def _result_state(
+        self,
         operation: EvaluationOp,
-        evaluation: DriverEvaluation,
+        summary: EvaluatorSummary,
         now: str,
         evidence_ref: str | None,
     ) -> EvaluationResultStateModel:
+        """Project a running, unscored result: the reward stays withheld."""
+
         result_contract = operation.payload.get("result_contract", {})
         if not isinstance(result_contract, dict):
             raise RuntimeError("compiled evaluation result contract is invalid")
         contract = EvaluationResultContract.from_mapping(result_contract)
         if evidence_ref is None:
             raise RuntimeError("PrimAITE evaluation evidence identity is unavailable")
-        # This backend does not project a reward score: the source reward's member
-        # evidence closure is incomplete, so the result stays RUNNING with no score.
         return EvaluationResultStateModel(
             resource_type=contract.resource_type,
-            run_id=evaluation.execution_ref,
+            run_id=summary.execution_ref,
             status=EvaluationResultStatus.RUNNING.value,
             observed_at=now,
             updated_at=now,
@@ -419,283 +151,10 @@ class PrimaiteEvaluator(object):
             score=None,
             max_score=None,
             detail=(
-                f"PrimAITE evaluator projection after {evaluation.step_count} "
+                f"PrimAITE evaluator projection after {summary.step_count} "
                 "source transitions; reward withheld."
             ),
             evidence_refs=[evidence_ref],
-        )
-
-    @staticmethod
-    def _history_events(
-        result_state: EvaluationResultStateModel,
-        now: str,
-    ) -> list[EvaluationHistoryEventModel]:
-        terminal = result_state.status == EvaluationResultStatus.READY.value
-        return [
-            EvaluationHistoryEventModel(
-                event_type=EvaluationHistoryEventType.EVALUATION_STARTED.value,
-                timestamp=now,
-                status=EvaluationResultStatus.RUNNING.value,
-                passed=None,
-                score=None,
-                max_score=None,
-                detail=None,
-                evidence_refs=[],
-                details={},
-            ),
-            EvaluationHistoryEventModel(
-                event_type=(
-                    EvaluationHistoryEventType.EVALUATION_READY.value
-                    if terminal
-                    else EvaluationHistoryEventType.EVALUATION_UPDATED.value
-                ),
-                timestamp=now,
-                status=result_state.status,
-                passed=result_state.passed,
-                score=result_state.score,
-                max_score=result_state.max_score,
-                detail=result_state.detail,
-                evidence_refs=result_state.evidence_refs,
-                details={},
-            ),
-        ]
-
-    def status(self) -> dict[str, object]:
-        return {
-            "running": self._running,
-            "startup_order": list(self._startup_order),
-            "results": len(self._results),
-            "capture_spec": self._capture_spec is not None,
-            "evidence_records": len(self._evidence_records),
-            "derived_measures": len(self._derived_measures),
-        }
-
-    def results(self) -> dict[str, dict[str, object]]:
-        return {address: dict(result) for address, result in self._results.items()}
-
-    def history(self) -> dict[str, list[dict[str, object]]]:
-        return {
-            address: [dict(event) for event in events] for address, events in self._history.items()
-        }
-
-    def evidence_records(self) -> tuple[ExperimentEvidenceRecordModel, ...]:
-        """Return typed, redacted evaluator evidence for the selected run."""
-
-        return self._evidence_records
-
-    def capture_spec(self) -> ExperimentCaptureSpecModel | None:
-        """Return the typed capture boundary used for evaluator evidence."""
-
-        return self._capture_spec
-
-    def derived_measures(self) -> tuple[ExperimentDerivedMeasureModel, ...]:
-        """Return typed measures whose limits prevent replay overclaiming."""
-
-        return self._derived_measures
-
-    def stop(self, snapshot: RuntimeSnapshot) -> ApplyResult:
-        entries = {
-            address: entry
-            for address, entry in snapshot.entries.items()
-            if entry.domain != RuntimeDomain.EVALUATION
-        }
-        removed = [
-            address
-            for address, entry in snapshot.entries.items()
-            if entry.domain == RuntimeDomain.EVALUATION
-        ]
-        self._running = False
-        self._startup_order = []
-        self._results = {}
-        self._history = {}
-        self._capture_spec = None
-        self._evidence_records = ()
-        self._derived_measures = ()
-        return ApplyResult(
-            success=True,
-            snapshot=snapshot.with_entries(
-                entries,
-                evaluation_results={},
-                evaluation_history={},
-                proposition_truth_results={},
-            ),
-            changed_addresses=removed,
-        )
-
-    @staticmethod
-    def _experiment_evidence(
-        evaluation: DriverEvaluation,
-        now: str,
-    ) -> ExperimentEvidenceRecordModel:
-        """Build the projection-scoped evidence record (no reward-valued measure)."""
-
-        source_revision = PrimaiteEvaluator._source_revision()
-        evidence_record_id = _scoped_id(EVALUATION_EVIDENCE_REF, evaluation.projection_ref)
-        return PrimaiteEvaluator._evidence_record(
-            evaluation, now, source_revision, evidence_record_id
-        )
-
-    @staticmethod
-    def _source_revision() -> str:
-        """Read the selected source revision used in evidence provenance."""
-
-        qualification = load_qualification()
-        source = qualification.get("source")
-        source_revision = source.get("commit") if isinstance(source, dict) else None
-        if not isinstance(source_revision, str):
-            raise RuntimeError("selected simulator qualification is invalid")
-        return source_revision
-
-    @staticmethod
-    def _evidence_record(
-        evaluation: DriverEvaluation,
-        now: str,
-        source_revision: str,
-        evidence_record_id: str,
-    ) -> ExperimentEvidenceRecordModel:
-        """Build one redacted, checksummed evaluator evidence record."""
-
-        capture_spec_id = _scoped_id(_CAPTURE_SPEC_ID, evaluation.projection_ref)
-        capture_requirement_id = _scoped_id(_CAPTURE_REQUIREMENT_ID, evaluation.projection_ref)
-        capture_window_id = _scoped_id(_CAPTURE_WINDOW_ID, evaluation.projection_ref)
-        payload_summary = (
-            "Sanitized evaluator summary: "
-            f"{evaluation.step_count} source transitions; terminal cause "
-            f"{evaluation.terminal_cause or 'none'}; cumulative BLUE reward withheld "
-            "pending source-member evidence closure."
-        )
-        return ExperimentEvidenceRecordModel(
-            schema_version="experiment-evidence-record/v1",
-            evidence_record_id=evidence_record_id,
-            record_version=_EVIDENCE_RECORD_VERSION,
-            capture_spec_ref=ExperimentCaptureSpecReferenceModel(
-                ref_kind="capture-spec",
-                ref_id=capture_spec_id,
-                ref_version="1.0.0",
-            ),
-            capture_requirement_ref=capture_requirement_id,
-            run_ref=ExperimentReferenceModel(
-                ref_kind="run",
-                ref_id=evaluation.execution_ref,
-                ref_version="1.0.0",
-            ),
-            task_ref=ExperimentTaskReferenceModel(
-                ref_kind="task",
-                ref_id=_TASK_ID,
-                ref_version="1.0.0",
-            ),
-            source_refs=[
-                ExperimentReferenceModel(
-                    ref_kind="protocol",
-                    ref_id="primaite-data-manipulation",
-                    ref_version=source_revision,
-                )
-            ],
-            evidence_kind="telemetry",
-            captured_at=now,
-            capture_window_ref=capture_window_id,
-            raw_content=ExperimentRawEvidenceContentModel(
-                content_uri=f"urn:raes:{evidence_record_id}:payload-summary",
-                content_checksum=ExperimentChecksumModel(
-                    algorithm="sha256",
-                    value=hashlib.sha256(payload_summary.encode("utf-8")).hexdigest(),
-                ),
-                payload_summary=payload_summary,
-                loss_disclosure=(
-                    "Source-native observation vector, action availability, info, "
-                    "reward components, hidden state, and traffic are withheld."
-                ),
-            ),
-            sensitivity="redacted",
-            redaction_state="redacted",
-            provenance_refs=[
-                ExperimentReferenceModel(
-                    ref_kind="other",
-                    ref_id="qualification.primaite.selected-source",
-                    ref_version=source_revision,
-                )
-            ],
-        )
-
-    @staticmethod
-    def _capture_specification(
-        evaluation: DriverEvaluation,
-        now: str,
-    ) -> ExperimentCaptureSpecModel:
-        """Build the projection-scoped evaluator capture specification."""
-
-        capture_spec_id = _scoped_id(_CAPTURE_SPEC_ID, evaluation.projection_ref)
-        capture_requirement_id = _scoped_id(_CAPTURE_REQUIREMENT_ID, evaluation.projection_ref)
-        capture_window_id = _scoped_id(_CAPTURE_WINDOW_ID, evaluation.projection_ref)
-        return ExperimentCaptureSpecModel(
-            schema_version="experiment-capture-spec/v1",
-            capture_spec_id=capture_spec_id,
-            spec_version="1.0.0",
-            title="PrimAITE evaluator summary capture",
-            description=(
-                "Capture the sanitized evaluator-owned summary used to derive the "
-                "selected cumulative-blue-reward measure."
-            ),
-            scope_refs=[
-                ExperimentReferenceModel(
-                    ref_kind="run",
-                    ref_id=evaluation.execution_ref,
-                    ref_version="1.0.0",
-                ),
-                ExperimentReferenceModel(
-                    ref_kind="task",
-                    ref_id=_TASK_ID,
-                    ref_version="1.0.0",
-                ),
-            ],
-            capture_windows=[
-                ExperimentCaptureWindowModel(
-                    window_id=capture_window_id,
-                    window_kind="event",
-                    starts_at=now,
-                    ends_at=now,
-                    description=(
-                        "One read-only evaluator projection after the current "
-                        "serialized source transition."
-                    ),
-                )
-            ],
-            capture_requirements={
-                capture_requirement_id: ExperimentCaptureRequirementModel(
-                    requirement_id=capture_requirement_id,
-                    title="Sanitized evaluator summary",
-                    capture_kind="telemetry",
-                    capture_scope="run",
-                    channel_ref=ExperimentMeasurementChannelReferenceModel(
-                        ref_kind="measurement-channel",
-                        ref_id="primaite-evaluation-history",
-                        ref_version="1.0.0",
-                    ),
-                    window_refs=[capture_window_id],
-                    expected_media_types=["application/json"],
-                    sensitivity="redacted",
-                    redaction_policy="redaction.primaite.evaluator-summary",
-                    integrity_requirements=["sha256"],
-                    retention_policy="run-lifetime",
-                    loss_disclosure_required=True,
-                    notes=[
-                        "Native observation vector, action ids, info, reward components, "
-                        "hidden state, and traffic remain driver-private."
-                    ],
-                )
-            },
-            validity_notes=[
-                ExperimentValidityNoteModel(
-                    category="reproducibility",
-                    note=(
-                        "The capture attests one observed summary; it does not establish "
-                        "deterministic replay."
-                    ),
-                    mitigation=(
-                        "Record broken, absent, and unbound stochastic streams with the run."
-                    ),
-                )
-            ],
         )
 
 
