@@ -115,13 +115,14 @@ assert payload["cases"]
 """
 
 NASIM_CONFORMANCE_PROBE = r"""
+import json
+
 from raes_adapters.nasim.backend import (
     NasimCleanupReport,
     NasimEvaluation,
     NasimResetReport,
     NasimStep,
-    nasim_backend_conformance_payload,
-    run_nasim_conformance,
+    run_nasim_pr_conformance,
 )
 from raes_adapters.nasim.scenario_ledger import validate_all
 
@@ -184,12 +185,22 @@ class Driver:
         return self.closed
 
 
+# Compose the PR conformance evidence bundle from the installed wheel: the
+# published report projection (which drives this injected driver through the
+# constructed target's four surfaces on the published fixtures), source-protocol
+# diagnostics, fail-closed capability evidence, and declared weaknesses. The
+# hostile-failure / leakage probes are injected-driver test constructs and live
+# in the PR test suite, not this happy-path installed-package proof.
 assert validate_all() == []
-report = run_nasim_conformance(driver=Driver(), seed=20260802)
-payload = nasim_backend_conformance_payload(report)
-assert payload["passed"] is True
-assert payload["native_conformance"] is False
-assert payload["cases"]
+bundle = run_nasim_pr_conformance(driver=Driver())
+assert bundle["native_conformance"] is False
+assert bundle["backend_conformance"]["passed"] is True
+assert bundle["backend_conformance"]["cases"]
+assert bundle["source_diagnostics"]
+assert bundle["capability_evidence"]
+assert bundle["declared_weaknesses"]
+# Serializable to the portable JSON the evidence bundle claims to be.
+json.dumps(bundle, sort_keys=True)
 """
 CYBORG_CONFORMANCE_PROBE = r"""
 import json

@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from .cleanup import execute_nasim_cleanup
 from .conformance import (
+    PR_CONFORMANCE_SEED,
     nasim_backend_conformance_payload,
     nasim_declared_weaknesses,
     nasim_manifest_capability_evidence,
     nasim_manifest_capability_evidence_gaps,
     nasim_source_protocol_diagnostics,
     run_nasim_conformance,
+    run_nasim_pr_conformance,
 )
 from .driver import (
     NasimCleanupReport,
@@ -30,6 +32,7 @@ __all__ = [
     "ACTION_EVIDENCE_REF",
     "EVALUATION_EVIDENCE_REF",
     "NASIM_BACKEND_NAME",
+    "PR_CONFORMANCE_SEED",
     "NasimCleanupReport",
     "NasimDriver",
     "NasimDriverProtocol",
@@ -50,4 +53,5 @@ __all__ = [
     "nasim_manifest_capability_evidence_gaps",
     "nasim_source_protocol_diagnostics",
     "run_nasim_conformance",
+    "run_nasim_pr_conformance",
 ]
