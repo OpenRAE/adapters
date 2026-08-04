@@ -313,8 +313,9 @@ def test_pr_conformance_suite_fails_closed_on_capability_evidence_gaps(
         lambda *args, **kwargs: ("/capabilities/provisioner/supported_node_types",),
     )
 
+    driver = ProbeDriver()
     with pytest.raises(RuntimeError, match="incomplete"):
-        run_nasim_pr_conformance(driver=ProbeDriver())
+        run_nasim_pr_conformance(driver=driver)
 
 
 def test_clock_control_is_unsupported_consistent_with_manifest() -> None:
