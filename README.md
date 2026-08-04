@@ -378,6 +378,46 @@ configuration are attested; execution controls are partial and outcome
 reproduction is stochastic-bounded, with no adapter, manifest, or
 outcome-equivalence claim delivered by qualification.
 
+## NASim backend conformance
+
+Issue [#35](https://github.com/OpenRAE/adapters/issues/35) composes the NASim
+runtime target with the published RAES conformance report and adapter-local
+source-protocol probes. Three claims stay distinct: backend conformance is the
+exact `BackendConformanceReport` from RAES, serialized only through the published
+report projector; source-protocol reproduction is adapter-local executable
+evidence (source/ledger identity, reset and stochastic dispositions, action and
+observation projection, evaluator facts, independent terminal facts, and verified
+cleanup) emitted as RAES diagnostics; and the research/readiness claim is bounded
+by the declared weakness and loss references. The NASim probes add
+manifest-derived capability-evidence links that fail closed when an affirmative
+surface has no passing evidence; they do not create another profile, fixture
+corpus, report schema, or research-validity claim.
+
+```python
+from raes_adapters.nasim.backend import run_nasim_pr_conformance
+
+# `driver` is any deterministic NasimDriverProtocol implementation for the PR
+# lane, or a real NasimDriver for the manual-live lane — the caller selects it.
+bundle = run_nasim_pr_conformance(driver=deterministic_injected_driver)
+# bundle: backend_conformance (published payload, which drives the four surfaces
+# on the published fixtures), source_diagnostics, capability_evidence,
+# declared_weaknesses.
+```
+
+The deterministic PR lane uses a fully constructed `RuntimeTarget` with an
+explicit injected driver and never imports the simulator; the clean-install
+proof composes the same evidence bundle from the built `nasim`-extra wheel, and
+the manual-live lane runs the identical composition against a real `NasimDriver`
+on the qualified runtime. The hostile-failure and portable-output-leakage probes
+over the four surfaces are injected-driver constructs — a real `NasimDriver`
+cannot be made to raise on a chosen surface — so they live in the deterministic
+PR test suite (`tests/test_nasim_conformance.py`), which leak-tests each
+surface's success and failure paths. NASim exposes no RAES time surface, so clock
+control reports a validated
+unsupported disposition rather than an affirmative time claim. The
+[conformance-composition guardrails](docs/decisions/nasim-conformance-guardrails.md)
+fix those boundaries.
+
 ## Development
 
 Requires [`uv`](https://docs.astral.sh/uv/). Repo-wide gates run through nox:

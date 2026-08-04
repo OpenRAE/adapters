@@ -33,6 +33,7 @@ semantic and protocol authority.
 - [NASim qualification guardrails](decisions/nasim-qualification-guardrails.md)
 - [NASim scenario and source-ledger guardrails](decisions/nasim-scenario-ledger-guardrails.md)
 - [NASim backend architecture guardrails](decisions/nasim-backend-guardrails.md)
+- [NASim conformance-composition guardrails](decisions/nasim-conformance-guardrails.md)
 - [CyberBattleSim scenario and source-ledger guardrails](decisions/cyberbattlesim-scenario-ledger-guardrails.md)
 - [CyberBattleSim backend architecture guardrails](decisions/cyberbattlesim-backend-guardrails.md)
 - [CyberBattleSim conformance-composition guardrails](decisions/cyberbattlesim-conformance-guardrails.md)
