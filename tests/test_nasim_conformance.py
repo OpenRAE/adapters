@@ -13,6 +13,7 @@ import json
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+import pytest
 from raes_backend_protocols.manifest import backend_manifest_payload
 from raes_conformance.conformance import BackendConformanceReport
 from raes_conformance.conformance.report import backend_conformance_report_payload
@@ -297,6 +298,23 @@ def test_pr_conformance_suite_composes_published_and_source_evidence() -> None:
     # The composed bundle is the machine-readable evidence run by the
     # clean-install proof; it must carry no native leakage.
     assert not any(marker in _json_text(bundle) for marker in NATIVE_MARKERS)
+
+
+def test_pr_conformance_suite_fails_closed_on_capability_evidence_gaps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Drive the fail-closed branch: if any declared affirmative capability
+    # lacks passing evidence, the bundle must refuse rather than ship an
+    # unbacked surface (the guarantee run_nasim_pr_conformance's docstring
+    # exists to enforce). The success-path test above never reaches this
+    # branch because the real manifest has zero gaps.
+    monkeypatch.setattr(
+        "raes_adapters.nasim.backend.conformance.nasim_manifest_capability_evidence_gaps",
+        lambda *args, **kwargs: ("/capabilities/provisioner/supported_node_types",),
+    )
+
+    with pytest.raises(RuntimeError, match="incomplete"):
+        run_nasim_pr_conformance(driver=ProbeDriver())
 
 
 def test_clock_control_is_unsupported_consistent_with_manifest() -> None:
