@@ -175,25 +175,53 @@ def build_evidence_and_measure(
     return evidence_record, derived_measure
 
 
+def build_evidence_only(
+    config: EvaluatorEvidenceConfig,
+    summary: EvaluatorSummary,
+    now: str,
+    source_revision: str,
+    *,
+    payload_summary: str,
+) -> ExperimentEvidenceRecordModel:
+    """Build a projection-scoped evidence record with no derived measure.
+
+    A backend that withholds its reward (its member-evidence closure is
+    incomplete) records the same redacted evidence shape but supplies its own
+    ``payload_summary`` disclosing the withholding, and projects no measure.
+    """
+
+    evidence_record_id = scoped_id(config.evidence_ref, summary.projection_ref)
+    return _evidence_record(
+        config, summary, now, source_revision, evidence_record_id, payload_summary=payload_summary
+    )
+
+
 def _evidence_record(
     config: EvaluatorEvidenceConfig,
     summary: EvaluatorSummary,
     now: str,
     source_revision: str,
     evidence_record_id: str,
+    *,
+    payload_summary: str | None = None,
 ) -> ExperimentEvidenceRecordModel:
-    """Build one redacted, checksummed evaluator evidence record."""
+    """Build one redacted, checksummed evaluator evidence record.
+
+    ``payload_summary`` defaults to the reward-disclosing summary; a backend that
+    withholds its reward supplies its own withholding disclosure instead.
+    """
 
     capture_spec_id = scoped_id(config.capture_spec_id, summary.projection_ref)
     capture_requirement_id = scoped_id(config.capture_requirement_id, summary.projection_ref)
     capture_window_id = scoped_id(config.capture_window_id, summary.projection_ref)
-    payload_summary = (
-        "Sanitized evaluator summary: "
-        f"{summary.step_count} source transitions and cumulative "
-        f"reward {summary.cumulative_reward:.17g}; "
-        f"terminated={summary.terminated} truncated={summary.truncated} "
-        f"terminal_cause={summary.terminal_cause}."
-    )
+    if payload_summary is None:
+        payload_summary = (
+            "Sanitized evaluator summary: "
+            f"{summary.step_count} source transitions and cumulative "
+            f"reward {summary.cumulative_reward:.17g}; "
+            f"terminated={summary.terminated} truncated={summary.truncated} "
+            f"terminal_cause={summary.terminal_cause}."
+        )
     return ExperimentEvidenceRecordModel(
         schema_version="experiment-evidence-record/v1",
         evidence_record_id=evidence_record_id,
@@ -297,5 +325,6 @@ __all__ = [
     "EvaluatorSummary",
     "build_capture_spec",
     "build_evidence_and_measure",
+    "build_evidence_only",
     "scoped_id",
 ]

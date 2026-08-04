@@ -203,16 +203,25 @@ class GymEvaluator(object):
             return self._empty_summary(), self._projection_failure(snapshot)
         captured_at = _now_iso()
         summary = _summary(facts)
-        self._capture_spec = build_capture_spec(self._config, summary, captured_at)
+        self._record_projection(summary, captured_at)
+        return summary, None
+
+    def _record_projection(self, summary: EvaluatorSummary, now: str) -> None:
+        """Record the capture spec, evidence, and reward measure for one projection.
+
+        A backend that withholds its reward overrides this to emit evidence without a
+        derived measure.
+        """
+
+        self._capture_spec = build_capture_spec(self._config, summary, now)
         evidence_record, derived_measure = build_evidence_and_measure(
             self._config,
             summary,
-            captured_at,
+            now,
             self._source_revision(),
         )
         self._evidence_records = (evidence_record,)
         self._derived_measures = (derived_measure,)
-        return summary, None
 
     def _clear_evidence(self) -> None:
         """Clear evaluator evidence when no source projection is needed."""
