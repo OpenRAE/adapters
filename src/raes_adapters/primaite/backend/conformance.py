@@ -20,6 +20,7 @@ from raes_conformance.conformance.report import (  # type: ignore[import-untyped
 from raes_contracts.diagnostics import (  # type: ignore[import-untyped]
     Diagnostic,
     Severity,
+    diagnostic_payload,
 )
 
 from raes_adapters._conformance_support import affirmative_capability_pointers
@@ -36,6 +37,11 @@ from ._diagnostics import diagnostic_address
 from .driver import PrimaiteDriverProtocol
 from .manifest import create_primaite_manifest
 from .target import create_primaite_target
+
+# The single public seed for the deterministic PR conformance lane. The suite
+# never derives seed or case order from time, PR number, hashing, environment,
+# or global random state (see primaite-conformance-guardrails.md).
+PR_CONFORMANCE_SEED = 20260804
 
 
 def run_primaite_conformance(
@@ -158,11 +164,61 @@ def primaite_source_protocol_diagnostics(
     return tuple(diagnostics)
 
 
+def run_primaite_pr_conformance(
+    *,
+    driver: PrimaiteDriverProtocol,
+    seed: int = PR_CONFORMANCE_SEED,
+) -> dict[str, object]:
+    """Compose the deterministic PR conformance disclosure bundle for one driver.
+
+    Runs the published RAES target conformance for the profile inferred from the
+    live manifest — which drives the supplied injected driver through the
+    constructed ``RuntimeTarget``'s surfaces on the published fixtures — then
+    collects source-protocol diagnostics, the fail-closed capability-evidence
+    accounting, and declared weaknesses into a single validated portable bundle.
+    The three claims stay distinct: ``backend_conformance`` is the exact published
+    report payload, ``source_diagnostics`` are RAES source evidence, and
+    ``declared_weaknesses`` bound the research/readiness claim.
+
+    ``driver`` is required: the caller selects the lane explicitly. Every PR/clean-
+    install caller supplies a deterministic injected driver because the live
+    ``PrimaiteDriver`` verifies source identity and then fails closed — it cannot
+    execute in-process under the current architecture — so the bundle always keeps
+    ``native_conformance=false``.
+
+    Unlike the NASim bundle this function does **not** raise on capability gaps.
+    For PrimAITE every declared affirmative capability is an *expected* open gap:
+    no affirmative runtime capability is production-evidenced while the live driver
+    is non-runnable, so ``capability_evidence`` is empty and ``capability_gaps``
+    surfaces the full affirmative-pointer set as explicit non-claims rather than a
+    failure. Certifying any of those surfaces requires a real, qualified, isolated
+    live driver (blocked pending worker-process isolation and CPython 3.12
+    qualification evidence), never a fake driver.
+    """
+
+    report = run_primaite_conformance(driver=driver, seed=seed)
+    diagnostics = primaite_source_protocol_diagnostics()
+    payload = backend_manifest_payload(create_primaite_manifest())
+    evidence = primaite_manifest_capability_evidence()
+    gaps = primaite_manifest_capability_evidence_gaps(payload=payload)
+    return {
+        "seed": seed,
+        "native_conformance": report.native_conformance,
+        "backend_conformance": primaite_backend_conformance_payload(report),
+        "source_diagnostics": [diagnostic_payload(item) for item in diagnostics],
+        "capability_evidence": {pointer: list(refs) for pointer, refs in sorted(evidence.items())},
+        "capability_gaps": list(gaps),
+        "declared_weaknesses": list(primaite_declared_weaknesses()),
+    }
+
+
 __all__ = [
+    "PR_CONFORMANCE_SEED",
     "primaite_backend_conformance_payload",
     "primaite_declared_weaknesses",
     "primaite_manifest_capability_evidence",
     "primaite_manifest_capability_evidence_gaps",
     "primaite_source_protocol_diagnostics",
     "run_primaite_conformance",
+    "run_primaite_pr_conformance",
 ]
