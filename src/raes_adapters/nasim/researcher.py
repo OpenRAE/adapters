@@ -66,6 +66,8 @@ from raes_runtime.registry import RuntimeTarget  # type: ignore[import-untyped]
 from raes_adapters._manifest_support import read_source_revision
 from raes_adapters._researcher_support import (
     ApparatusContextSpec,
+    ArchivalRunInputs,
+    ArchivalRunSpec,
     build_apparatus_context,
     build_archival_collection,
     build_archival_run,
@@ -259,31 +261,35 @@ def archival_run(
     """Seal one episode in the published archival run contract."""
 
     return build_archival_run(
-        evidence_records=episode.evidence_records,
-        derived_measures=episode.derived_measures,
-        scenario_digest=scenario_digest,
-        task=task,
-        evidence_artifact=evidence_artifact,
+        ArchivalRunInputs(
+            evidence_records=episode.evidence_records,
+            derived_measures=episode.derived_measures,
+            evidence_artifact=evidence_artifact,
+            scenario_digest=scenario_digest,
+            task=task,
+        ),
         apparatus_context=lambda captured_at, setup_artifact: _apparatus_context(
             controls, captured_at, setup_artifact
         ),
         provenance=lambda run_id: red_implementation_provenance(
             run_id, controls.red_selection
         ).model_dump(mode="json"),
-        parameter_set=[
-            {
-                "name": "red-implementation",
-                "value": controls.red_manifest.identity.name,
-                "value_kind": "apparatus",
-            },
-            {"name": "trial-length", "value": controls.max_steps, "value_kind": "protocol"},
-        ],
-        seed=controls.seed,
-        stochastic_seed_control_id="nasim-gym-reset-seed",
-        clock_id=NASIM_CLOCK,
-        clock_authority="nasim-tiny runtime",
-        result_summary_key="nasim-cumulative-attacker-reward-result",
-        metric_id="cumulative_attacker_reward",
+        spec=ArchivalRunSpec(
+            parameter_set=[
+                {
+                    "name": "red-implementation",
+                    "value": controls.red_manifest.identity.name,
+                    "value_kind": "apparatus",
+                },
+                {"name": "trial-length", "value": controls.max_steps, "value_kind": "protocol"},
+            ],
+            seed=controls.seed,
+            stochastic_seed_control_id="nasim-gym-reset-seed",
+            clock_id=NASIM_CLOCK,
+            clock_authority="nasim-tiny runtime",
+            result_summary_key="nasim-cumulative-attacker-reward-result",
+            metric_id="cumulative_attacker_reward",
+        ),
     )
 
 

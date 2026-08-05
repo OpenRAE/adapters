@@ -42,6 +42,8 @@ from raes_runtime.registry import RuntimeTarget  # type: ignore[import-untyped]
 
 from raes_adapters._researcher_support import (
     ApparatusContextSpec,
+    ArchivalRunInputs,
+    ArchivalRunSpec,
     build_apparatus_context,
     build_archival_collection,
     build_archival_run,
@@ -213,32 +215,36 @@ def archival_run(
     """Seal one episode in the published archival run contract."""
 
     return build_archival_run(
-        evidence_records=episode.evidence_records,
-        derived_measures=episode.derived_measures,
-        scenario_digest=scenario_digest,
-        task=task,
-        evidence_artifact=evidence_artifact,
+        ArchivalRunInputs(
+            evidence_records=episode.evidence_records,
+            derived_measures=episode.derived_measures,
+            evidence_artifact=evidence_artifact,
+            scenario_digest=scenario_digest,
+            task=task,
+        ),
         apparatus_context=lambda captured_at, setup_artifact: _apparatus_context(
             controls, captured_at, setup_artifact
         ),
         provenance=lambda run_id: blue_implementation_provenance(
             run_id, controls.blue_selection
         ).model_dump(mode="json"),
-        parameter_set=[
-            {"name": "red-variant", "value": controls.red_variant, "value_kind": "protocol"},
-            {
-                "name": "blue-implementation",
-                "value": controls.blue_manifest.identity.name,
-                "value_kind": "apparatus",
-            },
-            {"name": "trial-length", "value": controls.max_steps, "value_kind": "protocol"},
-        ],
-        seed=controls.seed,
-        stochastic_seed_control_id="cyborg-seed",
-        clock_id="cage2-logical-clock",
-        clock_authority="cyborg-cage2 runtime",
-        result_summary_key="cage2-cumulative-blue-reward-result",
-        metric_id="cage2-cumulative-blue-reward",
+        spec=ArchivalRunSpec(
+            parameter_set=[
+                {"name": "red-variant", "value": controls.red_variant, "value_kind": "protocol"},
+                {
+                    "name": "blue-implementation",
+                    "value": controls.blue_manifest.identity.name,
+                    "value_kind": "apparatus",
+                },
+                {"name": "trial-length", "value": controls.max_steps, "value_kind": "protocol"},
+            ],
+            seed=controls.seed,
+            stochastic_seed_control_id="cyborg-seed",
+            clock_id="cage2-logical-clock",
+            clock_authority="cyborg-cage2 runtime",
+            result_summary_key="cage2-cumulative-blue-reward-result",
+            metric_id="cage2-cumulative-blue-reward",
+        ),
     )
 
 

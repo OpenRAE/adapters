@@ -168,22 +168,36 @@ def build_apparatus_context(
     }
 
 
+@dataclass(frozen=True)
+class ArchivalRunInputs(object):
+    """Per-episode inputs the archival run seals into portable evidence."""
+
+    evidence_records: tuple[ExperimentEvidenceRecordModel, ...]
+    derived_measures: tuple[ExperimentDerivedMeasureModel, ...]
+    evidence_artifact: ExperimentArtifactRefModel
+    scenario_digest: str
+    task: ExperimentTaskModel
+
+
+@dataclass(frozen=True)
+class ArchivalRunSpec(object):
+    """Backend-local scalars that shape the archival run payload."""
+
+    parameter_set: list[dict[str, object]]
+    seed: int
+    stochastic_seed_control_id: str
+    clock_id: str
+    clock_authority: str
+    result_summary_key: str
+    metric_id: str
+
+
 def build_archival_run(
+    inputs: ArchivalRunInputs,
     *,
-    evidence_records: tuple[ExperimentEvidenceRecordModel, ...],
-    derived_measures: tuple[ExperimentDerivedMeasureModel, ...],
-    scenario_digest: str,
-    task: ExperimentTaskModel,
-    evidence_artifact: ExperimentArtifactRefModel,
     apparatus_context: Callable[[object, ExperimentArtifactRefModel], dict[str, object]],
     provenance: Callable[[str], dict[str, object]],
-    parameter_set: list[dict[str, object]],
-    seed: int,
-    stochastic_seed_control_id: str,
-    clock_id: str,
-    clock_authority: str,
-    result_summary_key: str,
-    metric_id: str,
+    spec: ArchivalRunSpec,
 ) -> ExperimentRunModel:
     """Seal one episode in the published archival run contract.
 
@@ -192,6 +206,10 @@ def build_archival_run(
     resolved ``captured_at`` and setup artifact, the latter the resolved run id.
     """
 
+    evidence_records = inputs.evidence_records
+    derived_measures = inputs.derived_measures
+    evidence_artifact = inputs.evidence_artifact
+    task = inputs.task
     if not evidence_records or not derived_measures:
         raise ValueError("portable evidence is incomplete")
     run_id = evidence_records[0].run_ref.ref_id
@@ -211,16 +229,16 @@ def build_archival_run(
         "scenario_snapshot_ref": {
             "ref_kind": "scenario-snapshot",
             "ref_id": task.scenario_ref.ref_id,
-            "ref_digest": scenario_digest,
+            "ref_digest": inputs.scenario_digest,
             "ref_path": task.scenario_ref.ref_path,
         },
         "apparatus_context": apparatus_context(captured_at, setup_artifact),
         "participant_implementation_provenance": provenance(run_id),
-        "parameter_set": parameter_set,
-        "stochastic_controls": seed_stochastic_controls(stochastic_seed_control_id, seed),
+        "parameter_set": spec.parameter_set,
+        "stochastic_controls": seed_stochastic_controls(spec.stochastic_seed_control_id, spec.seed),
         "started_at": captured_at,
         "ended_at": generated_at,
-        "clock_context": clock_context(clock_id, clock_authority),
+        "clock_context": clock_context(spec.clock_id, spec.clock_authority),
         "run_status": "sealed",
         "outcome_status": "succeeded",
         "traceability": {
@@ -244,8 +262,8 @@ def build_archival_run(
         },
         "evidence_artifacts": [evidence_artifact.model_dump(mode="json")],
         "result_summaries": {
-            result_summary_key: {
-                "metric_id": metric_id,
+            spec.result_summary_key: {
+                "metric_id": spec.metric_id,
                 "value": measure.value,
                 "value_status": measure.value_status,
                 "evidence_refs": [
