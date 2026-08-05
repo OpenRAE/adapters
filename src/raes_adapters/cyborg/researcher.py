@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from importlib import metadata
 
 from raes_contracts.contracts import (  # type: ignore[import-untyped]
     ExperimentArtifactRefModel,
@@ -40,6 +39,13 @@ from raes_contracts.runtime_state import RuntimeSnapshot  # type: ignore[import-
 from raes_contracts.satisfiability import canonical_contract_digest  # type: ignore[import-untyped]
 from raes_runtime.manager import RuntimeManager  # type: ignore[import-untyped]
 from raes_runtime.registry import RuntimeTarget  # type: ignore[import-untyped]
+
+from raes_adapters._researcher_support import (
+    ApparatusContextSpec,
+    build_apparatus_context,
+    build_archival_collection,
+    build_archival_run,
+)
 
 from .driver import CyborgDriver
 from .manifest import create_cyborg_manifest
@@ -154,23 +160,6 @@ def blue_implementation_provenance(
     )
 
 
-def _manifest_ref(
-    ref_id: str, ref_version: str, subject_kind: str, subject_id: str, subject_version: str
-) -> dict[str, object]:
-    """Build a published manifest reference for archival apparatus context."""
-
-    return {
-        "ref_kind": "manifest",
-        "ref_id": ref_id,
-        "ref_version": ref_version,
-        "subject_ref": {
-            "ref_kind": subject_kind,
-            "ref_id": subject_id,
-            "ref_version": subject_version,
-        },
-    }
-
-
 def _apparatus_context(
     controls: RunControls,
     captured_at: object,
@@ -180,85 +169,37 @@ def _apparatus_context(
 
     backend = create_cyborg_manifest()
     blue = controls.blue_manifest
-    processor_version = metadata.version("raes")
-    processor_ref = _manifest_ref(
-        "raes-runtime-manager",
-        "processor-manifest/v2",
-        "processor",
-        "raes-runtime-manager",
-        processor_version,
-    )
-    backend_ref = _manifest_ref(
-        backend.name, "backend-manifest/v2", "backend", backend.name, backend.version
-    )
-    participant_ref = _manifest_ref(
-        blue.identity.name,
-        "participant-implementation-manifest/v1",
-        "participant-implementation",
-        blue.identity.name,
-        blue.identity.version,
-    )
-    return {
-        "schema_version": "experiment-apparatus-context/v1",
-        "apparatus_context_id": f"apparatus-{controls.run_id}",
-        "context_version": "1.0.0",
-        "declared_at": captured_at,
-        "components": {
-            "processor": {
-                "component_kind": "processor",
-                "identity": {"name": "raes-runtime-manager", "version": processor_version},
-                "manifest_ref": processor_ref,
-                "observed": True,
-            },
-            "backend": {
-                "component_kind": "backend",
-                "identity": {"name": backend.name, "version": backend.version},
-                "manifest_ref": backend_ref,
-                "observed": True,
-            },
-            "blue-policy": {
-                "component_kind": "participant-implementation",
-                "identity": blue.identity.model_dump(mode="json"),
-                "manifest_ref": participant_ref,
-                "observed": True,
-            },
-        },
-        "selected_manifests": [processor_ref, backend_ref, participant_ref],
-        "compatibility_declarations": [
+    spec = ApparatusContextSpec(
+        run_id=controls.run_id,
+        seed=controls.seed,
+        backend_name=backend.name,
+        backend_version=backend.version,
+        participant_component_key="blue-policy",
+        participant_identity_name=blue.identity.name,
+        participant_identity_version=blue.identity.version,
+        participant_identity_json=blue.identity.model_dump(mode="json"),
+        compatibility_declarations=[
             {
                 "ref_kind": "profile",
                 "ref_id": "cage2-cyborg-2.1-source-26ce1c1",
                 "ref_version": "26ce1c1253fa9e2e73f25e6a7f2da32860c11257",
             }
         ],
-        "configuration_parameters": [
+        configuration_parameters=[
             {"name": "red-variant", "value": controls.red_variant, "value_kind": "protocol"}
         ],
-        "stochastic_controls": [
-            {"control_id": "cyborg-seed", "role": "seed", "value": controls.seed}
-        ],
-        "clocks": [
-            {
-                "clock_id": "cage2-logical-clock",
-                "authority": "cyborg-cage2 runtime",
-                "time_domain": "logical",
-            }
-        ],
-        "measurement_channels": [
-            {
-                "ref_kind": "measurement-channel",
-                "ref_id": "cyborg-reward-projection",
-                "ref_version": "1.0.0",
-            }
-        ],
-        "observed_setup_evidence": [setup_artifact.model_dump(mode="json")],
-        "known_limitations": [
+        stochastic_seed_control_id="cyborg-seed",
+        clock_id="cage2-logical-clock",
+        clock_authority="cyborg-cage2 runtime",
+        measurement_channel_ref_id="cyborg-reward-projection",
+        known_limitations=[
             {
                 "category": "apparatus",
                 "note": "Native internals are withheld at the adapter boundary.",
             }
         ],
-    }
+    )
+    return build_apparatus_context(spec, captured_at, setup_artifact)
 
 
 def archival_run(
@@ -271,33 +212,19 @@ def archival_run(
 ) -> ExperimentRunModel:
     """Seal one episode in the published archival run contract."""
 
-    if not episode.evidence_records or not episode.derived_measures:
-        raise ValueError("portable evidence is incomplete")
-    run_id = episode.evidence_records[0].run_ref.ref_id
-    if not isinstance(run_id, str):
-        raise ValueError("portable run identity is incomplete")
-    captured_at = episode.evidence_records[0].captured_at
-    generated_at = episode.derived_measures[-1].generated_at
-    setup_artifact = evidence_artifact.model_copy(
-        update={"artifact_id": "researcher-setup-evidence", "role": "apparatus-evidence"}
-    )
-    measure = episode.derived_measures[-1]
-    payload: dict[str, object] = {
-        "schema_version": "experiment-run/v1",
-        "run_id": run_id,
-        "run_version": "1.0.0",
-        "task_ref": {"ref_kind": "task", "ref_id": task.task_id, "ref_version": task.task_version},
-        "scenario_snapshot_ref": {
-            "ref_kind": "scenario-snapshot",
-            "ref_id": task.scenario_ref.ref_id,
-            "ref_digest": scenario_digest,
-            "ref_path": task.scenario_ref.ref_path,
-        },
-        "apparatus_context": _apparatus_context(controls, captured_at, setup_artifact),
-        "participant_implementation_provenance": blue_implementation_provenance(
+    return build_archival_run(
+        evidence_records=episode.evidence_records,
+        derived_measures=episode.derived_measures,
+        scenario_digest=scenario_digest,
+        task=task,
+        evidence_artifact=evidence_artifact,
+        apparatus_context=lambda captured_at, setup_artifact: _apparatus_context(
+            controls, captured_at, setup_artifact
+        ),
+        provenance=lambda run_id: blue_implementation_provenance(
             run_id, controls.blue_selection
         ).model_dump(mode="json"),
-        "parameter_set": [
+        parameter_set=[
             {"name": "red-variant", "value": controls.red_variant, "value_kind": "protocol"},
             {
                 "name": "blue-implementation",
@@ -306,52 +233,13 @@ def archival_run(
             },
             {"name": "trial-length", "value": controls.max_steps, "value_kind": "protocol"},
         ],
-        "stochastic_controls": [
-            {"control_id": "cyborg-seed", "role": "seed", "value": controls.seed}
-        ],
-        "started_at": captured_at,
-        "ended_at": generated_at,
-        "clock_context": {
-            "clock_id": "cage2-logical-clock",
-            "authority": "cyborg-cage2 runtime",
-            "time_domain": "logical",
-        },
-        "run_status": "sealed",
-        "outcome_status": "succeeded",
-        "traceability": {
-            "capture_spec_refs": [
-                episode.evidence_records[0].capture_spec_ref.model_dump(mode="json")
-            ],
-            "evidence_record_refs": [
-                {
-                    "ref_kind": "evidence-record",
-                    "ref_id": item.evidence_record_id,
-                    "ref_version": item.record_version,
-                }
-                for item in episode.evidence_records
-            ],
-            "derived_measure_refs": [
-                {
-                    "ref_kind": "derived-measure",
-                    "ref_id": item.derived_measure_id,
-                    "ref_version": item.measure_version,
-                }
-                for item in episode.derived_measures
-            ],
-        },
-        "evidence_artifacts": [evidence_artifact.model_dump(mode="json")],
-        "result_summaries": {
-            "cage2-cumulative-blue-reward-result": {
-                "metric_id": "cage2-cumulative-blue-reward",
-                "value": measure.value,
-                "value_status": measure.value_status,
-                "evidence_refs": [
-                    {"ref_kind": "evidence", "ref_id": evidence_artifact.artifact_id}
-                ],
-            }
-        },
-    }
-    return ExperimentRunModel.model_validate(payload)
+        seed=controls.seed,
+        stochastic_seed_control_id="cyborg-seed",
+        clock_id="cage2-logical-clock",
+        clock_authority="cyborg-cage2 runtime",
+        result_summary_key="cage2-cumulative-blue-reward-result",
+        metric_id="cage2-cumulative-blue-reward",
+    )
 
 
 def archival_collection(
@@ -359,37 +247,7 @@ def archival_collection(
 ) -> ExperimentStudyModel:
     """Group a declared run batch without introducing a scientific claim."""
 
-    membership: dict[str, object] = {
-        "task": {
-            "target_ref": {
-                "ref_kind": "task",
-                "ref_id": task.task_id,
-                "ref_version": task.task_version,
-            },
-            "role": "primary-task",
-            "inclusion_rationale": "Task selected by the admitted experiment authoring input.",
-        }
-    }
-    for index, run in enumerate(runs, start=1):
-        membership[f"run-{index}"] = {
-            "target_ref": {"ref_kind": "run", "ref_id": run.run_id, "ref_version": run.run_version},
-            "role": "evaluation-run",
-            "grouping": "declared-study",
-        }
-    return ExperimentStudyModel(
-        schema_version="experiment-study/v1",
-        study_id=study_id,
-        study_version="1.0.0",
-        study_kind="collection",
-        title="CAGE-2 declared run collection",
-        owner="RAES adapters",
-        description="Portable grouping of the exact runs admitted by the packaged authoring input.",
-        purpose="Retain batch membership without adding an empirical or equivalence claim.",
-        membership=membership,
-        inclusion_criteria=[
-            "Only sealed runs from the exact admitted pack, scenario, task, and control selection."
-        ],
-    )
+    return build_archival_collection(task, runs, study_id, title="CAGE-2 declared run collection")
 
 
 def _blue_action_contract(configuration: ParticipantConfigurationResultModel) -> str:

@@ -1405,6 +1405,12 @@ def _dispatch(args: argparse.Namespace) -> int:
     adapter = _adapter(args)
     if args.command == "validate":
         return _validated_admission(adapter, args)
+    return _run_command(adapter, args)
+
+
+def _run_command(adapter: _BackendAdapter, args: argparse.Namespace) -> int:
+    """Dispatch the ``run`` command through its conformance or native path."""
+
     if args.mode == "conformance":
         if not _conformance_controls_absent(args):
             raise _CommandFailure(

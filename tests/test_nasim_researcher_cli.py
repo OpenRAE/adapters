@@ -489,8 +489,10 @@ def test_partial_startup_failure_still_attempts_verified_cleanup(
         red_selection=selection,
         red_configuration=configuration,
     )
+    scenario = _selected_scenario()
+    driver = FakeNasimDriver()
     with pytest.raises(RuntimeError):
-        execute_episode(_selected_scenario(), controls, driver=FakeNasimDriver())  # type: ignore[arg-type]
+        execute_episode(scenario, controls, driver=driver)  # type: ignore[arg-type]
     assert destroy_calls, "cleanup was not attempted after a partial-start failure"
 
 
