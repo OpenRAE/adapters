@@ -19,6 +19,7 @@ semantic and protocol authority.
 
 - [Repository overview](https://github.com/OpenRAE/adapters#readme)
 - [Installed researcher command](researcher-command.md)
+- [NASim researcher command](nasim-researcher-command.md)
 - [Contribution guide](https://github.com/OpenRAE/adapters/blob/dev/CONTRIBUTING.md)
 - [Architecture decisions](decisions/adrs/README.md)
 - [CybORG/CAGE-2 backend qualification guardrails](decisions/cyborg-cage2-runtime-qualification-guardrails.md)
@@ -26,6 +27,7 @@ semantic and protocol authority.
 - [CybORG/CAGE-2 provisioner and backend-manifest guardrails](decisions/cyborg-cage2-provisioner-manifest-guardrails.md)
 - [CybORG conformance-composition guardrails](decisions/cyborg-conformance-guardrails.md)
 - [CybORG researcher run-and-evidence command guardrails](decisions/cyborg-researcher-command-guardrails.md)
+- [NASim researcher run-and-evidence command guardrails](decisions/nasim-researcher-command-guardrails.md)
 - [CyberBattleSim qualification guardrails](decisions/cyberbattlesim-qualification-guardrails.md)
 - [PrimAITE qualification guardrails](decisions/primaite-qualification-guardrails.md)
 - [PrimAITE scenario and source-ledger guardrails](decisions/primaite-scenario-ledger-guardrails.md)

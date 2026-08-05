@@ -1,0 +1,317 @@
+name: nasim-tiny
+version: "1.0.0"
+description: >-
+  Portable RAES model of the selected NASim `tiny` static-benchmark case
+  (Jjschwartz/NetworkAttackSimulator @ 7c732bc, nasim==0.12.0,
+  nasim/scenarios/benchmark/tiny.yaml). It encodes the fixed three-subnet,
+  three-host topology exactly: a pivot host reachable from the internet and two
+  sensitive hosts the attacker must take to root. Every host runs the ssh
+  service and the tomcat process; a remote ssh exploit grants user access and a
+  tomcat privilege escalation grants root. Because `tiny` is a static benchmark
+  (not a generated scenario) the topology is represented node-for-node with no
+  abstraction loss. Objective and topology truth only; reward, evaluator,
+  termination, and stochastic controls live in the companion published
+  experiment contracts, and native NASim state (the flat action index, the raw
+  observation vector, and host access-level state) stays source-private.
+
+vulnerabilities:
+  ssh-remote-exploit:
+    name: "Remote ssh service exploit granting user access"
+    description: >-
+      A reachable host running the ssh service is exploitable for user-level
+      access, modeling the NASim `e_ssh` service exploit (linux/ssh).
+    class: "CWE-287"
+    technical: true
+  tomcat-privilege-escalation:
+    name: "Local tomcat privilege escalation to root"
+    description: >-
+      A host running the tomcat process allows escalation from user to root,
+      modeling the NASim `pe_tomcat` privilege escalation (linux/tomcat).
+    class: "CWE-269"
+    technical: true
+
+infrastructure:
+  subnet-one:
+    count: 1
+  subnet-two:
+    count: 1
+  subnet-three:
+    count: 1
+
+nodes:
+  host-1-0:
+    type: vm
+    description: "Pivot host in subnet 1, reachable from the internet boundary."
+    os: linux
+    os_version: "22.04"
+    resources:
+      ram: "2 GB"
+      cpu: 2
+    services:
+      - port: 22
+        protocol: tcp
+        name: ssh
+        description: "Secure shell service exposed on every tiny host."
+    vulnerabilities:
+      - ssh-remote-exploit
+      - tomcat-privilege-escalation
+    asset_value:
+      confidentiality: low
+      integrity: low
+      availability: medium
+  host-2-0:
+    type: vm
+    description: "Sensitive host in subnet 2 (NASim sensitive host (2, 0))."
+    os: linux
+    os_version: "22.04"
+    resources:
+      ram: "2 GB"
+      cpu: 2
+    services:
+      - port: 22
+        protocol: tcp
+        name: ssh
+        description: "Secure shell service exposed on every tiny host."
+    vulnerabilities:
+      - ssh-remote-exploit
+      - tomcat-privilege-escalation
+    asset_value:
+      confidentiality: critical
+      integrity: high
+      availability: high
+  host-3-0:
+    type: vm
+    description: "Sensitive host in subnet 3 (NASim sensitive host (3, 0))."
+    os: linux
+    os_version: "22.04"
+    resources:
+      ram: "2 GB"
+      cpu: 2
+    services:
+      - port: 22
+        protocol: tcp
+        name: ssh
+        description: "Secure shell service exposed on every tiny host."
+    vulnerabilities:
+      - ssh-remote-exploit
+      - tomcat-privilege-escalation
+    asset_value:
+      confidentiality: critical
+      integrity: high
+      availability: high
+  subnet-one:
+    type: switch
+    description: "Subnet 1 carrying the internet-reachable pivot host."
+  subnet-two:
+    type: switch
+    description: "Subnet 2 carrying the first sensitive host."
+  subnet-three:
+    type: switch
+    description: "Subnet 3 carrying the second sensitive host."
+
+relationships:
+  internet-to-subnet-one:
+    type: connects_to
+    source: subnet-one
+    target: host-1-0
+    description: "Internet boundary reaches the pivot host in subnet 1 (topology row 0->1)."
+  subnet-one-to-subnet-two:
+    type: connects_to
+    source: host-1-0
+    target: host-2-0
+    description: "Subnet 1 reaches subnet 2 (topology adjacency 1<->2)."
+  subnet-one-to-subnet-three:
+    type: connects_to
+    source: host-1-0
+    target: host-3-0
+    description: "Subnet 1 reaches subnet 3 (topology adjacency 1<->3)."
+  subnet-two-to-subnet-three:
+    type: connects_to
+    source: host-2-0
+    target: host-3-0
+    description: "Subnet 2 reaches subnet 3 (topology adjacency 2<->3)."
+
+entities:
+  red-team:
+    description: "Autonomous bruteforce attacker (run_bruteforce_agent baseline)."
+    role: red
+
+accounts:
+  ssh-principal:
+    username: "svc_ssh"
+    node: host-1-0
+    password_strength: weak
+    groups:
+      - "users"
+  tomcat-root:
+    username: "tomcat_admin"
+    node: host-1-0
+    password_strength: weak
+    groups:
+      - "root"
+
+action_contracts:
+  service-exploit:
+    semantic_version: "1.0.0"
+    behavioral_granularity: atomic
+    procedure_basis: "NASim service-exploit action semantics (linux/ssh, e_ssh)."
+    realization_profile: "portable-scenario/v1"
+    fidelity_claim: "abstract portable projection of the source action."
+    preconditions:
+      - precondition_id: pre-reachable
+        precondition_class: target
+        description: "Target host is reachable from an owned host and runs the service."
+    effects:
+      - effect_id: eff-user-access
+        effect_class: intended_effect
+        description: "Successful exploitation grants user-level access on the target."
+        target_refs:
+          - host-2-0
+    failure_classes:
+      - target_unavailable
+      - authority_denied
+  privilege-escalation:
+    semantic_version: "1.0.0"
+    behavioral_granularity: atomic
+    procedure_basis: "NASim privilege-escalation action semantics (linux/tomcat, pe_tomcat)."
+    realization_profile: "portable-scenario/v1"
+    fidelity_claim: "abstract portable projection of the source action."
+    preconditions:
+      - precondition_id: pre-user-owned
+        precondition_class: authority
+        description: "Attacker already holds user access on the acting host."
+    effects:
+      - effect_id: eff-root-access
+        effect_class: intended_effect
+        description: "Escalation grants root-level access on the owned host."
+        target_refs:
+          - host-2-0
+    failure_classes:
+      - authority_denied
+      - unsupported_action
+  service-discovery:
+    semantic_version: "1.0.0"
+    behavioral_granularity: atomic
+    procedure_basis: "NASim service-scan discovery action semantics."
+    realization_profile: "portable-scenario/v1"
+    fidelity_claim: "abstract portable projection of the source action."
+    preconditions:
+      - precondition_id: pre-owns-scanner
+        precondition_class: authority
+        description: "Attacker owns a host from which to scan."
+    effects:
+      - effect_id: eff-reveal-services
+        effect_class: intended_effect
+        description: "Discovery reveals the services present on a reachable host."
+        target_refs:
+          - host-1-0
+    failure_classes:
+      - target_unavailable
+  subnet-discovery:
+    semantic_version: "1.0.0"
+    behavioral_granularity: atomic
+    procedure_basis: "NASim subnet-scan discovery action semantics."
+    realization_profile: "portable-scenario/v1"
+    fidelity_claim: "abstract portable projection of the source action."
+    preconditions:
+      - precondition_id: pre-owns-pivot
+        precondition_class: authority
+        description: "Attacker owns a host from which to enumerate reachable subnets."
+    effects:
+      - effect_id: eff-reveal-subnets
+        effect_class: intended_effect
+        description: "Discovery reveals the subnets reachable from an owned host."
+        target_refs:
+          - host-3-0
+    failure_classes:
+      - target_unavailable
+
+observation_boundaries:
+  attacker-view:
+    projection_basis: "Attacker's partially observed network view."
+    redaction_policy: "Native flat observation vector, action index, and host state stay source-private."
+    latency_profile: "per-step"
+    observable_refs:
+      - host-1-0
+
+propositions:
+  sensitive-hosts-owned:
+    description: "The attacker holds root access on both sensitive hosts."
+    subjects:
+      - host-2-0
+      - host-3-0
+    basis: declared_state
+    predicate:
+      kind: presence
+      property: ownership.attacker_root
+      semantic_ref: "urn:raes:nasim:ownership"
+      operator: exists
+
+assertions:
+  ownership-postcondition:
+    description: "Attacker root ownership of both sensitive hosts is achieved."
+    proposition: sensitive-hosts-owned
+    role: postcondition
+    polarity: positive
+
+objectives:
+  compromise-sensitive-hosts:
+    description: "Red team takes root on both NASim sensitive hosts."
+    agent: attacker
+    actions:
+      - service-exploit
+      - privilege-escalation
+      - service-discovery
+      - subnet-discovery
+    targets:
+      - host-2-0
+      - host-3-0
+    success:
+      mode: all_of
+      assertions:
+        - ownership-postcondition
+
+agents:
+  attacker:
+    entity: red-team
+    description: "run_bruteforce_agent baseline attacker cycling the flat action space."
+    actions:
+      - service-exploit
+      - privilege-escalation
+      - service-discovery
+      - subnet-discovery
+    starting_accounts:
+      - ssh-principal
+    initial_knowledge:
+      hosts:
+        - host-1-0
+    observation_boundaries:
+      - attacker-view
+    allowed_subnets:
+      - subnet-one
+      - subnet-two
+      - subnet-three
+
+evidence_requirements:
+  attacker-action-log:
+    description: "Portable record of attacker action outcomes for adjudication."
+    source_class: participant_action
+    scope: "attacker actions across the tiny network"
+    window: "full episode"
+    channel: log
+    sensitivity: redacted
+    redaction: redact_secrets
+    integrity: checksum
+    retention: run_lifetime
+    loss_disclosure: best_effort
+  host-compromise-series:
+    description: "Portable record of per-step sensitive-host compromise state."
+    source_class: scenario_state
+    scope: "sensitive-host ownership over the episode"
+    window: "per-step"
+    channel: metric
+    sensitivity: plain
+    redaction: none
+    integrity: checksum
+    retention: run_lifetime
+    loss_disclosure: best_effort

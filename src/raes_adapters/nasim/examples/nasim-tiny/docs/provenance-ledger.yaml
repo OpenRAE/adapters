@@ -1,0 +1,91 @@
+schema_version: environment-pack-provenance/v3
+pack:
+  name: nasim-tiny
+sources:
+  - source_id: nasim-upstream
+    name: NetworkAttackSimulator (NASim)
+    url: https://github.com/Jjschwartz/NetworkAttackSimulator
+    ref: "v0.12.0 (7c732bc4620d20a25b221a782adee29c2a89d800)"
+    license: MIT
+    usage: reimplemented
+    attribution_required: true
+    attribution: >-
+      NASim (NetworkAttackSimulator), Copyright (c) 2018 Jonathon Schwartz,
+      distributed under the MIT License. Retain the NASim MIT license text and
+      copyright notice.
+    used: >-
+      The static `tiny` benchmark topology, the ssh service exploit and tomcat
+      privilege-escalation action semantics, the run_bruteforce_agent baseline,
+      the compromise-both-sensitive-hosts goal, and the reward/termination model
+      of nasim 0.12.0 were reimplemented as portable RAES contracts.
+    excluded: >-
+      The native flat action index (n=18), the raw float32 observation vector
+      (shape 56), and per-host access-level state stay simulator-private and are
+      never carried in a portable artifact.
+    captured: "2026-08-02"
+  - source_id: adapter-example
+    name: RAES NASim adapter example
+    license: MIT
+    usage: reimplemented
+    attribution_required: false
+    used: Portable topology, participant selection, and researcher command examples.
+artifacts:
+  - artifact_id: portable-scenario
+    path: sdl/
+    classification: redistributable
+    sources:
+      - nasim-upstream
+      - adapter-example
+    description: Portable RAES SDL scenario reimplemented from the NASim tiny benchmark.
+  - artifact_id: experiment-controls
+    path: experiment/
+    classification: redistributable
+    sources:
+      - nasim-upstream
+      - adapter-example
+    description: >-
+      Published RAES experiment authoring input and task carrying the reward,
+      evaluator, and independent-termination intent excluded from the SDL.
+  - artifact_id: participant-implementation
+    path: participant/
+    classification: redistributable
+    sources:
+      - adapter-example
+    description: Red bruteforce participant manifest, selection, and configuration.
+  - artifact_id: documentation
+    path: docs/
+    classification: redistributable
+    sources:
+      - nasim-upstream
+      - adapter-example
+    description: >-
+      Example documentation, provenance, and the ADR-069 determinism-loss
+      disclosure for the unbound global-NumPy action RNG.
+content_safety:
+  no_real_malware: true
+  no_real_third_party_targets: true
+  no_real_credentials: true
+  no_sensitive_data: true
+  offensive_tooling_boundary: true
+  notes: >-
+    Synthetic three-host private topology only; technique emulation with abstract
+    action contracts and no vendored offensive tooling. ADR-069 determinism loss
+    retained and disclosed: action success is drawn from the global NumPy stream,
+    not the gym reset seed, and the static benchmark ignores its constructor
+    seed, so the published stochastic controls are descriptive only with no
+    executable random-stream binding.
+review:
+  status: approved
+  gates:
+    - gate_id: licensing
+      status: approved
+      notes: NASim upstream is MIT; redistribution permitted with retained notice.
+    - gate_id: attribution
+      status: approved
+      notes: NASim MIT copyright notice retained on the nasim-upstream source.
+    - gate_id: sensitive-data
+      status: approved
+      notes: Synthetic topology only; no real credentials, targets, or sensitive data.
+    - gate_id: offensive-tooling
+      status: approved
+      notes: Abstract action contracts only; no vendored exploit code or live C2.

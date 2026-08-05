@@ -58,9 +58,12 @@ cyborg = ["raes-env-packs==3.6.2"]
 # the extra reproduces the admitted, runnable protocol rather than a newer
 # gymnasium that breaks NASim's supplied agents (they assert a Python-int action
 # index, which gymnasium >= 0.27 returns as numpy.int64). See the qualification
-# record (src/raes_adapters/nasim/qualification.json). No `conflicts` entry is
-# needed — no other extra constrains gymnasium/numpy in the single lock.
-nasim = ["nasim==0.12.0", "gymnasium==0.26.3", "numpy==1.26.4"]
+# record (src/raes_adapters/nasim/qualification.json). The environment-pack
+# validator is pinned too: the researcher command's pack validate/run path imports
+# `raes_env_packs`, and the packaged `nasim-tiny` example is gated by its CLIs.
+# No `conflicts` entry is needed — no other extra constrains gymnasium/numpy in the
+# single lock.
+nasim = ["nasim==0.12.0", "gymnasium==0.26.3", "numpy==1.26.4", "raes-env-packs==3.6.2"]
 
 [project.scripts]
 raes-adapters = "raes_adapters.cli:main"
@@ -135,6 +138,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "C4"]
 "src/raes_adapters/primaite/backend/provisioner.py" = ["UP004"]
 "src/raes_adapters/cyborg/conformance.py" = ["UP004"]
 "src/raes_adapters/cyborg/researcher.py" = ["UP004"]
+"src/raes_adapters/nasim/researcher.py" = ["UP004"]
 
 [tool.mypy]
 python_version = "3.12"
