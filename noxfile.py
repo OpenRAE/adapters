@@ -222,6 +222,97 @@ assert all(report["native_conformance"] is False for report in index["reports"])
 assert (Path(sys.argv[1]) / "index.json").is_file()
 json.dumps(index, sort_keys=True)
 """
+PRIMAITE_CONFORMANCE_PROBE = r"""
+import json
+
+from raes_adapters.primaite.backend import (
+    DriverCleanupReport,
+    DriverEvaluation,
+    DriverResetReport,
+    DriverStep,
+    run_primaite_pr_conformance,
+)
+from raes_adapters.primaite.scenario_ledger import validate_all
+
+
+class Driver:
+    def __init__(self):
+        self.closed = False
+        self.step_count = 0
+
+    def construct(self):
+        self.closed = False
+
+    def reset(self, seed):
+        self.closed = False
+        self.step_count = 0
+        return DriverResetReport(
+            operation_ref="driver.reset.clean-install",
+            applied_streams=(),
+            broken_streams=(
+                ("gym-reset-seam", "python-random") if seed is not None else ("gym-reset-seam",)
+            ),
+            absent_streams=("torch",),
+            unbound_streams=("numpy-global",),
+        )
+
+    def step(self, action_contract):
+        self.step_count += 1
+        return DriverStep(
+            operation_ref=f"driver.step.{self.step_count}",
+            step_number=0,
+            representable=False,
+            source_transition=False,
+            processed=False,
+            terminated=False,
+            truncated=False,
+            terminal_cause=None,
+            rejection_reason="unrepresentable-action",
+        )
+
+    def evaluate(self):
+        return DriverEvaluation(
+            execution_ref="driver.reset.clean-install",
+            projection_ref="driver.reset.clean-install.evaluation.1",
+            step_count=self.step_count,
+            cumulative_reward=0.0,
+            terminated=False,
+            truncated=False,
+            terminal_cause=None,
+        )
+
+    def close(self):
+        already_closed = self.closed
+        self.closed = True
+        return DriverCleanupReport(
+            operation_ref="driver.close.clean-install",
+            closed=True,
+            verified=True,
+            already_closed=already_closed,
+            workspace_removed=True,
+        )
+
+    def verify_closed(self):
+        return self.closed
+
+
+# Compose the PR conformance disclosure bundle from the installed wheel. PrimAITE
+# is fail-closed: the live driver is non-runnable in-process, so an injected
+# driver keeps native_conformance false, the canonical report keeps its single
+# published no-witness case, capability evidence stays empty, and every
+# affirmative capability is disclosed as a gap rather than certified.
+assert validate_all() == []
+bundle = run_primaite_pr_conformance(driver=Driver())
+assert bundle["native_conformance"] is False
+assert bundle["backend_conformance"]["native_conformance"] is False
+assert bundle["backend_conformance"]["cases"]
+assert bundle["source_diagnostics"]
+assert bundle["capability_evidence"] == {}
+assert bundle["capability_gaps"]
+assert bundle["declared_weaknesses"]
+# Serializable to the portable JSON the evidence bundle claims to be.
+json.dumps(bundle, sort_keys=True)
+"""
 
 nox.options.default_venv_backend = "none"
 nox.options.reuse_existing_virtualenvs = True
@@ -641,6 +732,31 @@ def _distributions(session: nox.Session) -> None:
             "pr",
             "--output",
             "researcher-conformance",
+            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+        )
+
+    session.log("clean install: primaite extra conformance")
+    primaite_venv = workdir / "venv-primaite"
+    _run(session, "uv", "venv", "--quiet", "--clear", str(primaite_venv))
+    _run(
+        session,
+        "uv",
+        "pip",
+        "install",
+        "--quiet",
+        "--python",
+        str(primaite_venv),
+        "--find-links",
+        str(dist),
+        f"{wheels[0]}[primaite]",
+    )
+    with session.chdir(probe_cwd):
+        _run(
+            session,
+            str(primaite_venv / "bin" / "python"),
+            "-I",
+            "-c",
+            PRIMAITE_CONFORMANCE_PROBE,
             env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
         )
 

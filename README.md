@@ -281,6 +281,51 @@ dependency graph. The
 [qualification guardrails](docs/decisions/primaite-qualification-guardrails.md)
 explain why this evidence is not an adapter manifest or RAES conformance claim.
 
+## PrimAITE backend conformance
+
+Issue [#42](https://github.com/OpenRAE/adapters/issues/42) composes the PrimAITE
+runtime target with the published RAES conformance report and adapter-local
+source-protocol and leakage probes. Three claims stay distinct: backend
+conformance is the exact `BackendConformanceReport` from RAES, serialized only
+through the published report projector; source-protocol reproduction is
+adapter-local executable evidence (source/ledger identity, reset and stochastic
+dispositions, action representability, withheld observation and reward, terminal
+semantics, and verified cleanup) emitted as RAES diagnostics; and the
+research/readiness claim is bounded by the declared weakness and loss references.
+
+PrimAITE is deliberately **fail-closed**. The live `PrimaiteDriver` verifies
+source identity and then refuses in-process construction (the qualified runtime is
+CPython 3.11 and PrimAITE writes platform directories on import), so an injected
+driver proves portable mechanics but never certifies a live-native capability. The
+canonical report keeps its single published no-witness `realization-envelope-v1`
+case, `native_conformance` stays false, capability evidence is empty, and every
+affirmative manifest capability is disclosed as an open gap rather than certified.
+
+```python
+from raes_adapters.primaite.backend import run_primaite_pr_conformance
+
+# `driver` is a deterministic PrimaiteDriverProtocol implementation for the PR
+# lane. The live PrimaiteDriver is non-runnable in-process, so the bundle always
+# keeps native_conformance=false and discloses capability gaps as non-claims.
+bundle = run_primaite_pr_conformance(driver=deterministic_injected_driver)
+# bundle: backend_conformance (published payload), source_diagnostics,
+# capability_evidence ({}), capability_gaps (disclosed non-claims),
+# declared_weaknesses.
+```
+
+The deterministic PR lane uses a fully constructed `RuntimeTarget` with an
+explicit injected driver and never imports the simulator; the clean-install proof
+composes the same bundle from the built `primaite`-extra wheel. The
+hostile-failure and portable-output-leakage probes over the four surfaces
+(provisioner, orchestrator, participant runtime, evaluator) plus cleanup live in
+the deterministic PR test suite (`tests/test_primaite_conformance.py`). PrimAITE
+exposes no RAES time surface, so clock control reports a validated unsupported
+disposition rather than an affirmative time claim. Native readiness remains
+blocked pending a reviewed worker/process isolation boundary and CPython 3.12
+qualification evidence. The
+[conformance-composition guardrails](docs/decisions/primaite-conformance-guardrails.md)
+fix those boundaries.
+
 ## CybORG/CAGE-2 runtime qualification
 
 Issue [#12](https://github.com/OpenRAE/adapters/issues/12) selects the

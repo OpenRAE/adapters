@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from .cleanup import execute_primaite_cleanup
 from .conformance import (
+    PR_CONFORMANCE_SEED,
     primaite_backend_conformance_payload,
     primaite_declared_weaknesses,
     primaite_manifest_capability_evidence,
     primaite_manifest_capability_evidence_gaps,
     primaite_source_protocol_diagnostics,
     run_primaite_conformance,
+    run_primaite_pr_conformance,
 )
 from .driver import (
     DriverCleanupReport,
@@ -37,6 +39,7 @@ __all__ = [
     "ACTION_EVIDENCE_REF",
     "EVALUATION_EVIDENCE_REF",
     "PRIMAITE_BACKEND_NAME",
+    "PR_CONFORMANCE_SEED",
     "DriverCleanupReport",
     "DriverEvaluation",
     "DriverResetReport",
@@ -58,4 +61,5 @@ __all__ = [
     "primaite_manifest_capability_evidence_gaps",
     "primaite_source_protocol_diagnostics",
     "run_primaite_conformance",
+    "run_primaite_pr_conformance",
 ]
