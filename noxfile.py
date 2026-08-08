@@ -693,7 +693,7 @@ def _distributions(session: nox.Session) -> None:
             "--pack",
             "cage2-research",
             "--pack-digest",
-            "sha256:1006e46a05a2fbafa0457743765d684dbfef652cda78733f39ea066ba34246e1",
+            "sha256:99bf6eb0a75bdab8d222689f8c7fadd4594289c255d02c0c904bec734532c752",
             "--scenario",
             "sdl/cage2-research.sdl.yaml",
             "--scenario-digest",

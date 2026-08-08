@@ -201,6 +201,9 @@
   },
   "packaging": {
     "documented_install": "editable checkout from the bundled CybORG directory",
+    "build_dependencies": [
+      "setuptools==83.0.0"
+    ],
     "unmodified_wheel": {
       "sha256": "80708d7e8c964a598530718895c374242b03992d6189c3de9a00666d6c67275d",
       "normalized_sha256": "ee61283f78df460441285263c861fc9c7ce65737b39f131125f889aadfd21bcd",
