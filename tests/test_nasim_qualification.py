@@ -189,9 +189,16 @@ def test_qualification_admits_selected_backend_and_bounds_claim_strength() -> No
         "outcome_reproduction": "stochastic-bounded",
     }
     # The nasim extra pins the published distribution AND its qualified runtime
-    # so installing the extra reproduces the admitted protocol; other extras
+    # so installing the extra reproduces the admitted protocol, plus the
+    # env-pack validator (as the cyborg extra does) so a clean install can run
+    # the packaged nasim-tiny pack through the researcher command; other extras
     # untouched.
-    assert extras["nasim"] == ["nasim==0.12.0", "gymnasium==0.26.3", "numpy==1.26.4"]
+    assert extras["nasim"] == [
+        "nasim==0.12.0",
+        "gymnasium==0.26.3",
+        "numpy==1.26.4",
+        "raes-env-packs==3.6.2",
+    ]
     assert record["packaging"]["extra_declaration"] == extras["nasim"]
     # The extra must install exactly the qualified runtime the record attests,
     # so installing raes-adapters[nasim] reproduces the admitted protocol.

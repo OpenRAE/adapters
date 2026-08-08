@@ -1,0 +1,209 @@
+{
+  "schema_version": "associated-artifact-manifest/v1",
+  "manifest_id": "nasim-tiny-associated-artifacts",
+  "manifest_version": "1.0.0",
+  "canonicalization_profile": "associated-artifact-set/v1",
+  "scope": "scenario",
+  "parent_ref": {
+    "ref_kind": "scenario",
+    "ref_id": "nasim-tiny",
+    "ref_version": null,
+    "ref_digest": null,
+    "ref_path": null
+  },
+  "artifacts": {
+    "attack-path": {
+      "artifact_id": "attack-path",
+      "role": "documentation",
+      "media_type": "text/markdown",
+      "uri": "raes-environment-pack:/docs/attack-path.md",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "39d6c54cdc1b8e275a14fa620290c03ed24fb8a32a2098f8b8074bc0f5756b9d"
+      },
+      "size_bytes": 737,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#36",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "concepts": {
+      "artifact_id": "concepts",
+      "role": "documentation",
+      "media_type": "text/markdown",
+      "uri": "raes-environment-pack:/docs/concepts.md",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "a7d278cc680c64442933ad33c83c0d9eccc52787c8a57c7e2b9096a222edd64f"
+      },
+      "size_bytes": 1520,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#36",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "golden-readiness-checklist": {
+      "artifact_id": "golden-readiness-checklist",
+      "role": "documentation",
+      "media_type": "text/markdown",
+      "uri": "raes-environment-pack:/docs/golden-readiness-checklist.md",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "76f26fe8fa618c1ac4e09b122ee570b3ddf6e9d2133bddd34c08e0851810d7b8"
+      },
+      "size_bytes": 1681,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#36",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "provenance-ledger": {
+      "artifact_id": "provenance-ledger",
+      "role": "apparatus-evidence",
+      "media_type": "application/yaml",
+      "uri": "raes-environment-pack:/docs/provenance-ledger.yaml",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "3d5f420c0c8d16f3fb6d9e77695afad37abb4b508af38fd06f882a14667179e0"
+      },
+      "size_bytes": 3624,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#36",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "experiment-spec": {
+      "artifact_id": "experiment-spec",
+      "role": "configuration",
+      "media_type": "application/json",
+      "uri": "raes-environment-pack:/experiment/nasim-tiny.spec.exp.json",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "7580e9516bb4bcafc6afac3d67bc0c9a157b73055871df9a87d97e257c53467a"
+      },
+      "size_bytes": 3919,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#36",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "experiment-task": {
+      "artifact_id": "experiment-task",
+      "role": "protocol",
+      "media_type": "application/json",
+      "uri": "raes-environment-pack:/experiment/nasim-tiny.task.exp.json",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "c58e0a35bf889bb86877380d8e2249d55cd2b12eac439511f4c85f5594310654"
+      },
+      "size_bytes": 5366,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#36",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "compatibility-manifest": {
+      "artifact_id": "compatibility-manifest",
+      "role": "configuration",
+      "media_type": "application/yaml",
+      "uri": "raes-environment-pack:/pack.compatibility.yaml",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "45fb3038c94eff5ec14457fd3e428dc5c282819e28240c35e13fc340b778c051"
+      },
+      "size_bytes": 3101,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#36",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "pack-declaration": {
+      "artifact_id": "pack-declaration",
+      "role": "configuration",
+      "media_type": "application/yaml",
+      "uri": "raes-environment-pack:/pack.yaml",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "84e545c2571b360d41a24ca786c566ab619bcaf6e620de83a161ac8fd83b9ff5"
+      },
+      "size_bytes": 600,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#36",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "red-participant-configuration": {
+      "artifact_id": "red-participant-configuration",
+      "role": "configuration",
+      "media_type": "application/json",
+      "uri": "raes-environment-pack:/participant/nasim-red-bruteforce.configuration.json",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "9b9be7070f490e115eeed91fd256c8124693ef1ba467eff72cdbadb3b0c8aeb0"
+      },
+      "size_bytes": 1048,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#36",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "red-participant-manifest": {
+      "artifact_id": "red-participant-manifest",
+      "role": "manifest",
+      "media_type": "application/json",
+      "uri": "raes-environment-pack:/participant/nasim-red-bruteforce.manifest.json",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "eaced091e9084fd50239641e9bacbe575937192cc84405c142e628213b8cff21"
+      },
+      "size_bytes": 2487,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#36",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "red-participant-selection": {
+      "artifact_id": "red-participant-selection",
+      "role": "configuration",
+      "media_type": "application/json",
+      "uri": "raes-environment-pack:/participant/nasim-red-bruteforce.selection.json",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "e243ac01fb0ee2ecb818272268b39d8ed0ea90e78e194f7d7b0c9cb5c320962c"
+      },
+      "size_bytes": 1325,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#36",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "scenario": {
+      "artifact_id": "scenario",
+      "role": "scenario-snapshot",
+      "media_type": "application/yaml",
+      "uri": "raes-environment-pack:/sdl/nasim-tiny.sdl.yaml",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "c33598c421a91659d080c5235b492df645219054b2b1825926aa5fc534fb7e19"
+      },
+      "size_bytes": 9963,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#36",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    }
+  },
+  "set_digest": "sha256:4b96181c34eeead6a02f31517a313becdb352899a209046efedc8e2637d1c5f2"
+}

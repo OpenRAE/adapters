@@ -31,6 +31,7 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Researcher command: researcher-command.md
+  - NASim researcher command: nasim-researcher-command.md
   - Maintainers:
       - Continuous integration: maintainers/ci.md
       - Project services: maintainers/project-services.md
@@ -46,6 +47,7 @@ nav:
       - CybORG reward, objective, and outcome projection guardrails: decisions/cyborg-evaluation-projection-guardrails.md
       - CybORG conformance-composition guardrails: decisions/cyborg-conformance-guardrails.md
       - CybORG researcher run-and-evidence command guardrails: decisions/cyborg-researcher-command-guardrails.md
+      - NASim researcher run-and-evidence command guardrails: decisions/nasim-researcher-command-guardrails.md
       - CyberBattleSim qualification guardrails: decisions/cyberbattlesim-qualification-guardrails.md
       - PrimAITE qualification guardrails: decisions/primaite-qualification-guardrails.md
       - PrimAITE scenario and source-ledger guardrails: decisions/primaite-scenario-ledger-guardrails.md

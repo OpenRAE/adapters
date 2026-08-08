@@ -1,0 +1,43 @@
+{
+  "participant_address": "participant.behavior.red",
+  "implementation_identity": {
+    "name": "nasim-red-bruteforce",
+    "version": "1.0.0"
+  },
+  "manifest_ref": "participant/nasim-red-bruteforce.manifest.json",
+  "manifest_digest": "sha256:622a5b06193505759c8818b9a39e930f89f86a9ee148717cc38d1c0ab026aff2",
+  "configuration_ref": "participant/nasim-red-bruteforce.configuration.json",
+  "configuration_digest": "sha256:454ca50f9aa85343424087ccb1cf6a2979bed74746215f7afe30793008f4339b",
+  "selected_decision_surface_mode": "policy-directed",
+  "participant_contract_versions": [
+    "participant-episode-state-envelope-v1",
+    "participant-behavior-history-event-stream-v1",
+    "participant-decision-surface-v2"
+  ],
+  "exposure_policy": {
+    "policy_id": "nasim-red-observation-boundary",
+    "policy_version": null,
+    "policy_digest": null,
+    "exposure_policy_kinds": [
+      "hidden-truth",
+      "observation-stream"
+    ],
+    "disclosed_refs": [
+      "participant.observation-boundary.red"
+    ],
+    "withheld_refs": [
+      "servicescan",
+      "osscan",
+      "subnetscan",
+      "processscan",
+      "privilegeescalation",
+      "flatactionspace",
+      "<nasim"
+    ],
+    "tool_affordance_refs": [],
+    "visibility_scope_refs": [
+      "participant.behavior.red"
+    ],
+    "constraints": {}
+  }
+}

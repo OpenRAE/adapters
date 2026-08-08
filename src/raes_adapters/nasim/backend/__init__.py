@@ -20,6 +20,7 @@ from .driver import (
     NasimEvaluation,
     NasimResetReport,
     NasimStep,
+    verify_selected_nasim_source,
 )
 from .evaluator import EVALUATION_EVIDENCE_REF, NasimEvaluator
 from .manifest import NASIM_BACKEND_NAME, create_nasim_manifest
@@ -54,4 +55,5 @@ __all__ = [
     "nasim_source_protocol_diagnostics",
     "run_nasim_conformance",
     "run_nasim_pr_conformance",
+    "verify_selected_nasim_source",
 ]

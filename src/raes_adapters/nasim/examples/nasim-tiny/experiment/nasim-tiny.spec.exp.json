@@ -1,0 +1,94 @@
+{
+  "schema_version": "experiment-authoring-input/v1",
+  "spec_id": "nasim-tiny-spec",
+  "spec_version": "1.0.0",
+  "title": "NASim tiny public run plan",
+  "description": "Authoring input for the admitted public NASim protocol. Carries the episode/turn/termination control and the descriptive stochastic controls that RAES SDL excludes. The stochastic controls are descriptive only: NASim binds action success through the global NumPy stream rather than the environment seed, so no executable random-stream binding is claimed and the determinism loss is retained.",
+  "task_ref": {
+    "ref_kind": "task",
+    "ref_id": "nasim-tiny-task"
+  },
+  "intended_scenario_ref": {
+    "ref_kind": "scenario-snapshot",
+    "ref_id": "nasim-tiny",
+    "ref_digest": "sha256:a826fd8f812a447dd4c8d346179163f4c5274176ca739bc2802756913a195e2d",
+    "ref_path": "sdl/nasim-tiny.sdl.yaml"
+  },
+  "run_plan": {
+    "episode_control": {
+      "turn_order": "sequential",
+      "termination_rule": "After each attacker step, evaluate independently: terminated when every sensitive host is compromised (goal reached), and truncated when the step count reaches the step limit (1000). The two boundaries are computed independently and reported separately.",
+      "max_steps": 1000,
+      "termination_condition_refs": [
+        "goal-reached",
+        "step-limit"
+      ],
+      "description": "Source-native goal completion and the step-limit truncation stay distinct terminal causes."
+    },
+    "stochastic_controls": [
+      {
+        "control_id": "numpy-global-action-success",
+        "role": "randomization",
+        "value": "20260802",
+        "description": "The global NumPy seed 20260802 is the only stream that controls action success in the source; neither make_benchmark nor reset binds it for a static benchmark. Descriptive only; no executable binding."
+      },
+      {
+        "control_id": "gym-environment-reset",
+        "role": "seed",
+        "value": "20260802",
+        "description": "The gym environment reset seed 20260802 seeds a stream NASim does not use to resolve action success for the static benchmark. Descriptive only; no executable binding."
+      }
+    ],
+    "target_run_count": 1
+  },
+  "validity_notes": [
+    {
+      "category": "internal",
+      "note": "Action success is drawn from the global NumPy RNG, not the gym reset seed; the determinism loss is retained as a non-claim."
+    }
+  ],
+  "artifact_refs": [
+    {
+      "artifact_id": "nasim-red-bruteforce-manifest",
+      "role": "manifest",
+      "media_type": "application/json",
+      "uri": "pack:/participant/nasim-red-bruteforce.manifest.json",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "eaced091e9084fd50239641e9bacbe575937192cc84405c142e628213b8cff21"
+      },
+      "size_bytes": 2487,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#36",
+      "sensitivity": "public"
+    },
+    {
+      "artifact_id": "nasim-red-bruteforce-selection",
+      "role": "configuration",
+      "media_type": "application/json",
+      "uri": "pack:/participant/nasim-red-bruteforce.selection.json",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "e243ac01fb0ee2ecb818272268b39d8ed0ea90e78e194f7d7b0c9cb5c320962c"
+      },
+      "size_bytes": 1325,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#36",
+      "sensitivity": "public"
+    },
+    {
+      "artifact_id": "nasim-red-bruteforce-configuration",
+      "role": "configuration",
+      "media_type": "application/json",
+      "uri": "pack:/participant/nasim-red-bruteforce.configuration.json",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "9b9be7070f490e115eeed91fd256c8124693ef1ba467eff72cdbadb3b0c8aeb0"
+      },
+      "size_bytes": 1048,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#36",
+      "sensitivity": "public"
+    }
+  ]
+}

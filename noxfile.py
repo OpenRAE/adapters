@@ -544,9 +544,14 @@ def _distributions(session: nox.Session) -> None:
             env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
         )
 
-    session.log("clean install: nasim extra conformance")
+    session.log("clean install: nasim extra conformance + researcher + pack gates")
     nasim_venv = workdir / "venv-nasim"
-    _run(session, "uv", "venv", "--quiet", "--clear", str(nasim_venv))
+    # Pin the qualified runtime's Python. NASim's admitted runtime (numpy 1.26.4)
+    # and installed-source admission are qualified for 3.12; on a 3.13 default the
+    # native source cannot be verified (native_available false), so the researcher
+    # conformance run would fail. CI pins 3.12 (setup-python); pin it here too so
+    # the clean-install proof reproduces the qualified environment.
+    _run(session, "uv", "venv", "--quiet", "--clear", "--python", "3.12", str(nasim_venv))
     _run(
         session,
         "uv",
@@ -559,6 +564,7 @@ def _distributions(session: nox.Session) -> None:
         str(dist),
         f"{wheels[0]}[nasim]",
     )
+    nasim_pack_source = REPO_ROOT / "src" / "raes_adapters" / "nasim" / "examples" / "nasim-tiny"
     with session.chdir(probe_cwd):
         _run(
             session,
@@ -566,6 +572,82 @@ def _distributions(session: nox.Session) -> None:
             "-I",
             "-c",
             NASIM_CONFORMANCE_PROBE,
+            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+        )
+        _run(
+            session,
+            str(nasim_venv / "bin" / "raes-adapters"),
+            "inspect",
+            "--backend",
+            "nasim-tiny",
+            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+        )
+        _run(
+            session,
+            str(nasim_venv / "bin" / "raes-adapters"),
+            "validate",
+            "--backend",
+            "nasim-tiny",
+            "--mode",
+            "study",
+            "--pack",
+            "nasim-tiny",
+            "--pack-digest",
+            "sha256:4b96181c34eeead6a02f31517a313becdb352899a209046efedc8e2637d1c5f2",
+            "--scenario",
+            "sdl/nasim-tiny.sdl.yaml",
+            "--scenario-digest",
+            "sha256:a826fd8f812a447dd4c8d346179163f4c5274176ca739bc2802756913a195e2d",
+            "--task",
+            "experiment/nasim-tiny.task.exp.json",
+            "--experiment",
+            "experiment/nasim-tiny.spec.exp.json",
+            "--participant-implementation",
+            "nasim-red-bruteforce",
+            "--participant-manifest",
+            "participant/nasim-red-bruteforce.manifest.json",
+            "--participant-selection",
+            "participant/nasim-red-bruteforce.selection.json",
+            "--participant-configuration",
+            "participant/nasim-red-bruteforce.configuration.json",
+            "--trial-length",
+            "1000",
+            "--seed",
+            "20260802",
+            "--run-id",
+            "distribution-validation",
+            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+        )
+        _run(
+            session,
+            str(nasim_venv / "bin" / "raes-adapters"),
+            "run",
+            "--backend",
+            "nasim-tiny",
+            "--mode",
+            "conformance",
+            "--suite",
+            "pr",
+            "--output",
+            "researcher-conformance-nasim",
+            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+        )
+        # The environment-pack content and release gates run over the source pack
+        # (always present in the checkout) using the env-packs console scripts the
+        # nasim extra now ships.
+        _run(
+            session,
+            str(nasim_venv / "bin" / "raes-pack-validate"),
+            "--pack",
+            str(nasim_pack_source),
+            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+        )
+        _run(
+            session,
+            str(nasim_venv / "bin" / "raes-pack-release"),
+            "check",
+            "--pack",
+            str(nasim_pack_source),
             env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
         )
 

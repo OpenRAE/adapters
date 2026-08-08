@@ -17,6 +17,7 @@ import re
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
+from importlib.metadata import Distribution
 from importlib.util import find_spec
 from typing import Protocol, cast
 
@@ -217,32 +218,7 @@ class NasimDriver(object):
                 source["version"],
             )
             if not self._artifacts_verified:
-                distributions = _source_admission.verify_runtime_artifacts(
-                    qualification,
-                    selected_distribution,
-                    expected_names=_RUNTIME_ARTIFACT_NAMES,
-                    primary_name="nasim",
-                )
-                _source_admission.verify_selected_source_files(
-                    qualification,
-                    selected_distribution,
-                    source_paths=_RUNTIME_SOURCE_PATHS,
-                )
-                if find_spec("_tkinter") is None:
-                    raise RuntimeError(_TK_UNAVAILABLE)
-                # Verify the top-level module origins resolve inside the selected
-                # distributions BEFORE importing NASim. ``find_spec`` does not
-                # execute a top-level module, so a shadowing package on the path
-                # is rejected before its import-time code can run.
-                _source_admission.verify_package_origin(
-                    "nasim", selected_distribution, "nasim/__init__.py"
-                )
-                _source_admission.verify_package_origin(
-                    "gymnasium", distributions["gymnasium"], "gymnasium/__init__.py"
-                )
-                _source_admission.verify_package_origin(
-                    "numpy", distributions["numpy"], "numpy/__init__.py"
-                )
+                _verify_pre_import_source(qualification, selected_distribution)
             # Importing ``nasim`` pulls ``tkinter`` at import time (a disclosed
             # upstream defect); the Tk and origin checks above precede it.
             nasim = cast(_NasimModule, importlib.import_module("nasim"))
@@ -478,6 +454,56 @@ class NasimDriver(object):
         return f"driver.{operation}.{self._operation_count}"
 
 
+def _verify_pre_import_source(
+    qualification: dict[str, object],
+    selected_distribution: Distribution,
+) -> None:
+    """Admit the installed selected source and pinned runtime before any import.
+
+    This runs exactly the pre-import checks ``NasimDriver.construct`` performs:
+    the complete selected runtime-artifact set, the per-digest source files, the
+    Tk system requirement, and the top-level module origins. ``find_spec`` does
+    not execute a top-level module, so a shadowing package is rejected before its
+    import-time code can run and without constructing the environment.
+    """
+
+    distributions = _source_admission.verify_runtime_artifacts(
+        qualification,
+        selected_distribution,
+        expected_names=_RUNTIME_ARTIFACT_NAMES,
+        primary_name="nasim",
+    )
+    _source_admission.verify_selected_source_files(
+        qualification,
+        selected_distribution,
+        source_paths=_RUNTIME_SOURCE_PATHS,
+    )
+    if find_spec("_tkinter") is None:
+        raise RuntimeError(_TK_UNAVAILABLE)
+    _source_admission.verify_package_origin("nasim", selected_distribution, "nasim/__init__.py")
+    _source_admission.verify_package_origin(
+        "gymnasium", distributions["gymnasium"], "gymnasium/__init__.py"
+    )
+    _source_admission.verify_package_origin("numpy", distributions["numpy"], "numpy/__init__.py")
+
+
+def verify_selected_nasim_source() -> None:
+    """Verify the selected installed NASim source without importing the env.
+
+    The CLI's native gate calls this as the analogue of the CybORG
+    ``verify_selected_cyborg_source`` byte-verification: it resolves the selected
+    distribution and admits the installed source and pinned runtime, and it
+    imports neither ``nasim`` nor its native dependencies.
+    """
+
+    qualification, source, _scenario_name = NasimDriver._selected_configuration()
+    selected_distribution = _source_admission.resolve_selected_distribution(
+        source["package"],
+        source["version"],
+    )
+    _verify_pre_import_source(qualification, selected_distribution)
+
+
 def _target_coordinate(target_ref: str | None) -> tuple[int, int] | None:
     """Parse a portable ``host-<subnet>-<host>`` reference into a coordinate."""
 
@@ -496,4 +522,5 @@ __all__ = [
     "NasimEvaluation",
     "NasimResetReport",
     "NasimStep",
+    "verify_selected_nasim_source",
 ]

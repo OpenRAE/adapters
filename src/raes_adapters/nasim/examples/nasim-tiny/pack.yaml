@@ -1,0 +1,19 @@
+name: nasim-tiny
+title: NASim tiny researcher example
+version: 1.0.0
+status: built
+description: >-
+  A portable NASim tiny static-benchmark topology for the installed RAES adapter
+  command: one red bruteforce attacker against three hosts, with the reward and
+  termination intent in published experiment contracts.
+authors:
+  - RAES
+license: MIT
+requirement: null
+contents:
+  flag_layer: false
+  reference_triangle: false
+  profile_bundles: false
+provenance_ledger: docs/provenance-ledger.yaml
+compatibility_manifest: pack.compatibility.yaml
+associated_artifact_manifest: pack.content-manifest.json
