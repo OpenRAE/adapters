@@ -1,0 +1,31 @@
+{
+  "schema_version": "participant-configuration-result/v1",
+  "participant_address": "participant.behavior.red",
+  "manifest_ref": "participant/nasim-red-bruteforce.manifest.json",
+  "manifest_digest": "sha256:622a5b06193505759c8818b9a39e930f89f86a9ee148717cc38d1c0ab026aff2",
+  "configuration": {
+    "implementation_identity": {
+      "name": "nasim-red-bruteforce",
+      "version": "1.0.0"
+    },
+    "manifest_version": "participant-implementation-manifest/v1",
+    "owner": {
+      "contract_id": "participant-configuration-result-v1",
+      "contract_version": "1.0.0",
+      "validator_id": "nasim-red-participant",
+      "validator_version": "1.0.0"
+    },
+    "values": [
+      {
+        "target_id": "red-action-contract-address",
+        "value_type": "string",
+        "origin": "default",
+        "value": {
+          "kind": "literal",
+          "value": "participant.action-contract.service-exploit"
+        }
+      }
+    ]
+  },
+  "configuration_digest": "sha256:454ca50f9aa85343424087ccb1cf6a2979bed74746215f7afe30793008f4339b"
+}

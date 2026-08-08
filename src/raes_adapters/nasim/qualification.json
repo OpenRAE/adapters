@@ -339,11 +339,16 @@
   ],
   "packaging": {
     "repository_extra": "nasim",
-    "extra_declaration": ["nasim==0.12.0", "gymnasium==0.26.3", "numpy==1.26.4"],
+    "extra_declaration": [
+      "nasim==0.12.0",
+      "gymnasium==0.26.3",
+      "numpy==1.26.4",
+      "raes-env-packs==3.6.2"
+    ],
     "publishable_distribution": true,
     "base_cyborg_cyberbattlesim_unchanged": true,
     "conflicts_declaration_required": false,
-    "decision": "NASim publishes an index distribution (wheel + sdist for 0.12.0), so the nasim extra pins nasim==0.12.0 directly (unlike cyberbattlesim, whose source is unpublished). It also pins the qualified gymnasium 0.26.3 / numpy 1.26.4 runtime so that installing raes-adapters[nasim] reproduces the admitted, runnable protocol instead of a later gymnasium that breaks NASim's supplied agents.",
+    "decision": "NASim publishes an index distribution (wheel + sdist for 0.12.0), so the nasim extra pins nasim==0.12.0 directly (unlike cyberbattlesim, whose source is unpublished). It also pins the qualified gymnasium 0.26.3 / numpy 1.26.4 runtime so that installing raes-adapters[nasim] reproduces the admitted, runnable protocol instead of a later gymnasium that breaks NASim's supplied agents. The extra additionally pins raes-env-packs==3.6.2 (as the cyborg extra does) so a clean raes-adapters[nasim] install can validate and run the packaged nasim-tiny environment pack through the researcher command; the pack validator is tooling and does not alter the qualified simulator runtime.",
     "reason": "The single uv.lock holds no gymnasium/numpy/matplotlib/networkx outside this extra and no other extra constrains them, so nasim resolves independently to the pinned runtime and no uv conflicts declaration is required. raes_adapters.nasim imports none of the simulator stack, so the repository test and typecheck graph never imports NASim."
   },
   "admission": {

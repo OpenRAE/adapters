@@ -1,0 +1,130 @@
+{
+  "schema_version": "experiment-task/v1",
+  "task_id": "nasim-tiny-task",
+  "task_version": "1.0.0",
+  "title": "NASim tiny bruteforce evaluation task",
+  "description": "Published evaluation-protocol contract for the admitted public NASim case (tiny static benchmark, run_bruteforce_agent baseline). Carries the reward, evaluator, and metric intent that RAES SDL deliberately excludes. Native reward scalars, the flat action index, and the raw observation vector remain source-private; only bounded measure definitions are portable.",
+  "scenario_ref": {
+    "ref_kind": "scenario-snapshot",
+    "ref_id": "nasim-tiny",
+    "ref_digest": "sha256:a826fd8f812a447dd4c8d346179163f4c5274176ca739bc2802756913a195e2d",
+    "ref_path": "sdl/nasim-tiny.sdl.yaml"
+  },
+  "evaluation_protocol": {
+    "protocol_id": "nasim-tiny-protocol",
+    "protocol_version": "1.0.0",
+    "intent": "Measure attacker progress, reward, goal attainment, and terminal cause for the admitted public protocol without asserting deterministic replay or outcome equivalence.",
+    "unit_of_analysis": "episode",
+    "metric_definitions": {
+      "steps_to_termination": {
+        "metric_id": "steps_to_termination",
+        "metric_version": "1.0.0",
+        "name": "Steps to termination",
+        "measured_construct": "Attacker steps to source-native goal, or the step limit when truncation occurs first.",
+        "unit_of_analysis": "episode",
+        "value_kind": "count",
+        "direction": "descriptive",
+        "evidence_requirements": [
+          {
+            "ref_kind": "evidence",
+            "ref_id": "attacker-action-log"
+          }
+        ]
+      },
+      "cumulative_attacker_reward": {
+        "metric_id": "cumulative_attacker_reward",
+        "metric_version": "1.0.0",
+        "name": "Cumulative attacker reward",
+        "measured_construct": "Per-episode cumulative attacker reward, where each step reward is the source-native action value minus action cost; these are the evaluator scalars, not an SDL objective score or equivalence claim.",
+        "unit_of_analysis": "episode",
+        "value_kind": "number",
+        "direction": "higher-is-better",
+        "evidence_requirements": [
+          {
+            "ref_kind": "evidence",
+            "ref_id": "attacker-action-log"
+          }
+        ]
+      },
+      "goal_reached": {
+        "metric_id": "goal_reached",
+        "metric_version": "1.0.0",
+        "name": "Goal reached",
+        "measured_construct": "Whether every sensitive host was compromised before the step limit.",
+        "unit_of_analysis": "episode",
+        "value_kind": "category",
+        "direction": "descriptive",
+        "evidence_requirements": [
+          {
+            "ref_kind": "evidence",
+            "ref_id": "host-compromise-series"
+          }
+        ]
+      },
+      "terminal_cause": {
+        "metric_id": "terminal_cause",
+        "metric_version": "1.0.0",
+        "name": "Terminal cause",
+        "measured_construct": "Reconstructed terminal cause, one of goal or step-limit; the terminated (goal) and truncated (step limit) causes stay distinct.",
+        "unit_of_analysis": "episode",
+        "value_kind": "category",
+        "direction": "descriptive",
+        "evidence_requirements": [
+          {
+            "ref_kind": "evidence",
+            "ref_id": "attacker-action-log"
+          }
+        ]
+      }
+    },
+    "observation_requirements": [
+      {
+        "ref_kind": "evidence",
+        "ref_id": "attacker-action-log"
+      },
+      {
+        "ref_kind": "evidence",
+        "ref_id": "host-compromise-series"
+      }
+    ]
+  },
+  "intended_use": "Define the portable evaluation protocol for the admitted public NASim case so an attested run can be scored consistently.",
+  "non_use": [
+    "Do not treat this synthetic example as an outcome-equivalence benchmark."
+  ],
+  "population_or_construct": "A single bruteforce baseline attacker on the fixed NASim tiny three-host topology with no defender.",
+  "split_and_leakage_controls": {
+    "partitioning_strategy": "Single held-out public protocol run of the documented bruteforce baseline against the static tiny benchmark."
+  },
+  "apparatus_constraints": {
+    "notes": [
+      "Requires the separately installed qualified NASim source and the nasim-tiny backend; the supplied agents require gymnasium 0.26.x and importing NASim requires Tk system libraries."
+    ]
+  },
+  "validity_notes": [
+    {
+      "category": "internal",
+      "note": "Action success is drawn from the global NumPy RNG, not the gym reset seed, and the static benchmark ignores its constructor seed, so no run under this protocol is a deterministic replay unless the global NumPy seed is bound explicitly."
+    },
+    {
+      "category": "external",
+      "note": "The packaged topology is intentionally small and supports workflow validation, not broad empirical claims."
+    }
+  ],
+  "artifact_refs": [
+    {
+      "artifact_id": "nasim-tiny-concepts",
+      "role": "documentation",
+      "media_type": "text/markdown",
+      "uri": "pack:/docs/concepts.md",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "a7d278cc680c64442933ad33c83c0d9eccc52787c8a57c7e2b9096a222edd64f"
+      },
+      "size_bytes": 1520,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#36",
+      "sensitivity": "public"
+    }
+  ]
+}

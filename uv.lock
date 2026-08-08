@@ -1835,6 +1835,7 @@ nasim = [
     { name = "gymnasium" },
     { name = "nasim" },
     { name = "numpy" },
+    { name = "raes-env-packs" },
 ]
 
 [package.dev-dependencies]
@@ -1859,6 +1860,7 @@ requires-dist = [
     { name = "numpy", marker = "extra == 'nasim'", specifier = "==1.26.4" },
     { name = "raes", specifier = "==3.3.0" },
     { name = "raes-env-packs", marker = "extra == 'cyborg'", specifier = "==3.6.2" },
+    { name = "raes-env-packs", marker = "extra == 'nasim'", specifier = "==3.6.2" },
 ]
 provides-extras = ["cyberbattlesim", "primaite", "cyborg", "nasim"]
 
