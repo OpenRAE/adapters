@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
+import sys
 import textwrap
 from dataclasses import dataclass, field
 from importlib import resources, util
@@ -40,9 +42,10 @@ infrastructure:
     properties: {cidr: 10.20.0.0/24, gateway: 10.20.0.1}
   user-host: {count: 1, links: [user-net]}
 """
-_PACK_DIGEST = "sha256:1006e46a05a2fbafa0457743765d684dbfef652cda78733f39ea066ba34246e1"
+_PACK_DIGEST = "sha256:99bf6eb0a75bdab8d222689f8c7fadd4594289c255d02c0c904bec734532c752"
 _SCENARIO_DIGEST = "sha256:926f13857da070f1ebdc3afbb3193c7c13f4aa9fe324b3eb93e1c2595871abda"
 _PACK_VALIDATOR_AVAILABLE = util.find_spec("raes_env_packs") is not None
+_EXAMPLE_ROOT = resources.files("raes_adapters.cyborg") / "examples" / "cage2-research"
 
 
 def _native_run_args(
@@ -271,6 +274,39 @@ def test_validate_admits_packaged_example(capsys: pytest.CaptureFixture[str]) ->
         "run_count": 2,
         "scope": "run-admission",
     }
+
+
+@pytest.mark.skipif(not _PACK_VALIDATOR_AVAILABLE, reason="requires the cyborg extra")
+@pytest.mark.parametrize(
+    ("module", "arguments", "success_marker"),
+    (
+        (
+            "raes_env_packs.content_ci",
+            ("--pack", str(_EXAMPLE_ROOT)),
+            "ENVIRONMENT-PACK CONTENT CI: PASS",
+        ),
+        (
+            "raes_env_packs.release",
+            ("check", "--pack", str(_EXAMPLE_ROOT)),
+            "[ok] cage2-research release checks",
+        ),
+    ),
+)
+def test_pack_passes_published_validation_and_release_gates(
+    module: str,
+    arguments: tuple[str, ...],
+    success_marker: str,
+) -> None:
+    result = subprocess.run(  # noqa: S603 - fixed interpreter/module and test-owned arguments
+        [sys.executable, "-m", module, *arguments],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert success_marker in result.stdout
+    assert "[skip] cage2-research" not in result.stdout
 
 
 def test_conformance_reserves_output_and_seals_relative_inventory(

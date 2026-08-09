@@ -1,0 +1,99 @@
+schema_version: environment-pack-compatibility/v2
+pack:
+  name: cage2-research
+  title: CAGE-2 researcher example
+  version: 1.0.0
+  status: built
+  provenance_ledger: docs/provenance-ledger.yaml
+  source:
+    requirement: null
+    issues:
+      - 21
+    upstream_references:
+      - https://github.com/cage-challenge/cage-challenge-2
+      - https://github.com/OpenRAE/adapters/issues/77
+artifact_boundaries:
+  participant_visible:
+    - path: sdl
+      export: public
+      description: Portable RAES SDL smoke scenario and objective truth.
+    - path: experiment
+      export: public
+      description: Published experiment authoring input and evaluation task.
+    - path: docs/attack-path.md
+      export: public
+      description: Participant-safe description of the bounded smoke activity.
+    - path: docs/concepts.md
+      export: public
+      description: Participant-safe concept and portability overview.
+  operator_only:
+    - path: participant
+      export: operator
+      description: Blue sleep-policy manifest, selection, and configuration.
+    - path: docs/provenance-ledger.yaml
+      export: operator
+      description: Pack-domain provenance, licensing, exclusions, and safety review.
+    - path: docs/golden-readiness-checklist.md
+      export: operator
+      description: Operator golden-readiness review checklist.
+  oracle_only: []
+  commercial: []
+runtime_profiles:
+  - profile_id: cage2-cyborg-2-1-source-26ce1c1
+    status: supported
+    description: >-
+      The qualified CAGE Challenge 2 source selection realized by the
+      cyborg-cage2 backend; the native source remains a separately admitted
+      operator dependency.
+    provider: raes-adapters[cyborg]
+delivery_bundles: []
+platform_features: []
+assets:
+  - asset_id: portable-scenario
+    path: sdl/cage2-research.sdl.yaml
+    visibility: public
+    status: shipped
+    description: Portable RAES smoke scenario document.
+  - asset_id: experiment-task
+    path: experiment/cage2-research.task.exp.json
+    visibility: public
+    status: shipped
+    description: Published evaluation-task contract.
+  - asset_id: experiment-spec
+    path: experiment/cage2-research.spec.exp.json
+    visibility: public
+    status: shipped
+    description: Published experiment authoring-input contract.
+operator_surfaces:
+  - surface_id: blue-participant-selection
+    path: participant/cyborg-blue-sleep-policy.selection.json
+    role: participant-selection
+    visibility: operator
+    status: shipped
+    description: Blue sleep-policy participant selection binding.
+validation:
+  commands:
+    - id: pack-validate
+      command: raes-pack-validate --pack .
+      validates:
+        - sdl/cage2-research.sdl.yaml
+        - docs/provenance-ledger.yaml
+        - pack.compatibility.yaml
+    - id: pack-release-check
+      command: raes-pack-release check --pack .
+      validates:
+        - pack.compatibility.yaml
+  gates:
+    - id: sdl-through-raes
+      kind: schema
+      paths:
+        - path: sdl/cage2-research.sdl.yaml
+    - id: participant-leak-scan
+      kind: leak-scan
+      paths:
+        - path: docs/attack-path.md
+        - path: docs/concepts.md
+    - id: golden-walkthrough
+      kind: manual-walkthrough
+      paths:
+        - path: docs/golden-readiness-checklist.md

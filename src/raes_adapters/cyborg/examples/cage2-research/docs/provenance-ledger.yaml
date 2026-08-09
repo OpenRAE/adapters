@@ -2,46 +2,135 @@ schema_version: environment-pack-provenance/v3
 pack:
   name: cage2-research
 sources:
+  - source_id: cage2-upstream
+    name: TTCP CAGE Challenge 2 and bundled CybORG 2.1 source
+    url: https://github.com/cage-challenge/cage-challenge-2
+    ref: 26ce1c1253fa9e2e73f25e6a7f2da32860c11257
+    license: MIT
+    usage: reimplemented
+    attribution_required: true
+    attribution: >-
+      TTCP CAGE Challenge 2 and CybORG source, distributed under the MIT
+      License; retain the upstream copyright and license notice.
+    used: >-
+      The qualified Scenario2 source selection, participant roles, native
+      control vocabulary, and evaluation intent referenced by the adapter's
+      pinned source ledger and loss disclosures.
+    excluded: >-
+      Native objects, action ids and classes, raw observations and hidden truth,
+      reward vectors, raw logs, source paths, and upstream executable bytes are
+      not copied into portable pack artifacts.
+    captured: "2026-08-08"
+  - source_id: cage2-evaluation-paper
+    name: On Autonomous Agents in a Cyber Defence Environment
+    url: https://arxiv.org/abs/2309.07388
+    ref: arXiv:2309.07388
+    license: n-a (referenced, not redistributed)
+    usage: referenced
+    attribution_required: true
+    attribution: >-
+      Mitchell Kiely, David Bowman, Maxwell Standen, and Christopher Moir,
+      "On Autonomous Agents in a Cyber Defence Environment," arXiv:2309.07388.
+    used: Research and evaluation context for CAGE Challenge 2 only.
+    excluded: >-
+      No paper text, figures, datasets, participant submissions, or result
+      claims are redistributed or treated as evidence for this example.
+    captured: "2026-08-08"
+  - source_id: raes-contracts
+    name: RAES published contracts and SDL implementation
+    url: https://github.com/OpenRAE/rae
+    ref: raes==3.3.0
+    license: MIT
+    usage: reused
+    attribution_required: false
+    used: >-
+      Published SDL, experiment, participant, associated-artifact, validation,
+      and runtime contracts consumed by the adapter and pack tooling.
+    excluded: >-
+      No RAES schema, vocabulary, validator, policy, or conformance profile is
+      copied or redefined by this pack.
+    captured: "2026-08-08"
   - source_id: adapter-example
     name: RAES CybORG adapter example
+    url: https://github.com/OpenRAE/adapters
+    ref: OpenRAE/adapters#20 and #21
     license: MIT
     usage: reimplemented
     attribution_required: false
-    used: Portable topology and researcher command examples.
+    used: >-
+      Portable smoke topology, participant selection, experiment controls,
+      bounded documentation, and installed researcher command examples.
+    excluded: >-
+      The full CAGE-2 Scenario2 SDL remains issue #77; this bounded example
+      carries no deterministic replay, equivalence, or scientific-validity claim.
+  - source_id: manifest-generator
+    name: raes-env-packs content-manifest derivation
+    url: https://github.com/OpenRAE/env-packs
+    ref: raes-env-packs==3.6.2
+    license: MIT
+    usage: generated-from
+    attribution_required: false
+    used: >-
+      Deterministic associated-artifact descriptors, member digests, sizes, and
+      set identity generated from the checked-in pack members.
+    excluded: No environment-pack schema or validator is vendored into this repository.
+    captured: "2026-08-08"
 artifacts:
   - artifact_id: portable-scenario
     path: sdl/
     classification: redistributable
     sources:
+      - cage2-upstream
+      - raes-contracts
       - adapter-example
-    description: Portable RAES SDL scenario.
+    description: Portable RAES smoke scenario informed by the qualified CAGE source.
   - artifact_id: experiment-controls
     path: experiment/
     classification: redistributable
     sources:
+      - cage2-upstream
+      - raes-contracts
       - adapter-example
-    description: Published RAES experiment authoring input.
+    description: Published RAES experiment authoring input and evaluation task.
+  - artifact_id: participant-implementation
+    path: participant/
+    classification: redistributable
+    sources:
+      - raes-contracts
+      - adapter-example
+    description: Blue sleep-policy participant manifest, selection, and configuration.
   - artifact_id: documentation
     path: docs/
     classification: redistributable
     sources:
+      - cage2-upstream
+      - cage2-evaluation-paper
+      - raes-contracts
       - adapter-example
-    description: Example documentation and provenance.
+      - manifest-generator
+    description: Example documentation, provenance, and golden-readiness review.
 content_safety:
   no_real_malware: true
   no_real_third_party_targets: true
   no_real_credentials: true
   no_sensitive_data: true
   offensive_tooling_boundary: true
-  notes: Synthetic private network only.
+  notes: >-
+    Synthetic private network only. Abstract portable contracts and a sleep
+    policy are included; no malware, exploit payload, live target, or offensive
+    tool is shipped.
 review:
   status: approved
   gates:
     - gate_id: licensing
       status: approved
+      notes: CAGE Challenge 2, CybORG, RAES, env-packs, and this repository are MIT.
     - gate_id: attribution
       status: approved
+      notes: Upstream and paper attribution are recorded; paper content is not redistributed.
     - gate_id: sensitive-data
       status: approved
+      notes: Synthetic content only; no real credentials, targets, or sensitive data.
     - gate_id: offensive-tooling
       status: approved
+      notes: Abstract contracts and a sleep policy only; no exploit code or live C2.

@@ -523,6 +523,7 @@ def verify_qualification(repo_root: Path = REPO_ROOT) -> None:
     patch_text = cyborg.read_compatibility_patch()
     source_record = record["source"]
     patch_record = record["patches"][0]
+    packaging_record = record["packaging"]
     runtime_record = record["runtime"]
     dependency_record = record["dependency_resolution"]
     expected_versions = {
@@ -588,6 +589,11 @@ def verify_qualification(repo_root: Path = REPO_ROOT) -> None:
         if _download_sha256(archive_url) != source_record["archive_sha256"]:
             raise RuntimeError("CybORG qualification source archive digest mismatch")
 
+        build_constraints = root / "build-constraints.txt"
+        build_constraints.write_text(
+            "\n".join(packaging_record["build_dependencies"]) + "\n",
+            encoding="utf-8",
+        )
         original_dist = root / "original-dist"
         _run(
             "original wheel build",
@@ -595,6 +601,8 @@ def verify_qualification(repo_root: Path = REPO_ROOT) -> None:
                 "uv",
                 "build",
                 "--wheel",
+                "--build-constraints",
+                str(build_constraints),
                 "--out-dir",
                 str(original_dist),
                 str(source / "CybORG"),
@@ -603,7 +611,7 @@ def verify_qualification(repo_root: Path = REPO_ROOT) -> None:
             env=env,
         )
         original_wheel = _single_wheel(original_dist)
-        original_record = record["packaging"]["unmodified_wheel"]
+        original_record = packaging_record["unmodified_wheel"]
         if normalized_wheel_sha256(original_wheel) != original_record["normalized_sha256"]:
             raise RuntimeError("CybORG qualification original wheel identity mismatch")
         original_members = _wheel_members(original_wheel)
@@ -684,6 +692,8 @@ def verify_qualification(repo_root: Path = REPO_ROOT) -> None:
                 "uv",
                 "build",
                 "--wheel",
+                "--build-constraints",
+                str(build_constraints),
                 "--out-dir",
                 str(patched_dist),
                 str(source / "CybORG"),
@@ -692,7 +702,7 @@ def verify_qualification(repo_root: Path = REPO_ROOT) -> None:
             env=env,
         )
         patched_wheel = _single_wheel(patched_dist)
-        patched_record = record["packaging"]["patched_wheel"]
+        patched_record = packaging_record["patched_wheel"]
         if normalized_wheel_sha256(patched_wheel) != patched_record["normalized_sha256"]:
             raise RuntimeError("CybORG qualification patched wheel identity mismatch")
         patched_members = _wheel_members(patched_wheel)

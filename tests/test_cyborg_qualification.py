@@ -79,6 +79,7 @@ def test_packaging_patch_is_explicit_and_preserves_original_behavior() -> None:
     assert "package_data" in patch
     assert "Shared/Scenarios/*.yaml" in patch
     assert "Shared/Scenarios/images/*.yaml" in patch
+    assert packaging["build_dependencies"] == ["setuptools==83.0.0"]
 
     assert packaging["unmodified_wheel"] == {
         "sha256": "80708d7e8c964a598530718895c374242b03992d6189c3de9a00666d6c67275d",

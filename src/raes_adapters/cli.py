@@ -314,9 +314,11 @@ def cyborg_inspection_payload() -> dict[str, object]:
 
 _CYBORG_EXAMPLE_MEMBERS = (
     "pack.yaml",
+    "pack.compatibility.yaml",
     "pack.content-manifest.json",
     "docs/attack-path.md",
     "docs/concepts.md",
+    "docs/golden-readiness-checklist.md",
     "docs/provenance-ledger.yaml",
     "experiment/cage2-research.spec.exp.json",
     "experiment/cage2-research.task.exp.json",

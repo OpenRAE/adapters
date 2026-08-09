@@ -12,4 +12,5 @@ contents:
   reference_triangle: false
   profile_bundles: false
 provenance_ledger: docs/provenance-ledger.yaml
+compatibility_manifest: pack.compatibility.yaml
 associated_artifact_manifest: pack.content-manifest.json
