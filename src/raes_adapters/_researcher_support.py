@@ -300,7 +300,6 @@ class ArchivalRunSpec(object):
 
 
 def build_single_participant_archival_run(
-    controls: RedParticipantRunControls,
     episode: EpisodeEvidence,
     evidence_artifact: ExperimentArtifactRefModel,
     scenario_digest: str,

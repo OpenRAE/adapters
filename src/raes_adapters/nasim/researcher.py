@@ -182,7 +182,6 @@ def archival_run(
     """Seal one episode in the published archival run contract."""
 
     return build_single_participant_archival_run(
-        controls,
         episode,
         evidence_artifact,
         scenario_digest,
