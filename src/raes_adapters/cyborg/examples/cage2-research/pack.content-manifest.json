@@ -4,18 +4,206 @@
   "manifest_version": "1.0.0",
   "canonicalization_profile": "associated-artifact-set/v1",
   "scope": "scenario",
-  "parent_ref": {"ref_kind": "scenario", "ref_id": "cage2-research"},
-  "artifacts": {
-    "pack-declaration": {"artifact_id": "pack-declaration", "role": "configuration", "media_type": "application/yaml", "uri": "raes-environment-pack:/pack.yaml", "checksum": {"algorithm": "sha256", "value": "b3671068204e1e10c290feebce633bb92b350df79bdff33ace863da9321850a6"}, "size_bytes": 398, "created_at": "2026-08-02T00:00:00Z", "source": "OpenRAE/adapters#20", "sensitivity": "public"},
-    "scenario": {"artifact_id": "scenario", "role": "scenario-snapshot", "media_type": "application/yaml", "uri": "raes-environment-pack:/sdl/cage2-research.sdl.yaml", "checksum": {"algorithm": "sha256", "value": "84dd6bbd6d056b5858f08b47c5e330f7247e7f314dbfd5401cb03e0c66177fe9"}, "size_bytes": 245, "created_at": "2026-08-02T00:00:00Z", "source": "OpenRAE/adapters#20", "sensitivity": "public"},
-    "attack-path": {"artifact_id": "attack-path", "role": "documentation", "media_type": "text/markdown", "uri": "raes-environment-pack:/docs/attack-path.md", "checksum": {"algorithm": "sha256", "value": "bea179314dc6cca73bd44779e2a5a1713d8c78a75e88a28553755651e01e58f3"}, "size_bytes": 215, "created_at": "2026-08-02T00:00:00Z", "source": "OpenRAE/adapters#20", "sensitivity": "public"},
-    "concepts": {"artifact_id": "concepts", "role": "documentation", "media_type": "text/markdown", "uri": "raes-environment-pack:/docs/concepts.md", "checksum": {"algorithm": "sha256", "value": "d3b6682e721a4a3c5cf33121edb8c60cc3cd160747b1cc9000de8fde6660d13f"}, "size_bytes": 235, "created_at": "2026-08-02T00:00:00Z", "source": "OpenRAE/adapters#20", "sensitivity": "public"},
-    "provenance-ledger": {"artifact_id": "provenance-ledger", "role": "apparatus-evidence", "media_type": "application/yaml", "uri": "raes-environment-pack:/docs/provenance-ledger.yaml", "checksum": {"algorithm": "sha256", "value": "7cbea75e0a0f2dc6ccf3685f4e9870b21c11de118a6290560c2008fc25e2ecf3"}, "size_bytes": 1284, "created_at": "2026-08-02T00:00:00Z", "source": "OpenRAE/adapters#20", "sensitivity": "public"},
-    "experiment-task": {"artifact_id": "experiment-task", "role": "protocol", "media_type": "application/json", "uri": "raes-environment-pack:/experiment/cage2-research.task.exp.json", "checksum": {"algorithm": "sha256", "value": "71f083a6047cedbc98ebb7c7e8018ef76abe1844d892e7fe170ff23741b5dd0e"}, "size_bytes": 2569, "created_at": "2026-08-02T00:00:00Z", "source": "OpenRAE/adapters#20", "sensitivity": "public"},
-    "experiment-spec": {"artifact_id": "experiment-spec", "role": "configuration", "media_type": "application/json", "uri": "raes-environment-pack:/experiment/cage2-research.spec.exp.json", "checksum": {"algorithm": "sha256", "value": "07d084ee3b6d5e12ef72a74902956c4f6b9cb688cc778f1c9ccada21e3dc7197"}, "size_bytes": 3102, "created_at": "2026-08-02T00:00:00Z", "source": "OpenRAE/adapters#20", "sensitivity": "public"},
-    "blue-policy-manifest": {"artifact_id": "blue-policy-manifest", "role": "manifest", "media_type": "application/json", "uri": "raes-environment-pack:/participant/cyborg-blue-sleep-policy.manifest.json", "checksum": {"algorithm": "sha256", "value": "73cf1016f04ead0741755dd98dd1a1e4cc2927b14e948246294a7bd1a28cd26b"}, "size_bytes": 2271, "created_at": "2026-08-02T00:00:00Z", "source": "OpenRAE/adapters#20", "sensitivity": "public"},
-    "blue-policy-configuration": {"artifact_id": "blue-policy-configuration", "role": "configuration", "media_type": "application/json", "uri": "raes-environment-pack:/participant/cyborg-blue-sleep-policy.configuration.json", "checksum": {"algorithm": "sha256", "value": "c31948db14751cf80dd66726c34d7471786eabf3d934658f1d40248fb065f918"}, "size_bytes": 997, "created_at": "2026-08-02T00:00:00Z", "source": "OpenRAE/adapters#20", "sensitivity": "public"},
-    "blue-policy-selection": {"artifact_id": "blue-policy-selection", "role": "configuration", "media_type": "application/json", "uri": "raes-environment-pack:/participant/cyborg-blue-sleep-policy.selection.json", "checksum": {"algorithm": "sha256", "value": "e5a8dfb2134a708bac9b479fd23661948d6c617f7bc0b8855683445645ec3791"}, "size_bytes": 1166, "created_at": "2026-08-02T00:00:00Z", "source": "OpenRAE/adapters#20", "sensitivity": "public"}
+  "parent_ref": {
+    "ref_kind": "scenario",
+    "ref_id": "cage2-research",
+    "ref_version": null,
+    "ref_digest": null,
+    "ref_path": null
   },
-  "set_digest": "sha256:1006e46a05a2fbafa0457743765d684dbfef652cda78733f39ea066ba34246e1"
+  "artifacts": {
+    "pack-declaration": {
+      "artifact_id": "pack-declaration",
+      "role": "configuration",
+      "media_type": "application/yaml",
+      "uri": "raes-environment-pack:/pack.yaml",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "df4e34bb9248e83f81e59c8eae5b1d41f254a7ea81c5ad108f08755446a36057"
+      },
+      "size_bytes": 446,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#20",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "compatibility-manifest": {
+      "artifact_id": "compatibility-manifest",
+      "role": "configuration",
+      "media_type": "application/yaml",
+      "uri": "raes-environment-pack:/pack.compatibility.yaml",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "95858dda07f360f894b67325df320208fa9e8d1695b90f03290a357ed56115ea"
+      },
+      "size_bytes": 3258,
+      "created_at": "2026-08-08T00:00:00Z",
+      "source": "OpenRAE/adapters#21",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "scenario": {
+      "artifact_id": "scenario",
+      "role": "scenario-snapshot",
+      "media_type": "application/yaml",
+      "uri": "raes-environment-pack:/sdl/cage2-research.sdl.yaml",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "84dd6bbd6d056b5858f08b47c5e330f7247e7f314dbfd5401cb03e0c66177fe9"
+      },
+      "size_bytes": 245,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#20",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "attack-path": {
+      "artifact_id": "attack-path",
+      "role": "documentation",
+      "media_type": "text/markdown",
+      "uri": "raes-environment-pack:/docs/attack-path.md",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "bea179314dc6cca73bd44779e2a5a1713d8c78a75e88a28553755651e01e58f3"
+      },
+      "size_bytes": 215,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#20",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "concepts": {
+      "artifact_id": "concepts",
+      "role": "documentation",
+      "media_type": "text/markdown",
+      "uri": "raes-environment-pack:/docs/concepts.md",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "d3b6682e721a4a3c5cf33121edb8c60cc3cd160747b1cc9000de8fde6660d13f"
+      },
+      "size_bytes": 235,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#20",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "golden-readiness-checklist": {
+      "artifact_id": "golden-readiness-checklist",
+      "role": "documentation",
+      "media_type": "text/markdown",
+      "uri": "raes-environment-pack:/docs/golden-readiness-checklist.md",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "2a4c666b108df5c021dc95633c6f3713ad14daae85e3c4f5afa8c04fe2ff3954"
+      },
+      "size_bytes": 2840,
+      "created_at": "2026-08-08T00:00:00Z",
+      "source": "OpenRAE/adapters#21",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "provenance-ledger": {
+      "artifact_id": "provenance-ledger",
+      "role": "apparatus-evidence",
+      "media_type": "application/yaml",
+      "uri": "raes-environment-pack:/docs/provenance-ledger.yaml",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "bd918a3ce37f151b01531d6aed2bb1a0c6cecec7f9463ec1e01870af24e77b1c"
+      },
+      "size_bytes": 5322,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#20",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "experiment-task": {
+      "artifact_id": "experiment-task",
+      "role": "protocol",
+      "media_type": "application/json",
+      "uri": "raes-environment-pack:/experiment/cage2-research.task.exp.json",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "71f083a6047cedbc98ebb7c7e8018ef76abe1844d892e7fe170ff23741b5dd0e"
+      },
+      "size_bytes": 2569,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#20",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "experiment-spec": {
+      "artifact_id": "experiment-spec",
+      "role": "configuration",
+      "media_type": "application/json",
+      "uri": "raes-environment-pack:/experiment/cage2-research.spec.exp.json",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "07d084ee3b6d5e12ef72a74902956c4f6b9cb688cc778f1c9ccada21e3dc7197"
+      },
+      "size_bytes": 3102,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#20",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "blue-policy-manifest": {
+      "artifact_id": "blue-policy-manifest",
+      "role": "manifest",
+      "media_type": "application/json",
+      "uri": "raes-environment-pack:/participant/cyborg-blue-sleep-policy.manifest.json",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "73cf1016f04ead0741755dd98dd1a1e4cc2927b14e948246294a7bd1a28cd26b"
+      },
+      "size_bytes": 2271,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#20",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "blue-policy-configuration": {
+      "artifact_id": "blue-policy-configuration",
+      "role": "configuration",
+      "media_type": "application/json",
+      "uri": "raes-environment-pack:/participant/cyborg-blue-sleep-policy.configuration.json",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "c31948db14751cf80dd66726c34d7471786eabf3d934658f1d40248fb065f918"
+      },
+      "size_bytes": 997,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#20",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "blue-policy-selection": {
+      "artifact_id": "blue-policy-selection",
+      "role": "configuration",
+      "media_type": "application/json",
+      "uri": "raes-environment-pack:/participant/cyborg-blue-sleep-policy.selection.json",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "e5a8dfb2134a708bac9b479fd23661948d6c617f7bc0b8855683445645ec3791"
+      },
+      "size_bytes": 1166,
+      "created_at": "2026-08-02T00:00:00Z",
+      "source": "OpenRAE/adapters#20",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    }
+  },
+  "set_digest": "sha256:99bf6eb0a75bdab8d222689f8c7fadd4594289c255d02c0c904bec734532c752"
 }

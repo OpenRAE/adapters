@@ -79,10 +79,11 @@ def test_packaging_patch_is_explicit_and_preserves_original_behavior() -> None:
     assert "package_data" in patch
     assert "Shared/Scenarios/*.yaml" in patch
     assert "Shared/Scenarios/images/*.yaml" in patch
+    assert packaging["build_dependencies"] == ["setuptools==83.0.0"]
 
     assert packaging["unmodified_wheel"] == {
         "sha256": "80708d7e8c964a598530718895c374242b03992d6189c3de9a00666d6c67275d",
-        "normalized_sha256": "35a5c20f35e97c6f4d668adbd82c9c9a44d2c06b10fdc15ad0e31e0d318a6bcf",
+        "normalized_sha256": "ee61283f78df460441285263c861fc9c7ce65737b39f131125f889aadfd21bcd",
         "build": "passed",
         "import": "failed",
         "missing_runtime_files": [
@@ -96,7 +97,7 @@ def test_packaging_patch_is_explicit_and_preserves_original_behavior() -> None:
     assert packaging["patched_wheel"]["clean_install"] == "passed"
     assert packaging["patched_wheel"]["source_native_smoke"] == "passed"
     assert packaging["patched_wheel"]["normalized_sha256"] == (
-        "9ba0552205083bbcd81f764130e04e6aa2f5dc7a74b54b109d516ce6afd0b595"
+        "9b6ecd41749466f3f6f5cc118be9536f153e57fb66b400aaa949f88d1c736039"
     )
 
 

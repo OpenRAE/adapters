@@ -31,7 +31,7 @@ seeds, and runtime planning:
 raes-adapters validate \
   --mode study \
   --pack cage2-research \
-  --pack-digest sha256:1006e46a05a2fbafa0457743765d684dbfef652cda78733f39ea066ba34246e1 \
+  --pack-digest sha256:99bf6eb0a75bdab8d222689f8c7fadd4594289c255d02c0c904bec734532c752 \
   --scenario sdl/cage2-research.sdl.yaml \
   --scenario-digest sha256:926f13857da070f1ebdc3afbb3193c7c13f4aa9fe324b3eb93e1c2595871abda \
   --task experiment/cage2-research.task.exp.json \
@@ -55,7 +55,7 @@ following smoke run executes one admitted seed:
 raes-adapters run \
   --mode smoke \
   --pack cage2-research \
-  --pack-digest sha256:1006e46a05a2fbafa0457743765d684dbfef652cda78733f39ea066ba34246e1 \
+  --pack-digest sha256:99bf6eb0a75bdab8d222689f8c7fadd4594289c255d02c0c904bec734532c752 \
   --scenario sdl/cage2-research.sdl.yaml \
   --scenario-digest sha256:926f13857da070f1ebdc3afbb3193c7c13f4aa9fe324b3eb93e1c2595871abda \
   --task experiment/cage2-research.task.exp.json \
@@ -78,7 +78,7 @@ experiment authoring input:
 raes-adapters run \
   --mode study \
   --pack cage2-research \
-  --pack-digest sha256:1006e46a05a2fbafa0457743765d684dbfef652cda78733f39ea066ba34246e1 \
+  --pack-digest sha256:99bf6eb0a75bdab8d222689f8c7fadd4594289c255d02c0c904bec734532c752 \
   --scenario sdl/cage2-research.sdl.yaml \
   --scenario-digest sha256:926f13857da070f1ebdc3afbb3193c7c13f4aa9fe324b3eb93e1c2595871abda \
   --task experiment/cage2-research.task.exp.json \
