@@ -37,10 +37,11 @@ dependencies = ["raes==3.3.0"]
 
 [project.optional-dependencies]
 # Microsoft publishes the selected CyberBattleSim source but no index or
-# release artifact. The adapter extra is therefore dependency-light; users
-# install the pinned simulator source separately and target construction
-# reports its absence without weakening the base installation.
-cyberbattlesim = []
+# release artifact. The adapter extra therefore installs only the published
+# environment-pack validator; users install the pinned simulator source
+# separately and target construction reports its absence without weakening the
+# base installation.
+cyberbattlesim = ["raes-env-packs==3.6.2"]
 # DSTL publishes the selected PrimAITE source (tag v4.0.0) but no index or
 # release wheel. Its pins (gymnasium==0.28.1, numpy~=1.23, pydantic==2.7.0) are
 # mutually incompatible with the resolved cyberbattlesim/base graph, so the

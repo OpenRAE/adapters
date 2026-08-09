@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from raes_contracts.contracts import (  # type: ignore[import-untyped]
+    ParticipantConfigurationResultModel,
+    ParticipantImplementationManifestModel,
+    ParticipantImplementationSelectionModel,
+)
 from raes_runtime.registry import (  # type: ignore[import-untyped]
     RuntimeTarget,
     RuntimeTargetComponents,
@@ -24,6 +29,10 @@ def create_cyberbattlesim_components(
     *,
     driver: CyberBattleSimDriverProtocol,
     seed: int | None = None,
+    participant_manifest: ParticipantImplementationManifestModel | None = None,
+    participant_selection: ParticipantImplementationSelectionModel | None = None,
+    participant_configuration: ParticipantConfigurationResultModel | None = None,
+    conformance_mode: bool = False,
 ) -> RuntimeTargetComponents:
     """Create components sharing one driver-owned source lifecycle."""
 
@@ -34,6 +43,10 @@ def create_cyberbattlesim_components(
         participant_runtime=CyberBattleSimParticipantRuntime(
             driver,
             seed=seed,
+            participant_manifest=participant_manifest,
+            participant_selection=participant_selection,
+            participant_configuration=participant_configuration,
+            conformance_mode=conformance_mode,
         ),
     )
 
@@ -42,6 +55,10 @@ def create_cyberbattlesim_target(
     *,
     driver: CyberBattleSimDriverProtocol | None = None,
     seed: int | None = None,
+    participant_manifest: ParticipantImplementationManifestModel | None = None,
+    participant_selection: ParticipantImplementationSelectionModel | None = None,
+    participant_configuration: ParticipantConfigurationResultModel | None = None,
+    conformance_mode: bool = False,
 ) -> RuntimeTarget:
     """Return a validated RAES target for the selected source profile."""
 
@@ -50,6 +67,10 @@ def create_cyberbattlesim_target(
     components = create_cyberbattlesim_components(
         driver=selected_driver,
         seed=seed,
+        participant_manifest=participant_manifest,
+        participant_selection=participant_selection,
+        participant_configuration=participant_configuration,
+        conformance_mode=conformance_mode,
     )
     return build_runtime_target(
         CYBERBATTLESIM_BACKEND_NAME,

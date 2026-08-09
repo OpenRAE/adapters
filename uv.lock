@@ -1828,6 +1828,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+cyberbattlesim = [
+    { name = "raes-env-packs" },
+]
 cyborg = [
     { name = "raes-env-packs" },
 ]
@@ -1859,6 +1862,7 @@ requires-dist = [
     { name = "nasim", marker = "extra == 'nasim'", specifier = "==0.12.0" },
     { name = "numpy", marker = "extra == 'nasim'", specifier = "==1.26.4" },
     { name = "raes", specifier = "==3.3.0" },
+    { name = "raes-env-packs", marker = "extra == 'cyberbattlesim'", specifier = "==3.6.2" },
     { name = "raes-env-packs", marker = "extra == 'cyborg'", specifier = "==3.6.2" },
     { name = "raes-env-packs", marker = "extra == 'nasim'", specifier = "==3.6.2" },
 ]

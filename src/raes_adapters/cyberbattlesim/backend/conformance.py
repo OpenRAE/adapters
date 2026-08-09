@@ -10,6 +10,11 @@ from raes_backend_protocols.backend_manifest import (  # type: ignore[import-unt
 from raes_conformance.conformance import (  # type: ignore[import-untyped]
     BackendConformanceReport,
 )
+from raes_contracts.contracts import (  # type: ignore[import-untyped]
+    ParticipantConfigurationResultModel,
+    ParticipantImplementationManifestModel,
+    ParticipantImplementationSelectionModel,
+)
 from raes_contracts.diagnostics import Diagnostic  # type: ignore[import-untyped]
 
 from raes_adapters._gym_backend import conformance as gym
@@ -17,6 +22,7 @@ from raes_adapters._gym_backend.conformance import (
     GymConformanceConfig,
     standard_probe_requirements,
 )
+from raes_adapters.base import run_conformance_probe
 from raes_adapters.cyberbattlesim import load_qualification
 from raes_adapters.cyberbattlesim.scenario_ledger import (
     CYBERBATTLE_CHAIN,
@@ -41,10 +47,28 @@ _CONFIG = GymConformanceConfig(
         _BACKEND_EVIDENCE,
         _SOURCE_EVIDENCE,
         participant_dual=(
+            "execution_bindings",
             "feature_support",
+            "max_autonomous_action_attempts",
+            "max_autonomous_burst_size",
+            "max_autonomous_in_flight",
+            "max_autonomous_occurrences",
+            "max_autonomous_participants",
+            "max_autonomous_retries_per_occurrence",
+            "max_concurrent_actions",
+            "max_execution_services",
+            "supported_autonomous_action_contracts",
+            "supported_autonomous_observation_boundaries",
+            "supported_autonomous_policy_profiles",
+            "supported_autonomous_selection_strategies",
+            "supported_autonomous_target_addresses",
             "supported_behavior_features",
+            "supported_execution_control_actions",
             "supported_interaction_features",
             "supported_participant_roles",
+            "supports_autonomous_execution",
+            "supports_bounded_concurrency",
+            "supports_execution_control",
         ),
     ),
     default_selection=CYBERBATTLE_CHAIN,
@@ -60,9 +84,23 @@ def run_cyberbattlesim_conformance(
     *,
     driver: CyberBattleSimDriverProtocol | None = None,
     seed: int | None = None,
+    participant_manifest: ParticipantImplementationManifestModel | None = None,
+    participant_selection: ParticipantImplementationSelectionModel | None = None,
+    participant_configuration: ParticipantConfigurationResultModel | None = None,
 ) -> BackendConformanceReport:
     """Run the published RAES target conformance probe for CyberBattleSim."""
 
+    if participant_manifest is not None:
+        return run_conformance_probe(
+            create_cyberbattlesim_target(
+                driver=driver,
+                seed=seed,
+                participant_manifest=participant_manifest,
+                participant_selection=participant_selection,
+                participant_configuration=participant_configuration,
+                conformance_mode=True,
+            )
+        )
     return gym.run_conformance(_CONFIG, driver, seed)
 
 

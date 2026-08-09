@@ -113,6 +113,24 @@ tracebacks, and hidden state. This is adapter-readiness evidence in this repo;
 it is not an upstream CyberBattleSim test and it does not replace the
 deterministic injected-driver CI probe.
 
+For issue #29, the same manual protocol additionally acquires the exact
+versioned `cyberbattlesim-chain` pack outside the Python wheel, verifies its
+release checksum and content digest, runs `raes-pack-validate` and
+`raes-pack-release check`, installs the exact qualified native source, and then
+uses the installed `raes-adapters` command to inspect, validate, execute the
+documented short episode or seeded batch, seal its portable inventory, and
+verify cleanup. The pack reference build, automated rehearsal, researcher
+walkthrough, and command must bind the same scenario digest, controls,
+`CredentialCacheExploiter` participant, objective/evaluation task, and selected
+evaluator. The run exercises the real `CyberBattleSimDriver` and target path;
+an injected driver, fixed-action stand-in, or direct source evaluator that
+bypasses RAES is not native-readiness evidence. The passing record carries the
+exact adapter, pack, scenario, participant, native source, control, evaluator,
+and output-inventory identities plus bounded leak-check dispositions; it never
+retains native observations, actions, credentials, rewards, hidden state, raw
+logs, paths, environment data, or tracebacks. Pack status advances only as far
+as that recorded evidence warrants.
+
 The extension seam is the selected qualification/protocol artifact identity
 passed to a module-local smoke runner. Scenario, participant, evaluator, seed,
 metric, or termination values must be read from that one canonical selection,

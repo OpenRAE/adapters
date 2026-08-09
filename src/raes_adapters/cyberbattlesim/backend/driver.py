@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from importlib.metadata import Distribution
 from threading import RLock
 from typing import Protocol, TypedDict, cast
 
@@ -23,8 +24,15 @@ _NATIVE_ACTION_KIND = {
     "local-vulnerability": "local_vulnerability",
     "remote-vulnerability": "remote_vulnerability",
 }
+_PORTABLE_TARGET_BY_ACTION_KIND = {
+    "connect": "provision.node.customer-data",
+    "local-vulnerability": "provision.node.linux-relay",
+    "remote-vulnerability": "provision.node.windows-relay",
+}
 _RUNTIME_SOURCE_PATHS = (
     "cyberbattle/__init__.py",
+    "cyberbattle/agents/baseline/agent_randomcredlookup.py",
+    "cyberbattle/agents/baseline/learner.py",
     "cyberbattle/_env/cyberbattle_env.py",
     "cyberbattle/_env/defender.py",
     "cyberbattle/_env/cyberbattle_chain.py",
@@ -32,6 +40,57 @@ _RUNTIME_SOURCE_PATHS = (
 )
 _RUNTIME_ARTIFACT_NAMES = frozenset({"cyberbattlesim", "gymnasium", "numpy"})
 _QUALIFICATION_INVALID = _source_admission.QUALIFICATION_INVALID
+
+
+def _verify_selected_source_identity(
+    qualification: dict[str, object],
+    selected_distribution: Distribution,
+) -> dict[str, Distribution]:
+    """Verify the complete pinned runtime without constructing an environment."""
+
+    distributions = _source_admission.verify_runtime_artifacts(
+        qualification,
+        selected_distribution,
+        expected_names=_RUNTIME_ARTIFACT_NAMES,
+        primary_name="cyberbattlesim",
+    )
+    _source_admission.verify_runtime_source_tree(
+        qualification,
+        selected_distribution,
+        import_root="cyberbattle",
+    )
+    _source_admission.verify_selected_source_files(
+        qualification,
+        selected_distribution,
+        source_paths=_RUNTIME_SOURCE_PATHS,
+    )
+    for module_name, path in (
+        ("cyberbattle", "cyberbattle/__init__.py"),
+        (
+            "cyberbattle.agents.baseline.agent_randomcredlookup",
+            "cyberbattle/agents/baseline/agent_randomcredlookup.py",
+        ),
+        (
+            "cyberbattle.agents.baseline.agent_wrapper",
+            "cyberbattle/agents/baseline/agent_wrapper.py",
+        ),
+    ):
+        _source_admission.verify_package_origin(
+            module_name,
+            selected_distribution,
+            path,
+        )
+    _source_admission.verify_package_origin(
+        "gymnasium",
+        distributions["gymnasium"],
+        "gymnasium/__init__.py",
+    )
+    _source_admission.verify_package_origin(
+        "numpy",
+        distributions["numpy"],
+        "numpy/__init__.py",
+    )
+    return distributions
 
 
 class _ActionSpace(Protocol):
@@ -64,10 +123,17 @@ class _GymnasiumModule(Protocol):
     def make(self, gym_id: str, **kwargs: object) -> _EnvironmentWrapper: ...
 
 
+class _NumpyRandomModule(Protocol):
+    """One random draw used by the pinned evaluator policy."""
+
+    def rand(self) -> float: ...
+
+
 class _NumpyModule(Protocol):
     """NumPy operations needed for private action-mask selection."""
 
     int32: object
+    random: _NumpyRandomModule
 
     def argwhere(self, mask: object) -> Sequence[object]: ...
 
@@ -85,6 +151,42 @@ class _DefenderModule(Protocol):
     """Selected source defender constructor used by the driver."""
 
     ScanAndReimageCompromisedMachines: Callable[..., object]
+
+
+class _SourcePolicy(Protocol):
+    """Selected source policy kept entirely behind the driver boundary."""
+
+    def new_episode(self) -> None: ...
+
+    def explore(self, wrapped_env: object) -> tuple[str, object, object]: ...
+
+    def exploit(
+        self, wrapped_env: object, observation: object
+    ) -> tuple[str, object | None, object]: ...
+
+    def on_step(
+        self,
+        wrapped_env: object,
+        observation: object,
+        reward: object,
+        done: object,
+        truncated: object,
+        info: object,
+        action_metadata: object,
+    ) -> None: ...
+
+
+class _SourcePolicyModule(Protocol):
+    """Constructor surface of the qualified source participant module."""
+
+    CredentialCacheExploiter: Callable[[], _SourcePolicy]
+
+
+class _SourceWrapperModule(Protocol):
+    """Minimal qualified wrapper constructors used by the selected policy."""
+
+    AgentWrapper: Callable[[object, object], object]
+    StateAugmentation: Callable[[object], object]
 
 
 class _SelectedSource(TypedDict):
@@ -172,6 +274,15 @@ class DriverCleanupReport(object):
     already_closed: bool
 
 
+@dataclass(frozen=True)
+class AutonomousActionProposal(object):
+    """Portable authorization coordinates for one private native proposal."""
+
+    action_kind: str
+    target_address: str
+    proposal_ref: str
+
+
 class CyberBattleSimDriverProtocol(Protocol):
     """Injectable boundary implemented by the live and test drivers."""
 
@@ -179,7 +290,15 @@ class CyberBattleSimDriverProtocol(Protocol):
 
     def reset(self, seed: int | None) -> DriverResetReport: ...
 
-    def step(self, action_kind: str) -> DriverStep: ...
+    def propose_autonomous_action(self, *, epsilon: float) -> AutonomousActionProposal: ...
+
+    def step(
+        self,
+        action_kind: str,
+        *,
+        target_address: str | None = None,
+        proposal_ref: str | None = None,
+    ) -> DriverStep: ...
 
     def evaluate(self) -> DriverEvaluation: ...
 
@@ -203,6 +322,13 @@ class CyberBattleSimDriver(object):
         self._environment: _NativeEnvironment | None = None
         self._numpy: _NumpyModule | None = None
         self._last_observation: object | None = None
+        self._autonomous_policy: _SourcePolicy | None = None
+        self._autonomous_wrapper: object | None = None
+        self._pending_native_action: dict[str, object] | None = None
+        self._pending_action_kind: str | None = None
+        self._pending_target_address: str | None = None
+        self._pending_proposal_ref: str | None = None
+        self._pending_action_metadata: object | None = None
         self._step_count = 0
         self._operation_count = 0
         self._evaluation_count = 0
@@ -213,6 +339,7 @@ class CyberBattleSimDriver(object):
         self._terminal_cause: str | None = None
         self._closed = True
         self._artifacts_verified = False
+        self._selected_distribution: Distribution | None = None
 
     def construct(self) -> None:
         """Construct the selected source environment once, on demand."""
@@ -227,37 +354,8 @@ class CyberBattleSimDriver(object):
             )
 
             if not self._artifacts_verified:
-                distributions = _source_admission.verify_runtime_artifacts(
-                    qualification,
-                    selected_distribution,
-                    expected_names=_RUNTIME_ARTIFACT_NAMES,
-                    primary_name="cyberbattlesim",
-                )
-                _source_admission.verify_runtime_source_tree(
-                    qualification,
-                    selected_distribution,
-                    import_root="cyberbattle",
-                )
-                _source_admission.verify_selected_source_files(
-                    qualification,
-                    selected_distribution,
-                    source_paths=_RUNTIME_SOURCE_PATHS,
-                )
-                _source_admission.verify_package_origin(
-                    "cyberbattle",
-                    selected_distribution,
-                    "cyberbattle/__init__.py",
-                )
-                _source_admission.verify_package_origin(
-                    "gymnasium",
-                    distributions["gymnasium"],
-                    "gymnasium/__init__.py",
-                )
-                _source_admission.verify_package_origin(
-                    "numpy",
-                    distributions["numpy"],
-                    "numpy/__init__.py",
-                )
+                _verify_selected_source_identity(qualification, selected_distribution)
+            self._selected_distribution = selected_distribution
             # Importing ``cyberbattle`` registers CyberBattleChain-v0.
             importlib.import_module("cyberbattle")
             gymnasium = cast(_GymnasiumModule, importlib.import_module("gymnasium"))
@@ -336,13 +434,60 @@ class CyberBattleSimDriver(object):
             self._terminated = False
             self._truncated = False
             self._terminal_cause = None
+            self._autonomous_policy = None
+            self._autonomous_wrapper = None
+            self._clear_pending_action()
             return DriverResetReport(
                 operation_ref=operation_ref,
                 applied_streams=applied,
                 unbound_streams=unbound,
             )
 
-    def step(self, action_kind: str) -> DriverStep:
+    def propose_autonomous_action(self, *, epsilon: float) -> AutonomousActionProposal:
+        """Return only the semantic kind of one qualified source-policy proposal.
+
+        The native proposal remains pending and driver-private until a matching
+        public RAES action request reaches :meth:`step`. Merely asking the policy
+        for a proposal can therefore never mutate the simulator.
+        """
+
+        with self._lock:
+            if not 0.0 <= epsilon <= 1.0:
+                raise ValueError("autonomous epsilon is outside the supported range")
+            self._require_environment()
+            if self._last_observation is None or self._numpy is None:
+                raise RuntimeError("selected simulator must be reset before action selection")
+            if self._pending_native_action is not None:
+                raise RuntimeError("selected autonomous proposal is already pending admission")
+            policy, wrapper = self._require_autonomous_policy()
+            draw = self._numpy.random.rand()
+            if draw <= epsilon:
+                _style, action, metadata = policy.explore(wrapper)
+            else:
+                _style, action, metadata = policy.exploit(wrapper, self._last_observation)
+                if not action:
+                    _style, action, metadata = policy.explore(wrapper)
+            kind, normalized = self._normalize_policy_action(action)
+            target_address = _PORTABLE_TARGET_BY_ACTION_KIND[kind]
+            proposal_ref = self._next_operation_ref("proposal")
+            self._pending_native_action = normalized
+            self._pending_action_kind = kind
+            self._pending_target_address = target_address
+            self._pending_proposal_ref = proposal_ref
+            self._pending_action_metadata = metadata
+            return AutonomousActionProposal(
+                action_kind=kind,
+                target_address=target_address,
+                proposal_ref=proposal_ref,
+            )
+
+    def step(
+        self,
+        action_kind: str,
+        *,
+        target_address: str | None = None,
+        proposal_ref: str | None = None,
+    ) -> DriverStep:
         """Resolve one private native action and perform at most one source step."""
 
         with self._lock:
@@ -352,7 +497,18 @@ class CyberBattleSimDriver(object):
             if self._last_observation is None:
                 raise RuntimeError("selected simulator must be reset before action execution")
             operation_ref = self._next_operation_ref("step")
-            native_action = self._resolve_native_action(action_kind)
+            autonomous = self._pending_native_action is not None
+            if autonomous:
+                if (
+                    action_kind != self._pending_action_kind
+                    or target_address != self._pending_target_address
+                    or proposal_ref != self._pending_proposal_ref
+                ):
+                    self._clear_pending_action()
+                    raise ValueError("autonomous proposal does not match admitted authorization")
+                native_action = self._pending_native_action
+            else:
+                native_action = self._resolve_native_action(action_kind)
             if native_action is None:
                 return DriverStep(
                     operation_ref=operation_ref,
@@ -366,8 +522,21 @@ class CyberBattleSimDriver(object):
 
             step_result = environment.step(native_action)
             if not isinstance(step_result, tuple) or len(step_result) != 5:
+                self._clear_pending_action()
                 raise RuntimeError("selected simulator step returned an unsupported shape")
-            observation, reward, terminated, truncated, _source_info = step_result
+            observation, reward, terminated, truncated, source_info = step_result
+            if autonomous:
+                policy, wrapper = self._require_autonomous_policy()
+                policy.on_step(
+                    wrapper,
+                    observation,
+                    reward,
+                    terminated,
+                    truncated,
+                    source_info,
+                    self._pending_action_metadata,
+                )
+            self._clear_pending_action()
             self._last_observation = observation
             self._step_count += 1
             self._cumulative_reward += float(reward)
@@ -420,6 +589,9 @@ class CyberBattleSimDriver(object):
             self._environment = None
             self._last_observation = None
             self._execution_ref = None
+            self._autonomous_policy = None
+            self._autonomous_wrapper = None
+            self._clear_pending_action()
             self._closed = True
             return DriverCleanupReport(
                 operation_ref=self._next_operation_ref("close"),
@@ -433,6 +605,61 @@ class CyberBattleSimDriver(object):
 
         with self._lock:
             return self._closed and self._environment is None
+
+    def _require_autonomous_policy(self) -> tuple[_SourcePolicy, object]:
+        if self._autonomous_policy is None or self._autonomous_wrapper is None:
+            environment = self._require_environment()
+            observation = self._last_observation
+            if observation is None:
+                raise RuntimeError("selected simulator must be reset before action selection")
+            policy_module = cast(
+                _SourcePolicyModule,
+                importlib.import_module("cyberbattle.agents.baseline.agent_randomcredlookup"),
+            )
+            wrapper_module = cast(
+                _SourceWrapperModule,
+                importlib.import_module("cyberbattle.agents.baseline.agent_wrapper"),
+            )
+            selected_distribution = self._selected_distribution
+            if selected_distribution is None:
+                raise RuntimeError("selected simulator source identity is unavailable")
+            _source_admission.verify_package_origin(
+                "cyberbattle.agents.baseline.agent_randomcredlookup",
+                selected_distribution,
+                "cyberbattle/agents/baseline/agent_randomcredlookup.py",
+            )
+            _source_admission.verify_package_origin(
+                "cyberbattle.agents.baseline.agent_wrapper",
+                selected_distribution,
+                "cyberbattle/agents/baseline/agent_wrapper.py",
+            )
+            policy = policy_module.CredentialCacheExploiter()
+            wrapper = wrapper_module.AgentWrapper(
+                environment,
+                wrapper_module.StateAugmentation(observation),
+            )
+            policy.new_episode()
+            self._autonomous_policy = policy
+            self._autonomous_wrapper = wrapper
+        return self._autonomous_policy, self._autonomous_wrapper
+
+    @staticmethod
+    def _normalize_policy_action(action: object) -> tuple[str, dict[str, object]]:
+        if not isinstance(action, Mapping) or len(action) != 1:
+            raise RuntimeError("selected source policy returned an unsupported action shape")
+        native_kind, value = next(iter(action.items()))
+        kind_by_native = {value: key for key, value in _NATIVE_ACTION_KIND.items()}
+        kind = kind_by_native.get(native_kind)
+        if kind is None:
+            raise RuntimeError("selected source policy returned an unsupported action kind")
+        return kind, {native_kind: value}
+
+    def _clear_pending_action(self) -> None:
+        self._pending_native_action = None
+        self._pending_action_kind = None
+        self._pending_target_address = None
+        self._pending_proposal_ref = None
+        self._pending_action_metadata = None
 
     def _resolve_native_action(self, action_kind: str) -> dict[str, object] | None:
         if not isinstance(self._last_observation, Mapping):
@@ -557,11 +784,23 @@ class CyberBattleSimDriver(object):
         return f"driver.{operation}.{self._operation_count}"
 
 
+def verify_selected_cyberbattlesim_source() -> None:
+    """Verify the complete pinned source without importing or constructing it."""
+
+    qualification, source, _selection = CyberBattleSimDriver._selected_configuration()
+    selected_distribution = _source_admission.resolve_selected_distribution(
+        source["package"], source["version"]
+    )
+    _verify_selected_source_identity(qualification, selected_distribution)
+
+
 __all__ = [
+    "AutonomousActionProposal",
     "CyberBattleSimDriver",
     "CyberBattleSimDriverProtocol",
     "DriverCleanupReport",
     "DriverEvaluation",
     "DriverResetReport",
     "DriverStep",
+    "verify_selected_cyberbattlesim_source",
 ]

@@ -60,6 +60,17 @@ from raes_operations.run_artifacts import (  # type: ignore[import-untyped]
     atomic_write_json_artifact,
 )
 
+from raes_adapters.cyberbattlesim import (
+    load_qualification as load_cyberbattlesim_qualification,
+)
+from raes_adapters.cyberbattlesim import researcher as cyberbattlesim_researcher
+from raes_adapters.cyberbattlesim.backend import (
+    create_cyberbattlesim_manifest,
+    create_cyberbattlesim_target,
+)
+from raes_adapters.cyberbattlesim.backend.driver import (
+    verify_selected_cyberbattlesim_source,
+)
 from raes_adapters.cyborg import (
     CAGE2_SOURCE_26CE1C1,
     create_cyborg_manifest,
@@ -160,6 +171,8 @@ class _BackendAdapter(object):
     participant_address: str
     pack_example_id: str
     pack_package: str
+    packaged_example: bool
+    expected_pack_digest: str | None
     example_members: tuple[str, ...]
     native_module: str
     inspection_payload: Callable[[], dict[str, object]]
@@ -211,7 +224,7 @@ def _relative_output(value: str) -> Path:
     return requested
 
 
-_BACKEND_CHOICES = ("cyborg-cage2", "nasim-tiny")
+_BACKEND_CHOICES = ("cyborg-cage2", "cyberbattlesim-chain", "nasim-tiny")
 
 
 def _parser() -> _Parser:
@@ -716,12 +729,225 @@ def _nasim_machine_software() -> dict[str, str]:
     }
 
 
+# --- CyberBattleSim backend adapter -----------------------------------------
+
+_CYBERBATTLESIM_EXAMPLE_MEMBERS = (
+    "pack.yaml",
+    "pack.compatibility.yaml",
+    "pack.content-manifest.json",
+    "docs/attack-path.md",
+    "docs/concepts.md",
+    "docs/golden-readiness-checklist.md",
+    "docs/provenance-ledger.yaml",
+    "experiment/cyberbattlesim-chain.spec.exp.json",
+    "experiment/cyberbattlesim-chain.task.exp.json",
+    "participant/cyberbattlesim-red-credential-cache.configuration.json",
+    "participant/cyberbattlesim-red-credential-cache.manifest.json",
+    "participant/cyberbattlesim-red-credential-cache.selection.json",
+    "sdl/cyberbattlesim-chain.sdl.yaml",
+)
+_CYBERBATTLESIM_PACK_DIGEST = (
+    "sha256:08ae7e997b50bb396c290c4a5537a65e9e7d8b8e6abc97d1ff65022c4258e417"
+)
+
+
+def _cyberbattlesim_native_args_complete(args: argparse.Namespace) -> bool:
+    """Require the complete chain pack surface and reject foreign arguments."""
+
+    required = (
+        args.pack,
+        args.pack_digest,
+        args.scenario,
+        args.scenario_digest,
+        args.experiment,
+        args.task,
+        args.participant_implementation,
+        args.participant_manifest,
+        args.participant_selection,
+        args.participant_configuration,
+        args.trial_length,
+        args.seed,
+        args.run_id,
+    )
+    foreign = (
+        args.red_variant,
+        args.blue_implementation,
+        args.blue_manifest,
+        args.blue_selection,
+        args.blue_configuration,
+    )
+    return all(value is not None for value in required) and all(value is None for value in foreign)
+
+
+def _cyberbattlesim_participant_paths(
+    args: argparse.Namespace,
+) -> tuple[str, Path, Path, Path]:
+    """Return the admitted credential-cache policy artifact paths."""
+
+    return (
+        args.participant_implementation,
+        args.participant_manifest,
+        args.participant_selection,
+        args.participant_configuration,
+    )
+
+
+def _cyberbattlesim_experiment_bindings_match(
+    args: argparse.Namespace,
+    scenario_digest: str,
+    spec: ExperimentSpecModel,
+    task: ExperimentTaskModel,
+    artifact_bindings_admitted: bool,
+) -> bool:
+    """Verify the exact selected chain scenario, protocol, and participant bytes."""
+
+    intended = spec.intended_scenario_ref
+    plan = spec.run_plan
+    return all(
+        (
+            scenario_digest == args.scenario_digest,
+            intended is not None,
+            intended is not None and intended.ref_digest == args.scenario_digest,
+            intended is not None and intended.ref_path == args.scenario.as_posix(),
+            task.scenario_ref.ref_digest == args.scenario_digest,
+            task.scenario_ref.ref_path == args.scenario.as_posix(),
+            spec.task_ref.ref_id == task.task_id,
+            plan.episode_control.max_steps == args.trial_length,
+            artifact_bindings_admitted,
+        )
+    )
+
+
+def _cyberbattlesim_participant_bindings_match(
+    args: argparse.Namespace,
+    manifest: ParticipantImplementationManifestModel,
+    selection: ParticipantImplementationSelectionModel,
+    configuration: ParticipantConfigurationResultModel,
+) -> bool:
+    """Verify the selected policy identity and its published configuration."""
+
+    capabilities = manifest.capabilities
+    values = {
+        item.target_id: item.value.value
+        for item in configuration.configuration.values
+        if item.value.kind == "literal"
+    }
+    return all(
+        (
+            args.participant_implementation == manifest.identity.name,
+            selection.participant_address == "participant.behavior.red",
+            selection.implementation_identity == manifest.identity,
+            configuration.configuration.implementation_identity == manifest.identity,
+            selection.manifest_ref == args.participant_manifest.as_posix(),
+            configuration.manifest_ref == args.participant_manifest.as_posix(),
+            selection.configuration_ref == args.participant_configuration.as_posix(),
+            selection.manifest_digest == canonical_contract_digest(manifest),
+            "cyberbattlesim-chain" in manifest.compatibility.backends,
+            selection.selected_decision_surface_mode
+            in capabilities.supported_decision_surface_modes,
+            set(selection.participant_contract_versions)
+            <= set(capabilities.supported_participant_contracts),
+            set(selection.exposure_policy.exposure_policy_kinds)
+            <= set(capabilities.exposure_policy_kinds),
+            values.get("red-policy-identity") == "CredentialCacheExploiter",
+        )
+    )
+
+
+def _cyberbattlesim_admitted_seeds(
+    args: argparse.Namespace, spec: ExperimentSpecModel
+) -> tuple[int, ...]:
+    """Bind the one documented seed without claiming deterministic replay."""
+
+    declared = {
+        str(item.value)
+        for item in spec.run_plan.stochastic_controls
+        if item.role in {"seed", "sampling", "randomization"}
+    }
+    if any(type(seed) is not int or str(seed) not in declared for seed in args.seed):
+        raise _ValidationFailure
+    seeds = tuple(args.seed)
+    if args.mode == "smoke":
+        if len(seeds) != 1:
+            raise _ValidationFailure
+    elif len(seeds) != spec.run_plan.target_run_count:
+        raise _ValidationFailure
+    return seeds
+
+
+def _cyberbattlesim_build_controls(
+    args: argparse.Namespace, admitted: _AdmittedRun, run_id: str, seed: int
+) -> object:
+    """Bind one admitted episode to the exact source policy and controls."""
+
+    return cyberbattlesim_researcher.RunControls(
+        run_id=run_id,
+        seed=seed,
+        max_steps=args.trial_length,
+        red_manifest=admitted.participant_manifest,
+        red_selection=admitted.participant_selection,
+        red_configuration=admitted.participant_configuration,
+    )
+
+
+def _cyberbattlesim_provenance_payload(
+    args: argparse.Namespace, admitted: _AdmittedRun
+) -> dict[str, object]:
+    """Return selected adapter, pack, scenario, source, policy, and controls."""
+
+    qualification = load_cyberbattlesim_qualification()
+    source = qualification["source"]
+    return {
+        "adapter": {
+            "distribution": "raes-adapters",
+            "version": metadata.version("raes-adapters"),
+        },
+        "backend_manifest": backend_manifest_payload(create_cyberbattlesim_manifest()),
+        "configuration": {
+            "participant_implementation": args.participant_implementation,
+            "participant_manifest": args.participant_manifest.as_posix(),
+            "participant_selection": args.participant_selection.as_posix(),
+            "participant_configuration": args.participant_configuration.as_posix(),
+            "experiment_id": admitted.spec.spec_id,
+            "experiment_version": admitted.spec.spec_version,
+            "mode": args.mode,
+            "run_id": args.run_id,
+            "seeds": list(admitted.seeds),
+            "trial_length": args.trial_length,
+        },
+        "environment_pack": {
+            "digest": admitted.pack_digest,
+            "identity": "cyberbattlesim-chain",
+        },
+        "scenario": {
+            "digest": admitted.scenario_digest,
+            "identity": args.scenario.as_posix(),
+        },
+        "source": {"commit": source["commit"], "version": source["version"]},
+    }
+
+
+def _cyberbattlesim_machine_software() -> dict[str, str]:
+    """Return CyberBattleSim-relevant installed distribution identities."""
+
+    return {
+        "cyberbattlesim": _installed_version("cyberbattlesim"),
+        "gymnasium": _installed_version("gymnasium"),
+        "numpy": _installed_version("numpy"),
+        "raes": _installed_version("raes"),
+        "raes-adapters": _installed_version("raes-adapters"),
+        "raes-env-packs": _installed_version("raes-env-packs"),
+    }
+
+
 _BACKENDS: dict[str, _BackendAdapter] = {
     "cyborg-cage2": _BackendAdapter(
         name="cyborg-cage2",
         participant_address="participant.behavior.blue",
         pack_example_id="cage2-research",
         pack_package="raes_adapters.cyborg",
+        packaged_example=True,
+        expected_pack_digest=None,
         example_members=_CYBORG_EXAMPLE_MEMBERS,
         native_module="CybORG",
         inspection_payload=lambda: cyborg_inspection_payload(),
@@ -748,6 +974,8 @@ _BACKENDS: dict[str, _BackendAdapter] = {
         participant_address="participant.behavior.red",
         pack_example_id="nasim-tiny",
         pack_package="raes_adapters.nasim",
+        packaged_example=True,
+        expected_pack_digest=None,
         example_members=_NASIM_EXAMPLE_MEMBERS,
         native_module="nasim",
         inspection_payload=nasim_researcher.nasim_inspection_payload,
@@ -769,6 +997,34 @@ _BACKENDS: dict[str, _BackendAdapter] = {
         provenance_payload=_nasim_provenance_payload,
         machine_software=_nasim_machine_software,
     ),
+    "cyberbattlesim-chain": _BackendAdapter(
+        name="cyberbattlesim-chain",
+        participant_address="participant.behavior.red",
+        pack_example_id="cyberbattlesim-chain",
+        pack_package="raes_adapters.cyberbattlesim",
+        packaged_example=False,
+        expected_pack_digest=_CYBERBATTLESIM_PACK_DIGEST,
+        example_members=_CYBERBATTLESIM_EXAMPLE_MEMBERS,
+        native_module="cyberbattle",
+        inspection_payload=cyberbattlesim_researcher.cyberbattlesim_inspection_payload,
+        verify_source=verify_selected_cyberbattlesim_source,
+        create_target=create_cyberbattlesim_target,
+        researcher=cyberbattlesim_researcher,
+        backend_manifest=create_cyberbattlesim_manifest,
+        conformance_suite=cyberbattlesim_researcher.cyberbattlesim_conformance_suite,
+        conformance_evidence_basis="installed-source-probe",
+        native_args_complete=_cyberbattlesim_native_args_complete,
+        participant_paths=_cyberbattlesim_participant_paths,
+        experiment_bindings_match=_cyberbattlesim_experiment_bindings_match,
+        participant_bindings_match=_cyberbattlesim_participant_bindings_match,
+        admitted_seeds=_cyberbattlesim_admitted_seeds,
+        build_controls=_cyberbattlesim_build_controls,
+        episode_provenance=cyberbattlesim_researcher.red_implementation_provenance,
+        evidence_source_label="cyberbattlesim-chain evaluator projection",
+        evidence_satisfies_refs=("attacker-action-log", "availability-series"),
+        provenance_payload=_cyberbattlesim_provenance_payload,
+        machine_software=_cyberbattlesim_machine_software,
+    ),
 }
 
 
@@ -782,7 +1038,7 @@ def _adapter(args: argparse.Namespace) -> _BackendAdapter:
 def _pack_root(adapter: _BackendAdapter, value: str) -> Iterator[Path]:
     """Resolve a named packaged example or caller-selected pack root."""
 
-    if value != adapter.pack_example_id:
+    if value != adapter.pack_example_id or not adapter.packaged_example:
         yield Path(value)
         return
     package_root = resources.files(adapter.pack_package) / "examples" / value
@@ -873,6 +1129,11 @@ def _load_pack_artifacts(
     )
     with _pack_root(adapter, args.pack) as pack:
         try:
+            if (
+                adapter.expected_pack_digest is not None
+                and args.pack_digest != adapter.expected_pack_digest
+            ):
+                raise _ValidationFailure
             pack_admitted = pack_contracts.validate_pack(pack).ok
             digest_admitted = pack_contracts.verify_pack_content_digest(pack, args.pack_digest)
         except Exception as error:
@@ -1066,6 +1327,28 @@ def _retain_failure(output: Path, code: str, message: str) -> None:
 def _run_conformance(adapter: _BackendAdapter, args: argparse.Namespace) -> int:
     """Run the selected backend conformance suite and seal its evidence."""
 
+    admitted: _AdmittedRun | None = None
+    if adapter.expected_pack_digest is not None:
+        try:
+            admitted = _admit_native_run(adapter, args)
+        except _ValidationFailure:
+            raise _CommandFailure(
+                EXIT_VALIDATION, _CONTROLS_INVALID_CODE, _CONTROLS_INVALID_MESSAGE
+            ) from None
+        if util.find_spec(adapter.native_module) is None:
+            raise _CommandFailure(
+                EXIT_RUNTIME,
+                "researcher.runtime.native-unavailable",
+                "qualified native source is unavailable",
+            )
+        try:
+            adapter.verify_source()
+        except Exception:
+            raise _CommandFailure(
+                EXIT_VALIDATION,
+                "researcher.validation.source-invalid",
+                "qualified native source was not admitted",
+            ) from None
     try:
         output = _reserve_output(args.output)
     except _OutputFailure:
@@ -1073,7 +1356,19 @@ def _run_conformance(adapter: _BackendAdapter, args: argparse.Namespace) -> int:
             EXIT_OUTPUT, "researcher.output.unavailable", "output root is unavailable"
         ) from None
     try:
-        result = adapter.conformance_suite(suite=args.suite, output_dir=output)
+        conformance_args: dict[str, object] = {
+            "suite": args.suite,
+            "output_dir": output,
+        }
+        if admitted is not None:
+            conformance_args.update(
+                {
+                    "participant_manifest": admitted.participant_manifest,
+                    "participant_selection": admitted.participant_selection,
+                    "participant_configuration": admitted.participant_configuration,
+                }
+            )
+        result = adapter.conformance_suite(**conformance_args)
     except Exception:
         _retain_failure(output, _RUNTIME_FAILURE_CODE, "conformance execution failed")
         raise _CommandFailure(

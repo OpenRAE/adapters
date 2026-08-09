@@ -394,7 +394,12 @@ class GymParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
     ) -> ParticipantObservationEnvelopeModel:
         now = _now_iso()
         observation_ref = (
-            f"observation.{self._name}.{episode_id}.{step.step_number}.{request.action_instance_id}"
+            request.temporal_contexts[0].observation_point
+            if request.temporal_contexts
+            else (
+                f"observation.{self._name}.{episode_id}.{step.step_number}."
+                f"{request.action_instance_id}"
+            )
         )
         evidence_refs = self._evidence_refs(request)
         return ParticipantObservationEnvelopeModel(

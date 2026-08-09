@@ -1,0 +1,86 @@
+schema_version: environment-pack-provenance/v3
+pack:
+  name: cyberbattlesim-chain
+sources:
+  - source_id: cyberbattlesim-upstream
+    name: Microsoft CyberBattleSim
+    url: https://github.com/microsoft/CyberBattleSim
+    ref: "854d6966607fb68645651f55b0f97221bd293e0d"
+    license: MIT
+    usage: reimplemented
+    attribution_required: true
+    attribution: >-
+      CyberBattleSim, Copyright (c) Microsoft Corporation, distributed under
+      the MIT License. Retain the upstream license and notice obligations.
+    used: >-
+      The public size-10 CyberBattleChain-v0 topology and controls,
+      CredentialCacheExploiter participant, source-internal scan-and-reimage
+      defender, epsilon-greedy evaluator intent, reward, metrics, and termination.
+    excluded: >-
+      Native source, Python modules, Gym ids, observations, masks, action
+      coordinates, credential-cache values, reward vectors, raw logs, hidden
+      state, and historical benchmark output are not redistributed in this pack.
+    captured: "2026-07-29"
+  - source_id: adapter-evidence
+    name: RAES CyberBattleSim adapter evidence
+    url: https://github.com/OpenRAE/adapters
+    ref: "issues/25-29"
+    license: MIT
+    usage: reimplemented
+    attribution_required: false
+    used: >-
+      Portable SDL and experiment contracts, source-ledger references,
+      participant bindings, compatibility declarations, and researcher docs.
+artifacts:
+  - artifact_id: portable-scenario
+    path: sdl/
+    classification: redistributable
+    sources:
+      - cyberbattlesim-upstream
+      - adapter-evidence
+    description: Portable RAES scenario reimplemented from the selected public case.
+  - artifact_id: experiment-controls
+    path: experiment/
+    classification: redistributable
+    sources:
+      - cyberbattlesim-upstream
+      - adapter-evidence
+    description: Published task and run-plan contracts outside SDL semantics.
+  - artifact_id: participant-implementation
+    path: participant/
+    classification: redistributable
+    sources:
+      - adapter-evidence
+    description: Binding records for the separately installed qualified source policy.
+  - artifact_id: documentation
+    path: docs/
+    classification: redistributable
+    sources:
+      - cyberbattlesim-upstream
+      - adapter-evidence
+    description: Participant-safe narrative plus operator provenance and readiness review.
+content_safety:
+  no_real_malware: true
+  no_real_third_party_targets: true
+  no_real_credentials: true
+  no_sensitive_data: true
+  offensive_tooling_boundary: true
+  notes: >-
+    Synthetic generated topology only. The pack contains abstract RAES contracts,
+    not simulator source, credentials, exploit code, native configuration, or a
+    network-capable tool. Qualification losses and benchmark defects remain visible.
+review:
+  status: approved
+  gates:
+    - gate_id: licensing
+      status: approved
+      notes: Upstream is MIT; source is referenced and not redistributed.
+    - gate_id: attribution
+      status: approved
+      notes: Microsoft copyright and MIT obligation are retained.
+    - gate_id: sensitive-data
+      status: approved
+      notes: Synthetic topology only; no real credentials, targets, or sensitive data.
+    - gate_id: offensive-tooling
+      status: approved
+      notes: Abstract action contracts only; no native source or live offensive tooling.

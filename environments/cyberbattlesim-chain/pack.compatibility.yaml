@@ -1,0 +1,97 @@
+schema_version: environment-pack-compatibility/v2
+pack:
+  name: cyberbattlesim-chain
+  title: CyberBattleSim chain researcher example
+  version: 1.0.0
+  status: built
+  provenance_ledger: docs/provenance-ledger.yaml
+  source:
+    requirement: null
+    issues:
+      - 29
+    upstream_references:
+      - https://github.com/microsoft/CyberBattleSim
+artifact_boundaries:
+  participant_visible:
+    - path: sdl
+      export: public
+      description: Portable RAES SDL scenario and objective truth.
+    - path: experiment
+      export: public
+      description: Published experiment authoring input and evaluation task.
+    - path: docs/attack-path.md
+      export: public
+      description: Participant-safe scenario walkthrough.
+    - path: docs/concepts.md
+      export: public
+      description: Participant-safe concept overview and non-claims.
+  operator_only:
+    - path: participant
+      export: operator
+      description: CredentialCacheExploiter manifest, selection, and configuration.
+    - path: docs/provenance-ledger.yaml
+      export: operator
+      description: Provenance, licensing, exclusions, and safety review.
+    - path: docs/golden-readiness-checklist.md
+      export: operator
+      description: Operator-only golden-readiness protocol.
+  oracle_only: []
+  commercial: []
+runtime_profiles:
+  - profile_id: cyberbattlesim-chain-public
+    status: supported
+    description: >-
+      The admitted CyberBattleChain-v0 size-10 protocol realized by the
+      cyberbattlesim backend against separately installed qualified source.
+    provider: raes-adapters[cyberbattlesim]
+delivery_bundles: []
+platform_features: []
+assets:
+  - asset_id: portable-scenario
+    path: sdl/cyberbattlesim-chain.sdl.yaml
+    visibility: public
+    status: shipped
+    description: Portable RAES SDL scenario document.
+  - asset_id: experiment-task
+    path: experiment/cyberbattlesim-chain.task.exp.json
+    visibility: public
+    status: shipped
+    description: Published evaluation-task contract.
+  - asset_id: experiment-spec
+    path: experiment/cyberbattlesim-chain.spec.exp.json
+    visibility: public
+    status: shipped
+    description: Published experiment authoring-input contract.
+operator_surfaces:
+  - surface_id: red-participant-selection
+    path: participant/cyberbattlesim-red-credential-cache.selection.json
+    role: participant-selection
+    visibility: operator
+    status: shipped
+    description: Qualified red participant selection binding.
+validation:
+  commands:
+    - id: pack-validate
+      command: raes-pack-validate --pack .
+      validates:
+        - sdl/cyberbattlesim-chain.sdl.yaml
+        - docs/provenance-ledger.yaml
+        - pack.compatibility.yaml
+    - id: pack-release-check
+      command: raes-pack-release check --pack .
+      validates:
+        - pack.compatibility.yaml
+  gates:
+    - id: sdl-through-raes
+      kind: schema
+      paths:
+        - path: sdl/cyberbattlesim-chain.sdl.yaml
+    - id: participant-leak-scan
+      kind: leak-scan
+      paths:
+        - path: docs/attack-path.md
+        - path: docs/concepts.md
+    - id: golden-walkthrough
+      kind: manual-walkthrough
+      paths:
+        - path: docs/golden-readiness-checklist.md

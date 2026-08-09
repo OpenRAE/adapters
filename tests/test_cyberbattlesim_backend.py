@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import subprocess
 import sys
 from dataclasses import dataclass, field, replace
@@ -17,7 +18,13 @@ from raes_contracts.contracts import (
     ExperimentDerivedMeasureModel,
     ExperimentEvidenceRecordModel,
     ParticipantActionResultModel,
+    ParticipantConfigurationResultModel,
+    ParticipantImplementationManifestModel,
+    ParticipantImplementationSelectionModel,
     TrialCleanupPlanModel,
+)
+from raes_contracts.contracts.participant_execution import (
+    ParticipantExecutionServiceStateModel,
 )
 from raes_contracts.participant_binding import ParticipantActionAdmissionRequest
 from raes_contracts.participant_episode import (
@@ -38,7 +45,6 @@ from raes_processor.reference import ReferenceProcessor
 from raes_runtime import RuntimeControlPlane
 from raes_runtime.registry import RuntimeTarget
 
-from raes_adapters.base import run_conformance_probe
 from raes_adapters.cyberbattlesim.backend import (
     ACTION_EVIDENCE_REF,
     CYBERBATTLESIM_BACKEND_NAME,
@@ -53,12 +59,39 @@ from raes_adapters.cyberbattlesim.backend import (
     create_cyberbattlesim_manifest,
     create_cyberbattlesim_target,
     execute_cyberbattlesim_cleanup,
+    run_cyberbattlesim_conformance,
 )
 from tests._gym_fixtures import GymFixtureConfig, action_request, cleanup_plan
 
 PARTICIPANT = "participant.behavior.attacker"
 OBSERVATION_BOUNDARY = "participant.observation-boundary.attacker-view"
 LOCAL_ACTION = "participant.action-contract.local-vulnerability"
+PACK_ROOT = Path(__file__).parents[1] / "environments" / "cyberbattlesim-chain"
+
+
+def _selected_participant() -> tuple[
+    ParticipantImplementationManifestModel,
+    ParticipantImplementationSelectionModel,
+    ParticipantConfigurationResultModel,
+]:
+    """Load the external pack's exact selected participant contracts."""
+
+    participant = PACK_ROOT / "participant"
+
+    def load(name: str) -> object:
+        return json.loads((participant / name).read_text(encoding="utf-8"))
+
+    return (
+        ParticipantImplementationManifestModel.model_validate(
+            load("cyberbattlesim-red-credential-cache.manifest.json")
+        ),
+        ParticipantImplementationSelectionModel.model_validate(
+            load("cyberbattlesim-red-credential-cache.selection.json")
+        ),
+        ParticipantConfigurationResultModel.model_validate(
+            load("cyberbattlesim-red-credential-cache.configuration.json")
+        ),
+    )
 
 
 @dataclass
@@ -209,7 +242,8 @@ def test_manifest_and_target_claim_exact_implemented_surfaces() -> None:
     assert not manifest.has_observation
     assert not manifest.has_time
     assert manifest.participant_runtime is not None
-    assert manifest.participant_runtime.supports_bounded_concurrency is False
+    assert manifest.participant_runtime.supports_bounded_concurrency is True
+    assert manifest.participant_runtime.max_autonomous_in_flight == 1
     assert manifest.participant_runtime.supported_interaction_features == frozenset(
         {"interference"}
     )
@@ -867,14 +901,298 @@ def test_selected_scenario_realizes_and_runs_across_applicable_surfaces() -> Non
 
 
 def test_target_passes_canonical_backend_conformance_probe() -> None:
-    report = run_conformance_probe(
-        create_cyberbattlesim_target(driver=FakeDriver()),
+    participant_manifest, participant_selection, participant_configuration = _selected_participant()
+    report = run_cyberbattlesim_conformance(
+        driver=FakeDriver(),
+        participant_manifest=participant_manifest,
+        participant_selection=participant_selection,
+        participant_configuration=participant_configuration,
     )
 
     assert report.passed
     assert report.unsupported_contract_gaps == ()
     assert report.unsupported_capability_gaps == ()
     assert all(case.passed for case in report.cases)
+
+
+def test_manifest_claims_the_selected_autonomous_participant() -> None:
+    """The researcher case cannot ship behind the old fixed-action limitation."""
+
+    participant = create_cyberbattlesim_manifest().capabilities.participant_runtime
+
+    assert participant is not None
+    assert participant.supports_autonomous_execution
+    assert (
+        participant.constraints["autonomous_policy"]
+        == "qualified CredentialCacheExploiter through RAES action admission"
+    )
+
+
+def test_autonomous_binding_preserves_selected_security_context() -> None:
+    manifest, selection, configuration = _selected_participant()
+    runtime = CyberBattleSimParticipantRuntime(
+        FakeDriver(),
+        participant_manifest=manifest,
+        participant_selection=selection,
+        participant_configuration=configuration,
+    )
+
+    request = runtime.bind_autonomous_action(
+        selection.participant_address,
+        "participant.action-contract.connect",
+        OBSERVATION_BOUNDARY,
+        selection.manifest_ref,
+        "red-action-1",
+        (),
+        RuntimeSnapshot(),
+    )
+
+    assert request.participant_address == selection.participant_address
+    assert request.implementation_selection == selection
+    assert request.observation_boundary_address == OBSERVATION_BOUNDARY
+    assert request.visible_refs == (OBSERVATION_BOUNDARY,)
+    assert request.disclosed_refs == (OBSERVATION_BOUNDARY,)
+    assert request.target_addresses == ("provision.node.customer-data",)
+    assert request.validated_selection is not None
+    assert request.validated_selection.argument_map == {
+        "target_address": "provision.node.customer-data"
+    }
+
+    with pytest.raises(ValueError, match="binding is unavailable"):
+        runtime.bind_autonomous_action(
+            "participant.behavior.impostor",
+            "participant.action-contract.connect",
+            OBSERVATION_BOUNDARY,
+            selection.manifest_ref,
+            "impostor-action",
+            (),
+            RuntimeSnapshot(),
+        )
+    with pytest.raises(ValueError, match="binding is unavailable"):
+        runtime.bind_autonomous_action(
+            selection.participant_address,
+            "participant.action-contract.connect",
+            "participant.observation-boundary.hidden-truth",
+            selection.manifest_ref,
+            "hidden-boundary-action",
+            (),
+            RuntimeSnapshot(),
+        )
+
+
+def test_synthetic_conformance_identity_requires_explicit_fixture_mode() -> None:
+    manifest, selection, configuration = _selected_participant()
+    scope = "participant.autonomous-execution.conformance"
+    service = ParticipantExecutionServiceStateModel(
+        execution_scope_ref=scope,
+        policy_address=scope,
+        desired_lifecycle="running",
+        observed_lifecycle="running",
+        generation=0,
+        observed_generation=0,
+        health="healthy",
+        readiness="ready",
+        accepting_new_work=True,
+        draining=False,
+        quiescent=False,
+        resources_released=False,
+        policy_digest="sha256:" + "1" * 64,
+        binding_digest="sha256:" + "2" * 64,
+        time_declaration_digest="sha256:" + "3" * 64,
+        scheduler_state_refs=(),
+        capacity=2,
+        reserved=0,
+        in_flight=0,
+        last_transition_ref="operation:participant-execution:configure:0",
+        evidence_refs=("conformance:participant-execution:configured",),
+    )
+    fixture_snapshot = RuntimeSnapshot(
+        participant_execution_services={scope: service.model_dump(mode="json")}
+    )
+    binding_arguments = (
+        "participant.conformance",
+        "participant.action-contract.connect",
+        OBSERVATION_BOUNDARY,
+        selection.manifest_ref,
+        "participant-execution-conformance-0",
+        (),
+        fixture_snapshot,
+    )
+    production_runtime = CyberBattleSimParticipantRuntime(
+        FakeDriver(),
+        participant_manifest=manifest,
+        participant_selection=selection,
+        participant_configuration=configuration,
+    )
+
+    with pytest.raises(ValueError, match="binding is unavailable"):
+        production_runtime.bind_autonomous_action(*binding_arguments)
+
+    fixture_driver = FakeDriver()
+    fixture_runtime = CyberBattleSimParticipantRuntime(
+        fixture_driver,
+        participant_manifest=manifest,
+        participant_selection=selection,
+        participant_configuration=configuration,
+        conformance_mode=True,
+    )
+    request = replace(
+        fixture_runtime.bind_autonomous_action(*binding_arguments),
+        execution_scope_ref=scope,
+        execution_generation=0,
+    )
+    initialized = fixture_runtime.initialize(
+        ParticipantEpisodeInitializeRequest(
+            participant_address="participant.conformance",
+            episode_id="episode-conformance-fixture",
+        ),
+        fixture_snapshot,
+    )
+
+    result = fixture_runtime.admit_action(request, initialized.snapshot)
+
+    assert result.success
+    assert request.implementation_selection.participant_address == "participant.conformance"
+    assert fixture_driver.step_calls == ["connect"]
+
+
+def test_autonomous_policy_proposal_waits_for_raes_admission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A private source proposal cannot mutate the simulator before admission."""
+
+    class NativeEnvironment:
+        def __init__(self) -> None:
+            self.native_steps: list[dict[str, object]] = []
+
+        def step(
+            self, action: dict[str, object]
+        ) -> tuple[dict[str, object], float, bool, bool, dict[str, object]]:
+            self.native_steps.append(action)
+            return {"action_mask": {}}, 2.0, False, False, {}
+
+    class SourcePolicy:
+        exploit_calls = 0
+        explore_calls = 0
+        step_calls = 0
+        exploit_action: object = {"connect": (7, 8, 9, 10)}
+
+        def exploit(self, wrapper: object, observation: object) -> tuple[str, object, None]:
+            del wrapper, observation
+            SourcePolicy.exploit_calls += 1
+            return "exploit", SourcePolicy.exploit_action, None
+
+        def explore(self, wrapper: object) -> tuple[str, object, None]:
+            del wrapper
+            SourcePolicy.explore_calls += 1
+            return "explore", {"local_vulnerability": (1, 2, 3)}, None
+
+        def new_episode(self) -> None:
+            return None
+
+        def on_step(self, *args: object) -> None:
+            SourcePolicy.step_calls += 1
+
+    class SourceWrapper:
+        def __init__(self, environment: object, state: object) -> None:
+            del state
+            self.env = environment
+
+    environment = NativeEnvironment()
+    driver = CyberBattleSimDriver()
+    driver._environment = environment  # type: ignore[assignment]
+    driver._last_observation = {"action_mask": {"connect": [(0, 0)]}}
+    driver._numpy = SimpleNamespace(random=SimpleNamespace(rand=lambda: 0.95))  # type: ignore[assignment]
+    driver._max_steps = 10
+    driver._closed = False
+    driver._execution_ref = "driver.reset.1"
+    driver._selected_distribution = object()  # type: ignore[assignment]
+    monkeypatch.setattr(
+        "raes_adapters.cyberbattlesim.backend.driver._source_admission.resolve_selected_distribution",
+        lambda *_args: object(),
+    )
+    monkeypatch.setattr(
+        "raes_adapters.cyberbattlesim.backend.driver._source_admission.verify_package_origin",
+        lambda *_args: None,
+    )
+    monkeypatch.setattr(
+        "raes_adapters.cyberbattlesim.backend.driver.importlib.import_module",
+        lambda name: {
+            "cyberbattle.agents.baseline.agent_randomcredlookup": SimpleNamespace(
+                CredentialCacheExploiter=SourcePolicy
+            ),
+            "cyberbattle.agents.baseline.agent_wrapper": SimpleNamespace(
+                AgentWrapper=SourceWrapper,
+                StateAugmentation=lambda observation: observation,
+            ),
+        }[name],
+    )
+
+    proposal = driver.propose_autonomous_action(epsilon=0.9)
+
+    assert proposal.action_kind == "connect"
+    assert proposal.target_address == "provision.node.customer-data"
+    assert environment.native_steps == []
+    assert SourcePolicy.exploit_calls == 1
+
+    result = driver.step(
+        proposal.action_kind,
+        target_address=proposal.target_address,
+        proposal_ref=proposal.proposal_ref,
+    )
+
+    assert result.source_transition
+    assert environment.native_steps == [{"connect": (7, 8, 9, 10)}]
+    assert SourcePolicy.step_calls == 1
+
+    # The pinned upstream loop explores when draw <= epsilon.
+    driver._numpy = SimpleNamespace(random=SimpleNamespace(rand=lambda: 0.1))  # type: ignore[assignment]
+    explored = driver.propose_autonomous_action(epsilon=0.9)
+    assert explored.action_kind == "local-vulnerability"
+    assert explored.target_address == "provision.node.linux-relay"
+    driver.step(
+        explored.action_kind,
+        target_address=explored.target_address,
+        proposal_ref=explored.proposal_ref,
+    )
+    assert SourcePolicy.explore_calls == 1
+    assert SourcePolicy.exploit_calls == 1
+
+    # The complementary exploit branch falls back to exploration when the
+    # credential-cache policy has no valid action, exactly as the source does.
+    SourcePolicy.exploit_action = None
+    driver._numpy = SimpleNamespace(random=SimpleNamespace(rand=lambda: 0.95))  # type: ignore[assignment]
+    fallback = driver.propose_autonomous_action(epsilon=0.9)
+    assert fallback.action_kind == "local-vulnerability"
+    driver.step(
+        fallback.action_kind,
+        target_address=fallback.target_address,
+        proposal_ref=fallback.proposal_ref,
+    )
+    assert SourcePolicy.exploit_calls == 2
+    assert SourcePolicy.explore_calls == 2
+
+    driver._numpy = SimpleNamespace(random=SimpleNamespace(rand=lambda: 0.1))  # type: ignore[assignment]
+    rejected = driver.propose_autonomous_action(epsilon=0.9)
+    before_rejection = list(environment.native_steps)
+    with pytest.raises(ValueError, match="admitted authorization"):
+        driver.step(
+            rejected.action_kind,
+            target_address="provision.node.customer-data",
+            proposal_ref=rejected.proposal_ref,
+        )
+    assert environment.native_steps == before_rejection
+
+    driver._numpy = SimpleNamespace(random=SimpleNamespace(rand=lambda: 0.1))  # type: ignore[assignment]
+    rejected_proposal = driver.propose_autonomous_action(epsilon=0.9)
+    before_rejection = list(environment.native_steps)
+    with pytest.raises(ValueError, match="admitted authorization"):
+        driver.step(
+            rejected_proposal.action_kind,
+            target_address=rejected_proposal.target_address,
+            proposal_ref="driver.proposal.substituted",
+        )
+    assert environment.native_steps == before_rejection
 
 
 def test_live_driver_is_lazy_seed_bounded_and_performs_exactly_one_native_step(
@@ -937,6 +1255,11 @@ def test_live_driver_is_lazy_seed_bounded_and_performs_exactly_one_native_step(
     selected_configuration: dict[str, object] = {}
     source_content = {
         "cyberbattle/__init__.py": b"selected cyberbattle package",
+        "cyberbattle/agents/baseline/agent_randomcredlookup.py": (
+            b"selected credential cache policy"
+        ),
+        "cyberbattle/agents/baseline/agent_wrapper.py": b"selected policy wrapper state",
+        "cyberbattle/agents/baseline/learner.py": b"selected policy wrapper",
         "cyberbattle/_env/cyberbattle_env.py": b"selected cyberbattle environment",
         "cyberbattle/_env/defender.py": b"selected defender",
         "cyberbattle/_env/cyberbattle_chain.py": b"selected chain registration",
@@ -996,6 +1319,12 @@ def test_live_driver_is_lazy_seed_bounded_and_performs_exactly_one_native_step(
     }
     module_origins = {
         "cyberbattle": source_root / "cyberbattle/__init__.py",
+        "cyberbattle.agents.baseline.agent_randomcredlookup": (
+            source_root / "cyberbattle/agents/baseline/agent_randomcredlookup.py"
+        ),
+        "cyberbattle.agents.baseline.agent_wrapper": (
+            source_root / "cyberbattle/agents/baseline/agent_wrapper.py"
+        ),
         "cyberbattle._env.cyberbattle_env": (source_root / "cyberbattle/_env/cyberbattle_env.py"),
         "cyberbattle._env.defender": source_root / "cyberbattle/_env/defender.py",
         "gymnasium": dependency_roots["gymnasium"] / "gymnasium/__init__.py",

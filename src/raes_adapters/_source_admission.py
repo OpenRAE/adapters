@@ -400,9 +400,8 @@ def _installed_tree_digest(
 ) -> str:
     """Hash sorted installed paths and contents into a portable tree identity.
 
-    The recorded tree digest names each file by its path relative to the import
-    root, so this hashes ``relative_name`` while still locating each file by its
-    root-prefixed distribution path.
+    Qualification records name each file relative to its declared import root.
+    The root remains a separately validated field in the qualification record.
     """
 
     digest = hashlib.sha256()

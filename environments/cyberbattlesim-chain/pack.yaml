@@ -1,0 +1,19 @@
+name: cyberbattlesim-chain
+title: CyberBattleSim chain researcher example
+version: 1.0.0
+status: built
+description: >-
+  The selected CyberBattleChain-v0 case for the installed RAES adapter command:
+  a qualified CredentialCacheExploiter red participant against the source-internal
+  scan-and-reimage defender, with evaluator and run intent in published contracts.
+authors:
+  - RAES
+license: MIT
+requirement: null
+contents:
+  flag_layer: false
+  reference_triangle: false
+  profile_bundles: false
+provenance_ledger: docs/provenance-ledger.yaml
+compatibility_manifest: pack.compatibility.yaml
+associated_artifact_manifest: pack.content-manifest.json

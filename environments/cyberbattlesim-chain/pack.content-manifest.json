@@ -1,0 +1,209 @@
+{
+  "schema_version": "associated-artifact-manifest/v1",
+  "manifest_id": "cyberbattlesim-chain-associated-artifacts",
+  "manifest_version": "1.0.0",
+  "canonicalization_profile": "associated-artifact-set/v1",
+  "scope": "scenario",
+  "parent_ref": {
+    "ref_kind": "scenario",
+    "ref_id": "cyberbattlesim-chain",
+    "ref_version": null,
+    "ref_digest": null,
+    "ref_path": null
+  },
+  "artifacts": {
+    "attack-path": {
+      "artifact_id": "attack-path",
+      "role": "documentation",
+      "media_type": "text/markdown",
+      "uri": "raes-environment-pack:/docs/attack-path.md",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "53b7cf8b99073a56adfdae67c69eb381763ce945030ca4f62a638c60918c826a"
+      },
+      "size_bytes": 1019,
+      "created_at": "2026-08-08T00:00:00Z",
+      "source": "OpenRAE/adapters#29",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "concepts": {
+      "artifact_id": "concepts",
+      "role": "documentation",
+      "media_type": "text/markdown",
+      "uri": "raes-environment-pack:/docs/concepts.md",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "7b9f7cf8065cb5a55aebf7c62f64d1a6646fb44ebebae35e3d16dd07c17135e8"
+      },
+      "size_bytes": 1019,
+      "created_at": "2026-08-08T00:00:00Z",
+      "source": "OpenRAE/adapters#29",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "golden-readiness-checklist": {
+      "artifact_id": "golden-readiness-checklist",
+      "role": "documentation",
+      "media_type": "text/markdown",
+      "uri": "raes-environment-pack:/docs/golden-readiness-checklist.md",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "ab3febf666b60f8a08186d9e9e97471b652e2522ef3c9cd5a34b450921229fe2"
+      },
+      "size_bytes": 2123,
+      "created_at": "2026-08-08T00:00:00Z",
+      "source": "OpenRAE/adapters#29",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "provenance-ledger": {
+      "artifact_id": "provenance-ledger",
+      "role": "apparatus-evidence",
+      "media_type": "application/yaml",
+      "uri": "raes-environment-pack:/docs/provenance-ledger.yaml",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "e3e2de3cbe69477cdb06e819d666f507185e655c3cc18866c127092f223ae45d"
+      },
+      "size_bytes": 3365,
+      "created_at": "2026-08-08T00:00:00Z",
+      "source": "OpenRAE/adapters#29",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "experiment-spec": {
+      "artifact_id": "experiment-spec",
+      "role": "configuration",
+      "media_type": "application/json",
+      "uri": "raes-environment-pack:/experiment/cyberbattlesim-chain.spec.exp.json",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "c31d2f4376ad7877d756e6a572a5e9e344b0899c4e8e996e1b5f57eaa78be391"
+      },
+      "size_bytes": 4412,
+      "created_at": "2026-08-08T00:00:00Z",
+      "source": "OpenRAE/adapters#29",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "experiment-task": {
+      "artifact_id": "experiment-task",
+      "role": "protocol",
+      "media_type": "application/json",
+      "uri": "raes-environment-pack:/experiment/cyberbattlesim-chain.task.exp.json",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "6588ac115931b8de7052d52ccb94bbd258c5e6c78ffb9d5f5d1c0570f9236ce5"
+      },
+      "size_bytes": 5792,
+      "created_at": "2026-08-08T00:00:00Z",
+      "source": "OpenRAE/adapters#29",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "compatibility-manifest": {
+      "artifact_id": "compatibility-manifest",
+      "role": "configuration",
+      "media_type": "application/yaml",
+      "uri": "raes-environment-pack:/pack.compatibility.yaml",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "7ed168041503b548e20de647a87f3478cf796b2e557864ea349b38e26bb771a6"
+      },
+      "size_bytes": 3194,
+      "created_at": "2026-08-08T00:00:00Z",
+      "source": "OpenRAE/adapters#29",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "pack-declaration": {
+      "artifact_id": "pack-declaration",
+      "role": "configuration",
+      "media_type": "application/yaml",
+      "uri": "raes-environment-pack:/pack.yaml",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "15387eab6fb0131e943226451cfccae8fed66c725704c93b30a67bacb929c8d4"
+      },
+      "size_bytes": 649,
+      "created_at": "2026-08-08T00:00:00Z",
+      "source": "OpenRAE/adapters#29",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "red-participant-configuration": {
+      "artifact_id": "red-participant-configuration",
+      "role": "configuration",
+      "media_type": "application/json",
+      "uri": "raes-environment-pack:/participant/cyberbattlesim-red-credential-cache.configuration.json",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "2b5e0fd0ef0be839af33763199e76192196a4928ca555a230af0f685c38eeced"
+      },
+      "size_bytes": 1030,
+      "created_at": "2026-08-08T00:00:00Z",
+      "source": "OpenRAE/adapters#29",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "red-participant-manifest": {
+      "artifact_id": "red-participant-manifest",
+      "role": "manifest",
+      "media_type": "application/json",
+      "uri": "raes-environment-pack:/participant/cyberbattlesim-red-credential-cache.manifest.json",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "2ea827eb709a036b1721a91fabce787a320845bf26e3e6f0a0e5e768e7f9d93b"
+      },
+      "size_bytes": 2319,
+      "created_at": "2026-08-08T00:00:00Z",
+      "source": "OpenRAE/adapters#29",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "red-participant-selection": {
+      "artifact_id": "red-participant-selection",
+      "role": "configuration",
+      "media_type": "application/json",
+      "uri": "raes-environment-pack:/participant/cyberbattlesim-red-credential-cache.selection.json",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "ce920ca6362b37e8cde6af12190ee9b84e9ea3c3fc89842d31366f0ec6031935"
+      },
+      "size_bytes": 1432,
+      "created_at": "2026-08-08T00:00:00Z",
+      "source": "OpenRAE/adapters#29",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    },
+    "scenario": {
+      "artifact_id": "scenario",
+      "role": "scenario-snapshot",
+      "media_type": "application/yaml",
+      "uri": "raes-environment-pack:/sdl/cyberbattlesim-chain.sdl.yaml",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "935ffc3c2a85383fd7a500a1231b76032b4eb21a5a7b16f7ca23f8094dc922a3"
+      },
+      "size_bytes": 11219,
+      "created_at": "2026-08-08T00:00:00Z",
+      "source": "OpenRAE/adapters#29",
+      "satisfies_refs": [],
+      "sensitivity": "public",
+      "description": null
+    }
+  },
+  "set_digest": "sha256:08ae7e997b50bb396c290c4a5537a65e9e7d8b8e6abc97d1ff65022c4258e417"
+}

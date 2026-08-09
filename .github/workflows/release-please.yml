@@ -122,6 +122,26 @@ jobs:
         run: uv build --out-dir dist
       - name: Validate distribution metadata and README rendering
         run: uvx --from twine twine check --strict dist/*
+      - name: Build external CyberBattleSim environment-pack assets
+        env:
+          SOURCE_DATE_EPOCH: "1700000000"
+        run: |
+          set -euo pipefail
+          uv run --extra cyberbattlesim raes-pack-validate --pack environments/cyberbattlesim-chain
+          uv run --extra cyberbattlesim raes-pack-release check --pack environments/cyberbattlesim-chain
+          mkdir -p env-pack-build env-pack-assets
+          uv run --extra cyberbattlesim raes-pack-release build \
+            --pack environments/cyberbattlesim-chain \
+            --out env-pack-build
+          tar --sort=name --mtime="@${SOURCE_DATE_EPOCH}" --owner=0 --group=0 \
+            --numeric-owner -czf env-pack-assets/cyberbattlesim-chain-1.0.0.tar.gz \
+            -C environments cyberbattlesim-chain
+          tar --sort=name --mtime="@${SOURCE_DATE_EPOCH}" --owner=0 --group=0 \
+            --numeric-owner -czf env-pack-assets/cyberbattlesim-chain-1.0.0-views.tar.gz \
+            -C env-pack-build cyberbattlesim-chain-1.0.0
+          (cd env-pack-assets && sha256sum \
+            cyberbattlesim-chain-1.0.0.tar.gz \
+            cyberbattlesim-chain-1.0.0-views.tar.gz) | tee ENV_PACK_SHA256SUMS
       - name: Record checksums (outside the package directory)
         # SHA256SUMS must NOT live in dist/: the whole dist/ is handed to the PyPI
         # publisher as packages-dir, and a non-distribution file there fails upload.
@@ -137,6 +157,14 @@ jobs:
         with:
           name: checksums
           path: SHA256SUMS
+          if-no-files-found: error
+      - name: Upload external environment-pack assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: environment-packs
+          path: |
+            env-pack-assets/
+            ENV_PACK_SHA256SUMS
           if-no-files-found: error
 
   publish:
@@ -161,6 +189,10 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: checksums
+      - name: Download external environment-pack assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: environment-packs
       - name: Publish to PyPI (OIDC Trusted Publishing)
         uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247 # release/v1
         with:
@@ -175,7 +207,9 @@ jobs:
           TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || needs.release-please.outputs.tag_name }}
         # No --clobber: a released version's assets are immutable (ADR-003), so an
         # attempt to replace existing assets must fail rather than overwrite.
-        run: gh release upload "${TAG}" dist/* SHA256SUMS
+        run: >-
+          gh release upload "${TAG}" dist/* SHA256SUMS
+          env-pack-assets/* ENV_PACK_SHA256SUMS
 
   # Prove the published artifact installs and imports from the public index in a
   # clean environment (no checkout, no local links).
