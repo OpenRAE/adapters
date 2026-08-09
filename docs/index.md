@@ -20,6 +20,7 @@ semantic and protocol authority.
 - [Repository overview](https://github.com/OpenRAE/adapters#readme)
 - [Installed researcher command](researcher-command.md)
 - [NASim researcher command](nasim-researcher-command.md)
+- [CyberBattleSim researcher command](cyberbattlesim-researcher-command.md)
 - [Contribution guide](https://github.com/OpenRAE/adapters/blob/dev/CONTRIBUTING.md)
 - [Architecture decisions](decisions/adrs/README.md)
 - [CybORG/CAGE-2 backend qualification guardrails](decisions/cyborg-cage2-runtime-qualification-guardrails.md)
@@ -41,6 +42,8 @@ semantic and protocol authority.
 - [CyberBattleSim scenario and source-ledger guardrails](decisions/cyberbattlesim-scenario-ledger-guardrails.md)
 - [CyberBattleSim backend architecture guardrails](decisions/cyberbattlesim-backend-guardrails.md)
 - [CyberBattleSim conformance-composition guardrails](decisions/cyberbattlesim-conformance-guardrails.md)
+- [CyberBattleSim environment-pack and researcher-command guardrails](decisions/cyberbattlesim-researcher-command-guardrails.md)
+- [CyberBattleSim chain native-readiness record](decisions/cyberbattlesim-native-readiness-record.md)
 - [Project services](maintainers/project-services.md)
 
 ## Verify a checkout

@@ -1,17 +1,15 @@
-"""NASim researcher-run orchestration over published RAES runtime contracts.
+"""CyberBattleSim chain researcher workflow over published RAES contracts.
 
-This mirrors the CAGE-2 researcher command for the selected NASim ``tiny``
-static benchmark, adapted to a single red bruteforce attacker with no
-red-variant, no defender, and no second participant. Determinism loss is
-retained as a non-claim: action success is drawn from the process-global legacy
-NumPy stream, which neither ``make_benchmark`` nor the gym reset seed binds for a
-static benchmark (ADR-069), so a bound seed is never a deterministic-replay
-claim.
+The qualified source ``CredentialCacheExploiter`` selects every attacker action.
+Its native proposal stays driver-private until the matching semantic action is
+admitted by the participant runtime. The selected public evaluator's incomplete
+random-stream binding remains an explicit non-claim.
 """
 
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from importlib import metadata
@@ -32,6 +30,7 @@ from raes_contracts.contracts import (  # type: ignore[import-untyped]
     ExperimentStudyModel,
     ExperimentTaskModel,
     ParticipantConfigurationResultModel,
+    ParticipantImplementationManifestModel,
     ParticipantImplementationProvenanceModel,
     ParticipantImplementationSelectionModel,
 )
@@ -67,46 +66,55 @@ from raes_adapters._researcher_support import (
     single_participant_provenance,
     start_single_participant_runtime,
 )
-from raes_adapters.nasim import load_qualification
-from raes_adapters.nasim.backend.conformance import (
-    PR_CONFORMANCE_SEED,
-    nasim_backend_conformance_payload,
-    nasim_declared_weaknesses,
-    nasim_manifest_capability_evidence_gaps,
-    nasim_source_protocol_diagnostics,
-    run_nasim_conformance,
+from raes_adapters.cyberbattlesim import load_qualification
+from raes_adapters.cyberbattlesim.backend.conformance import (
+    cyberbattlesim_backend_conformance_payload,
+    cyberbattlesim_declared_weaknesses,
+    cyberbattlesim_manifest_capability_evidence_gaps,
+    cyberbattlesim_source_protocol_diagnostics,
+    run_cyberbattlesim_conformance,
 )
-from raes_adapters.nasim.backend.driver import NasimDriverProtocol, verify_selected_nasim_source
-from raes_adapters.nasim.backend.manifest import create_nasim_manifest
-from raes_adapters.nasim.backend.target import create_nasim_target
-from raes_adapters.nasim.runtime_plans import (
-    NASIM_CLOCK,
-    nasim_evaluation_plan,
-    nasim_orchestration_plan,
+from raes_adapters.cyberbattlesim.backend.driver import (
+    AutonomousActionProposal,
+    CyberBattleSimDriver,
+    CyberBattleSimDriverProtocol,
+    verify_selected_cyberbattlesim_source,
 )
-from raes_adapters.nasim.scenario_ledger import NASIM_TINY
+from raes_adapters.cyberbattlesim.backend.manifest import create_cyberbattlesim_manifest
+from raes_adapters.cyberbattlesim.backend.target import create_cyberbattlesim_target
+from raes_adapters.cyberbattlesim.runtime_plans import (
+    CYBERBATTLESIM_CLOCK,
+    cyberbattlesim_evaluation_plan,
+    cyberbattlesim_orchestration_plan,
+)
+from raes_adapters.cyberbattlesim.scenario_ledger import CYBERBATTLE_CHAIN
 
 _RED = "participant.behavior.red"
-_SERVICE_EXPLOIT = "participant.action-contract.service-exploit"
-_OBSERVATION_BOUNDARY = "participant.observation-boundary.red"
-_ACTION_CONTRACT_TARGET = "red-action-contract-address"
-_BACKEND_MANIFEST_REF = "manifest.nasim-tiny"
-_ACTION_ARGUMENT_SHAPE = "participant.action-argument-shape.nasim"
+_ACTION_CONTRACT_BY_KIND = {
+    "connect": "participant.action-contract.connect",
+    "local-vulnerability": "participant.action-contract.local-vulnerability",
+    "remote-vulnerability": "participant.action-contract.remote-vulnerability",
+}
+_OBSERVATION_BOUNDARY = "participant.observation-boundary.attacker-view"
+_POLICY_IDENTITY_TARGET = "red-policy-identity"
+_BACKEND_MANIFEST_REF = "manifest.cyberbattlesim-chain"
+_ACTION_ARGUMENT_SHAPE = "participant.action-argument-shape.cyberbattlesim"
+_POLICY_IDENTITY = "CredentialCacheExploiter"
+PR_CONFORMANCE_SEED = 20260729
 
 
 @dataclass(frozen=True)
 class RunControls(RedParticipantRunControls):
     """Internal, non-portable selection of already published run controls.
 
-    Bound to the single red bruteforce attacker; there is no red-variant, no
-    blue, and no green participant for the selected tiny scenario.
+    Bound to the single qualified credential-cache attacker and source controls.
     """
 
     def __post_init__(self) -> None:
         """Reject controls not bound to the selected published contracts."""
 
         self.validate_common(_RED)
-        _red_action_contract(self.red_configuration)
+        _red_policy_identity(self.red_configuration)
 
 
 def red_implementation_provenance(
@@ -124,7 +132,7 @@ def _apparatus_context(
 ) -> dict[str, object]:
     """Project admitted apparatus identities without exposing native state."""
 
-    backend = create_nasim_manifest()
+    backend = create_cyberbattlesim_manifest()
     red = controls.red_manifest
     source_revision = read_source_revision(load_qualification)
     spec = ApparatusContextSpec(
@@ -139,21 +147,21 @@ def _apparatus_context(
         compatibility_declarations=[
             {
                 "ref_kind": "profile",
-                "ref_id": f"nasim-tiny-static-benchmark-{source_revision[:7]}",
+                "ref_id": f"cyberbattlesim-chain-public-{source_revision[:7]}",
                 "ref_version": source_revision,
             }
         ],
         configuration_parameters=[
             {
-                "name": "red-action-contract",
-                "value": _red_action_contract(controls.red_configuration),
-                "value_kind": "protocol",
+                "name": "red-policy",
+                "value": _red_policy_identity(controls.red_configuration),
+                "value_kind": "apparatus",
             }
         ],
-        stochastic_seed_control_id="nasim-gym-reset-seed",
-        clock_id=NASIM_CLOCK,
-        clock_authority="nasim-tiny runtime",
-        measurement_channel_ref_id="nasim-reward-projection",
+        stochastic_seed_control_id="cyberbattlesim-gym-reset-seed",
+        clock_id=CYBERBATTLESIM_CLOCK,
+        clock_authority="cyberbattlesim-chain runtime",
+        measurement_channel_ref_id="cyberbattlesim-reward-projection",
         known_limitations=[
             {
                 "category": "apparatus",
@@ -162,8 +170,8 @@ def _apparatus_context(
             {
                 "category": "internal",
                 "note": (
-                    "Action success is drawn from the unbound global NumPy stream; a bound "
-                    "seed is not a deterministic-replay claim (ADR-069)."
+                    "The public evaluator leaves Python and global NumPy streams unbound; "
+                    "the recorded seed is not a deterministic-replay claim."
                 ),
             },
         ],
@@ -202,10 +210,10 @@ def archival_run(
                 {"name": "trial-length", "value": controls.max_steps, "value_kind": "protocol"},
             ],
             seed=controls.seed,
-            stochastic_seed_control_id="nasim-gym-reset-seed",
-            clock_id=NASIM_CLOCK,
-            clock_authority="nasim-tiny runtime",
-            result_summary_key="nasim-cumulative-attacker-reward-result",
+            stochastic_seed_control_id="cyberbattlesim-gym-reset-seed",
+            clock_id=CYBERBATTLESIM_CLOCK,
+            clock_authority="cyberbattlesim-chain runtime",
+            result_summary_key="cyberbattlesim-cumulative-attacker-reward-result",
             metric_id="cumulative_attacker_reward",
         ),
     )
@@ -217,30 +225,35 @@ def archival_collection(
     """Group a declared run batch without introducing a scientific claim."""
 
     return build_archival_collection(
-        task, runs, study_id, title="NASim tiny declared run collection"
+        task, runs, study_id, title="CyberBattleSim chain declared run collection"
     )
 
 
-def _red_action_contract(configuration: ParticipantConfigurationResultModel) -> str:
-    """Return the executable action selected by an admitted configuration."""
+def _red_policy_identity(configuration: ParticipantConfigurationResultModel) -> str:
+    """Return the exact source policy selected by an admitted configuration."""
 
     values = {
         item.target_id: item.value.value
         for item in configuration.configuration.values
         if item.value.kind == "literal"
     }
-    selected = values.get(_ACTION_CONTRACT_TARGET)
-    if not isinstance(selected, str) or selected != _SERVICE_EXPLOIT:
+    selected = values.get(_POLICY_IDENTITY_TARGET)
+    if selected != _POLICY_IDENTITY:
         raise ValueError("red participant configuration has no installed executable behavior")
-    return selected
+    return _POLICY_IDENTITY
 
 
 def _red_action_request(
-    action_instance_id: str, controls: RunControls
+    action_instance_id: str,
+    controls: RunControls,
+    proposal: AutonomousActionProposal,
 ) -> ParticipantActionAdmissionRequest:
-    """Build one action request bound to the selected red implementation."""
+    """Bind one private source-policy proposal to its portable semantic action."""
 
-    action_contract = _red_action_contract(controls.red_configuration)
+    try:
+        action_contract = _ACTION_CONTRACT_BY_KIND[proposal.action_kind]
+    except KeyError as error:
+        raise ValueError("source policy proposed an unsupported action kind") from error
     return ParticipantActionAdmissionRequest(
         participant_address=_RED,
         action_contract_address=action_contract,
@@ -253,10 +266,11 @@ def _red_action_request(
         validated_selection=ParticipantValidatedActionSelection(
             action_contract_address=action_contract,
             argument_shape_ref=_ACTION_ARGUMENT_SHAPE,
-            proposal_ref=f"proposal:{action_instance_id}",
-            normalized_arguments=(),
+            proposal_ref=proposal.proposal_ref,
+            normalized_arguments=(("target_address", proposal.target_address),),
             loss_disclosure_refs=("loss-observation-abstraction",),
         ),
+        target_addresses=(proposal.target_address,),
         requires_terminal_outcome=True,
     )
 
@@ -265,9 +279,9 @@ def _orchestration_plan(controls: RunControls) -> OrchestrationPlan:
     """Return the bounded single-attacker workflow for one admitted run."""
 
     workflow = f"orchestration.workflow.{controls.run_id}"
-    return nasim_orchestration_plan(
+    return cyberbattlesim_orchestration_plan(
         workflow=workflow,
-        name="nasim-tiny-research-run",
+        name="cyberbattlesim-chain-research-run",
         max_steps=controls.max_steps,
     )
 
@@ -277,7 +291,7 @@ def _start_runtime(
 ) -> tuple[RuntimeSnapshot, list[DiagnosticModel]]:
     """Realize the scenario topology and start the bounded single-attacker workflow.
 
-    The selected NASim backend ships no time-runtime component and its driver
+    The selected CyberBattleSim backend ships no time-runtime component and its driver
     resets only through the participant lifecycle (not at construction). The
     scenario objective is therefore evaluated at the end of the episode through
     the researcher's own evaluation plan rather than projected at scenario apply,
@@ -309,15 +323,19 @@ def _execute_steps(
     snapshot: RuntimeSnapshot,
     controls: RunControls,
     diagnostics: list[DiagnosticModel],
+    driver: CyberBattleSimDriverProtocol,
 ) -> tuple[RuntimeSnapshot, int]:
-    """Execute the admitted action until the declared terminal boundary."""
+    """Admit each exact source-policy proposal before its native transition."""
 
     if target.participant_runtime is None:
         raise RuntimeError("researcher execution runtime is unavailable")
     completed_steps = 0
     for step in range(1, controls.max_steps + 1):
+        epsilon = _epsilon_for_step(step - 1)
+        proposal = driver.propose_autonomous_action(epsilon=epsilon)
         action = target.participant_runtime.admit_action(
-            _red_action_request(f"{controls.run_id}-red-action-{step}", controls), snapshot
+            _red_action_request(f"{controls.run_id}-red-action-{step}", controls, proposal),
+            snapshot,
         )
         diagnostics.extend(diagnostic_model(item) for item in action.diagnostics)
         if not action.success:
@@ -327,6 +345,16 @@ def _execute_steps(
         if target.participant_runtime.status()["running"] == 0:
             break
     return snapshot, completed_steps
+
+
+def _epsilon_for_step(step: int) -> float:
+    """Apply the selected upstream evaluator's exponential epsilon schedule."""
+
+    protocol = load_qualification()["protocol"]["selection"]["attacker"]
+    initial = float(protocol["epsilon"])
+    minimum = float(protocol["epsilon_minimum"])
+    decay = float(protocol["epsilon_exponential_decay"])
+    return minimum + math.exp(-step / decay) * (initial - minimum)
 
 
 def _evaluate_episode(
@@ -342,7 +370,7 @@ def _evaluate_episode(
 
     if target.evaluator is None:
         raise RuntimeError("researcher evaluator is unavailable")
-    evaluated = target.evaluator.start(nasim_evaluation_plan(), snapshot)
+    evaluated = target.evaluator.start(cyberbattlesim_evaluation_plan(), snapshot)
     diagnostics.extend(diagnostic_model(item) for item in evaluated.diagnostics)
     if not evaluated.success:
         raise RuntimeError("researcher evaluation failed")
@@ -357,11 +385,18 @@ def execute_episode(
     scenario: object,
     controls: RunControls,
     *,
-    driver: NasimDriverProtocol | None = None,
+    driver: CyberBattleSimDriverProtocol | None = None,
 ) -> EpisodeEvidence:
     """Execute one selected episode and return only validated RAES evidence."""
 
-    target = create_nasim_target(seed=controls.seed, **({"driver": driver} if driver else {}))
+    selected_driver = driver if driver is not None else CyberBattleSimDriver()
+    target = create_cyberbattlesim_target(
+        seed=controls.seed,
+        driver=selected_driver,
+        participant_manifest=controls.red_manifest,
+        participant_selection=controls.red_selection,
+        participant_configuration=controls.red_configuration,
+    )
     diagnostics: list[DiagnosticModel] = []
     snapshot: RuntimeSnapshot | None = None
     completed_steps = 0
@@ -375,7 +410,9 @@ def execute_episode(
         snapshot, start_diagnostics = _start_runtime(target, scenario, controls)
         diagnostics.extend(start_diagnostics)
         snapshot = _initialize_participant(target, snapshot, controls, diagnostics)
-        snapshot, completed_steps = _execute_steps(target, snapshot, controls, diagnostics)
+        snapshot, completed_steps = _execute_steps(
+            target, snapshot, controls, diagnostics, selected_driver
+        )
         snapshot, evidence_records, derived_measures = _evaluate_episode(
             target, snapshot, diagnostics
         )
@@ -387,7 +424,13 @@ def execute_episode(
         )
         cleanup = manager.destroy()
         diagnostics.extend(diagnostic_model(item) for item in cleanup.diagnostics)
-        cleanup_verified = cleanup.success
+        driver_cleanup = selected_driver.close()
+        cleanup_verified = (
+            cleanup.success
+            and driver_cleanup.closed
+            and driver_cleanup.verified
+            and selected_driver.verify_closed()
+        )
     if not cleanup_verified:
         raise RuntimeError("researcher cleanup failed")
     return EpisodeEvidence(
@@ -400,9 +443,9 @@ def execute_episode(
 
 
 def _supported_profiles() -> list[str]:
-    """Return installed profiles fully supported by the NASim manifest."""
+    """Return installed profiles fully supported by the CyberBattleSim manifest."""
 
-    manifest = create_nasim_manifest()
+    manifest = create_cyberbattlesim_manifest()
     profiles: list[str] = []
     for path in sorted(backend_profiles_root().glob("*.json")):
         profile = load_backend_profile(path.stem)
@@ -411,15 +454,15 @@ def _supported_profiles() -> list[str]:
     return profiles
 
 
-def nasim_inspection_payload() -> dict[str, object]:
+def cyberbattlesim_inspection_payload() -> dict[str, object]:
     """Project installed identities without constructing the native backend."""
 
-    manifest = create_nasim_manifest()
+    manifest = create_cyberbattlesim_manifest()
     manifest_payload = backend_manifest_payload(manifest)
     qualification = load_qualification()
     source = qualification["source"]
     try:
-        verify_selected_nasim_source()
+        verify_selected_cyberbattlesim_source()
         native_verified = True
     except Exception:
         native_verified = False
@@ -438,10 +481,10 @@ def nasim_inspection_payload() -> dict[str, object]:
             "source_commit": source["commit"],
             "source_version": source["version"],
             "source_repository": source["repository"],
-            "source_ledger": "/".join(NASIM_TINY.ledger_resource),
+            "source_ledger": "/".join(CYBERBATTLE_CHAIN.ledger_resource),
         },
         "supported_profiles": _supported_profiles(),
-        "examples": ["nasim-tiny"],
+        "examples": ["cyberbattlesim-chain (external release asset)"],
     }
 
 
@@ -451,10 +494,17 @@ _CONFORMANCE_SUITE_SEEDS: dict[str, tuple[int, ...]] = {
 }
 
 
-def nasim_conformance_suite(*, suite: str, output_dir: Path) -> dict[str, object]:
+def cyberbattlesim_conformance_suite(
+    *,
+    suite: str,
+    output_dir: Path,
+    participant_manifest: ParticipantImplementationManifestModel | None = None,
+    participant_selection: ParticipantImplementationSelectionModel | None = None,
+    participant_configuration: ParticipantConfigurationResultModel | None = None,
+) -> dict[str, object]:
     """Run one deterministic tier and return a machine-readable evidence index.
 
-    NASim ships no hermetic probe driver, so this runs the published RAES target
+    CyberBattleSim ships no hermetic probe driver, so this runs the published RAES target
     conformance probe over the installed selected source. It preserves the
     canonical report, source-protocol diagnostics, declared weaknesses, and the
     explicit non-claims without wrapping any of them as an experiment run.
@@ -462,30 +512,37 @@ def nasim_conformance_suite(*, suite: str, output_dir: Path) -> dict[str, object
 
     seeds = _CONFORMANCE_SUITE_SEEDS.get(suite)
     if seeds is None:
-        raise ValueError("NASim conformance suite must be 'pr' or 'full'.")
+        raise ValueError("CyberBattleSim conformance suite must be 'pr' or 'full'.")
     invocation_root = Path.cwd().resolve()
     output_dir = output_dir.resolve()
     if output_dir == invocation_root or not output_dir.is_relative_to(invocation_root):
-        raise ValueError("NASim conformance output must be beneath the invocation directory.")
-    diagnostics = nasim_source_protocol_diagnostics()
+        raise ValueError(
+            "CyberBattleSim conformance output must be beneath the invocation directory."
+        )
+    diagnostics = cyberbattlesim_source_protocol_diagnostics()
     reports: list[dict[str, object]] = []
     for seed in seeds:
-        report = run_nasim_conformance(seed=seed)
-        payload = nasim_backend_conformance_payload(report)
+        report = run_cyberbattlesim_conformance(
+            seed=seed,
+            participant_manifest=participant_manifest,
+            participant_selection=participant_selection,
+            participant_configuration=participant_configuration,
+        )
+        payload = cyberbattlesim_backend_conformance_payload(report)
         if (
             report.unsupported_contract_gaps
             or report.unsupported_capability_gaps
             or any(not case.passed for case in report.cases)
         ):
-            raise RuntimeError("NASim published conformance cases failed.")
-        if nasim_manifest_capability_evidence_gaps(
+            raise RuntimeError("CyberBattleSim published conformance cases failed.")
+        if cyberbattlesim_manifest_capability_evidence_gaps(
             conformance_report=report, source_diagnostics=diagnostics
         ):
-            raise RuntimeError("NASim manifest capability evidence is incomplete.")
+            raise RuntimeError("CyberBattleSim manifest capability evidence is incomplete.")
         report_path = write_backend_conformance_report(
             payload,
             output_dir=output_dir,
-            run_id=f"nasim-{suite}-seed-{seed}",
+            run_id=f"cyberbattlesim-{suite}-seed-{seed}",
         )
         reports.append(
             {
@@ -500,7 +557,7 @@ def nasim_conformance_suite(*, suite: str, output_dir: Path) -> dict[str, object
         "seeds": list(seeds),
         "reports": reports,
         "diagnostics": [diagnostic_payload(item) for item in diagnostics],
-        "declared_weaknesses": list(nasim_declared_weaknesses()),
+        "declared_weaknesses": list(cyberbattlesim_declared_weaknesses()),
         "explicit_non_claims": [
             "Finite conformance does not establish deterministic replay.",
             "Finite conformance does not establish scientific equivalence.",
@@ -521,7 +578,7 @@ __all__ = [
     "archival_collection",
     "archival_run",
     "execute_episode",
-    "nasim_conformance_suite",
-    "nasim_inspection_payload",
+    "cyberbattlesim_conformance_suite",
+    "cyberbattlesim_inspection_payload",
     "red_implementation_provenance",
 ]

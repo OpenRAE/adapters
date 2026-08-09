@@ -228,11 +228,21 @@ def validate_repository(repo_root: Path) -> list[str]:
         "pypa/gh-action-pypi-publish@",
         "environment: pypi",
         "id-token: write",
+        "raes-pack-release build",
+        "env-pack-assets/cyberbattlesim-chain-1.0.0.tar.gz",
+        "env-pack-assets/cyberbattlesim-chain-1.0.0-views.tar.gz",
+        "(cd env-pack-assets && sha256sum",
+        "ENV_PACK_SHA256SUMS",
     ):
         _require(release_wf, expected, ".github/workflows/release-please.yml", errors)
     # No stored PyPI credential, and no silent `skip-existing` recovery that could
     # mask a partial or duplicate publication.
-    for forbidden in ("PYPI_API_TOKEN", "TWINE_PASSWORD", "skip-existing: true"):
+    for forbidden in (
+        "PYPI_API_TOKEN",
+        "TWINE_PASSWORD",
+        "skip-existing: true",
+        "sha256sum env-pack-assets/* | tee ENV_PACK_SHA256SUMS",
+    ):
         if forbidden in release_wf:
             errors.append(
                 ".github/workflows/release-please.yml: forbidden release setting "

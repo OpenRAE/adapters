@@ -7,6 +7,7 @@ from raes_backend_protocols.backend_manifest import (  # type: ignore[import-unt
 )
 from raes_backend_protocols.capabilities import (  # type: ignore[import-untyped]
     BackendCapabilitySet,
+    ParticipantExecutionBinding,
     ParticipantFeatureSupport,
     ParticipantRuntimeCapabilities,
     ProvisionerCapabilities,
@@ -59,12 +60,48 @@ def _provisioner_capabilities() -> ProvisionerCapabilities:
 def _participant_capabilities() -> ParticipantRuntimeCapabilities:
     """Declare bounded red-participant runtime support."""
 
+    action_contracts = frozenset(
+        {
+            "participant.action-contract.connect",
+            "participant.action-contract.local-vulnerability",
+            "participant.action-contract.remote-vulnerability",
+        }
+    )
+    target_addresses = frozenset(
+        {
+            "provision.node.customer-data",
+            "provision.node.linux-relay",
+            "provision.node.windows-relay",
+        }
+    )
+    implementation_ref = "participant/cyberbattlesim-red-credential-cache.manifest.json"
+    target_by_action = {
+        "participant.action-contract.connect": "provision.node.customer-data",
+        "participant.action-contract.local-vulnerability": "provision.node.linux-relay",
+        "participant.action-contract.remote-vulnerability": "provision.node.windows-relay",
+    }
+    execution_bindings = tuple(
+        ParticipantExecutionBinding(
+            binding_id=f"cyberbattlesim-{action.rsplit('.', 1)[-1]}",
+            action_contract_address=action,
+            target_addresses=(target_by_action[action],),
+            participant_implementation_ref=implementation_ref,
+            constraint_refs=("constraint:serialized-native-transition",),
+            evidence_refs=("source-ledger:credential-cache-exploiter",),
+            max_action_attempts=1,
+            max_in_flight=1,
+            timeout_seconds=30,
+            max_retries=0,
+        )
+        for action in sorted(action_contracts)
+    )
     return ParticipantRuntimeCapabilities(
         name="cyberbattlesim-participant-runtime",
         supported_participant_roles=frozenset({"red"}),
         supported_behavior_features=frozenset(
             {
                 "action_contracts",
+                "autonomous_execution",
                 "attribution_support",
                 "behavior_history",
                 "effects",
@@ -85,8 +122,28 @@ def _participant_capabilities() -> ParticipantRuntimeCapabilities:
                 disclosure_refs=("docs/decisions/cyberbattlesim-backend-guardrails.md",),
             ),
         ),
-        supports_autonomous_execution=False,
-        supports_bounded_concurrency=False,
+        supports_autonomous_execution=True,
+        supported_autonomous_selection_strategies=frozenset({"ordered_cycle"}),
+        supported_autonomous_action_contracts=action_contracts,
+        supported_autonomous_observation_boundaries=frozenset(
+            {"participant.observation-boundary.attacker-view"}
+        ),
+        supported_autonomous_target_addresses=target_addresses,
+        supported_autonomous_policy_profiles=frozenset({"participant-autonomous-execution/v1"}),
+        max_autonomous_participants=1,
+        max_autonomous_action_attempts=1,
+        max_autonomous_in_flight=1,
+        max_autonomous_occurrences=10_000,
+        max_autonomous_retries_per_occurrence=1,
+        max_autonomous_burst_size=1,
+        execution_bindings=execution_bindings,
+        supports_execution_control=True,
+        supported_execution_control_actions=frozenset(
+            {"start", "pause", "resume", "drain", "reset", "teardown"}
+        ),
+        supports_bounded_concurrency=True,
+        max_execution_services=1,
+        max_concurrent_actions=2,
         constraints={
             "max_in_flight_native_transitions": "1",
             "native_action_coordinates": "driver-private",
@@ -96,6 +153,9 @@ def _participant_capabilities() -> ParticipantRuntimeCapabilities:
             ),
             "participant_action_scope": (
                 "connect, local-vulnerability, and remote-vulnerability attacker contracts"
+            ),
+            "autonomous_policy": (
+                "qualified CredentialCacheExploiter through RAES action admission"
             ),
             "source_internal_defender": (
                 "scan-and-reimage executes inside the selected source step "

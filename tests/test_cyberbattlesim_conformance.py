@@ -14,6 +14,7 @@ from raes_contracts.contracts import (
     CleanupObligationModel,
     CleanupResourceBoundaryModel,
     ParticipantActionResultModel,
+    ParticipantConfigurationResultModel,
     ParticipantExposurePolicyModel,
     ParticipantImplementationCapabilitiesModel,
     ParticipantImplementationCompatibilityModel,
@@ -68,6 +69,36 @@ OBSERVATION_BOUNDARY = "participant.observation-boundary.attacker-view"
 LOCAL_ACTION = "participant.action-contract.local-vulnerability"
 SENTINEL = "native-secret-sentinel"
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _selected_participant() -> tuple[
+    ParticipantImplementationManifestModel,
+    ParticipantImplementationSelectionModel,
+    ParticipantConfigurationResultModel,
+]:
+    root = REPO_ROOT / "environments" / "cyberbattlesim-chain" / "participant"
+    return (
+        ParticipantImplementationManifestModel.model_validate_json(
+            (root / "cyberbattlesim-red-credential-cache.manifest.json").read_text()
+        ),
+        ParticipantImplementationSelectionModel.model_validate_json(
+            (root / "cyberbattlesim-red-credential-cache.selection.json").read_text()
+        ),
+        ParticipantConfigurationResultModel.model_validate_json(
+            (root / "cyberbattlesim-red-credential-cache.configuration.json").read_text()
+        ),
+    )
+
+
+def _run_selected_conformance() -> BackendConformanceReport:
+    manifest, selection, configuration = _selected_participant()
+    return run_cyberbattlesim_conformance(
+        driver=ProbeDriver(),
+        seed=20260729,
+        participant_manifest=manifest,
+        participant_selection=selection,
+        participant_configuration=configuration,
+    )
 
 
 @dataclass
@@ -280,7 +311,7 @@ def _normalized_text(text: str) -> str:
 
 
 def test_canonical_conformance_report_and_payload_are_published_shapes() -> None:
-    report = run_cyberbattlesim_conformance(driver=ProbeDriver(), seed=20260729)
+    report = _run_selected_conformance()
 
     assert isinstance(report, BackendConformanceReport)
     assert report.passed
@@ -305,7 +336,7 @@ def test_source_protocol_diagnostics_and_declared_weaknesses_are_raes_models() -
 
 def test_manifest_capability_evidence_is_derived_and_fails_closed() -> None:
     manifest = create_cyberbattlesim_manifest()
-    report = run_cyberbattlesim_conformance(driver=ProbeDriver(), seed=20260729)
+    report = _run_selected_conformance()
     diagnostics = cyberbattlesim_source_protocol_diagnostics()
     inventory = cyberbattlesim_manifest_capability_evidence(
         manifest,

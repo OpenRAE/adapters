@@ -1,0 +1,364 @@
+name: cyberbattlesim-chain
+version: "1.0.0"
+description: >-
+  Portable RAES model of the selected CyberBattleSim CyberBattleChain-v0 case
+  (Microsoft CyberBattleSim @ 854d696). It encodes the chain PATTERN and host
+  roles - an attacker entry host, alternating Linux/Windows relay hosts that
+  leak credentials toward a terminal high-value host, and a scan-and-reimage
+  defender - as a bounded representative topology. The selected source size is
+  ${chain_size}, recorded here as the generation parameter and in the companion
+  run plan; RAES SDL declares that parameter but has no construct to structurally
+  materialize the generated node graph, so this scenario is not a node-for-node
+  expansion of the size-10 case (disclosed as loss-abstracted-topology in the
+  source ledger). Objective and topology truth only; reward, evaluator,
+  termination, and stochastic controls live in companion published experiment
+  contracts, and native simulator state stays source-private.
+
+variables:
+  chain_size:
+    type: integer
+    default: 10
+    description: >-
+      Selected CyberBattleChain generation parameter (new_environment size).
+      Recorded as the selected value; RAES SDL does not structurally expand it
+      into materialized nodes (see the loss-abstracted-topology disclosure).
+
+vulnerabilities:
+  leaked-credentials:
+    name: "Credential leak enabling lateral movement"
+    description: >-
+      A chain host exposes credentials for the next host, modeling the
+      CyberBattleChain credential-cache leak that the attacker exploits.
+    class: "CWE-522"
+    technical: true
+  improper-access-control:
+    name: "Improper access control on relay service"
+    description: >-
+      A relay host accepts a leaked credential without adequate authorization,
+      allowing the attacker to own the next node in the chain.
+    class: "CWE-284"
+    technical: true
+
+infrastructure:
+  enterprise-lan:
+    count: 1
+
+nodes:
+  entry-client:
+    type: vm
+    description: "Attacker's initial foothold at the head of the chain."
+    os: linux
+    os_version: "22.04"
+    resources:
+      ram: "2 GB"
+      cpu: 2
+    services:
+      - port: 22
+        protocol: tcp
+        name: ssh
+        description: "Administrative shell service."
+    asset_value:
+      confidentiality: low
+      integrity: low
+      availability: medium
+  linux-relay:
+    type: vm
+    description: "Linux relay host midway along the chain."
+    os: linux
+    os_version: "22.04"
+    resources:
+      ram: "2 GB"
+      cpu: 2
+    services:
+      - port: 22
+        protocol: tcp
+        name: ssh
+        description: "Administrative shell service."
+    vulnerabilities:
+      - leaked-credentials
+    asset_value:
+      confidentiality: medium
+      integrity: medium
+      availability: medium
+  windows-relay:
+    type: vm
+    description: "Windows relay host along the chain."
+    os: windows
+    os_version: "2022"
+    resources:
+      ram: "4 GB"
+      cpu: 2
+    services:
+      - port: 3389
+        protocol: tcp
+        name: rdp
+        description: "Remote desktop service."
+    vulnerabilities:
+      - improper-access-control
+    asset_value:
+      confidentiality: medium
+      integrity: medium
+      availability: medium
+  customer-data:
+    type: vm
+    description: "Terminal high-value host holding the objective data."
+    os: linux
+    os_version: "22.04"
+    resources:
+      ram: "4 GB"
+      cpu: 4
+    services:
+      - port: 443
+        protocol: tcp
+        name: https
+        description: "Customer data web service."
+    vulnerabilities:
+      - leaked-credentials
+    asset_value:
+      confidentiality: critical
+      integrity: high
+      availability: high
+  enterprise-lan:
+    type: switch
+    description: "Flat enterprise subnet carrying the CyberBattleChain hosts."
+
+relationships:
+  entry-to-linux:
+    type: connects_to
+    source: entry-client
+    target: linux-relay
+    description: "Chain reachability from the entry client to the first relay."
+  linux-to-windows:
+    type: connects_to
+    source: linux-relay
+    target: windows-relay
+    description: "Chain reachability from the Linux relay to the Windows relay."
+  windows-to-customer:
+    type: connects_to
+    source: windows-relay
+    target: customer-data
+    description: "Chain reachability from the Windows relay to the terminal host."
+
+entities:
+  red-team:
+    description: "Autonomous credential-cache attacker (CredentialCacheExploiter)."
+    role: red
+  blue-team:
+    description: "Scan-and-reimage defender maintaining an availability SLA."
+    role: blue
+
+accounts:
+  relay-service:
+    username: "svc_relay"
+    node: linux-relay
+    password_strength: weak
+    groups:
+      - "operators"
+  windows-service:
+    username: "svc_win"
+    node: windows-relay
+    password_strength: weak
+    groups:
+      - "operators"
+
+action_contracts:
+  local-vulnerability:
+    semantic_version: "1.0.0"
+    behavioral_granularity: atomic
+    procedure_basis: "CyberBattleSim local_vulnerability action semantics."
+    realization_profile: "portable-scenario/v1"
+    fidelity_claim: "abstract portable projection of the source action."
+    preconditions:
+      - precondition_id: pre-owns-host
+        precondition_class: authority
+        description: "Attacker already owns the acting host."
+    effects:
+      - effect_id: eff-leak-local
+        effect_class: intended_effect
+        description: "Local exploitation reveals credentials cached on the host."
+        target_refs:
+          - linux-relay
+    failure_classes:
+      - target_unavailable
+      - authority_denied
+  remote-vulnerability:
+    semantic_version: "1.0.0"
+    behavioral_granularity: atomic
+    procedure_basis: "CyberBattleSim remote_vulnerability action semantics."
+    realization_profile: "portable-scenario/v1"
+    fidelity_claim: "abstract portable projection of the source action."
+    preconditions:
+      - precondition_id: pre-reachable
+        precondition_class: target
+        description: "Target host is reachable from an owned host."
+    effects:
+      - effect_id: eff-leak-remote
+        effect_class: intended_effect
+        description: "Remote exploitation reveals credentials for an adjacent host."
+        target_refs:
+          - windows-relay
+    failure_classes:
+      - target_unavailable
+      - authority_denied
+  connect:
+    semantic_version: "1.0.0"
+    behavioral_granularity: atomic
+    procedure_basis: "CyberBattleSim connect-and-infect action semantics."
+    realization_profile: "portable-scenario/v1"
+    fidelity_claim: "abstract portable projection of the source action."
+    preconditions:
+      - precondition_id: pre-has-credential
+        precondition_class: knowledge
+        description: "Attacker holds a valid credential for the target service."
+    effects:
+      - effect_id: eff-own-next
+        effect_class: intended_effect
+        description: "Connecting with a leaked credential takes ownership of the target."
+        target_refs:
+          - customer-data
+    failure_classes:
+      - authority_denied
+      - target_unavailable
+  scan-and-reimage:
+    semantic_version: "1.0.0"
+    behavioral_granularity: procedure
+    procedure_basis: "CyberBattleSim ScanAndReimageCompromisedMachines defender."
+    realization_profile: "portable-scenario/v1"
+    fidelity_claim: "abstract portable projection of the defender behavior."
+    preconditions:
+      - precondition_id: pre-detected
+        precondition_class: interaction
+        description: "Defender scan detects a compromised host."
+    effects:
+      - effect_id: eff-reimage
+        effect_class: intended_effect
+        description: "Compromised host is reimaged, evicting the attacker."
+        target_refs:
+          - linux-relay
+    failure_classes:
+      - target_unavailable
+      - unsupported_action
+
+observation_boundaries:
+  attacker-view:
+    projection_basis: "Attacker's partially observed network view."
+    redaction_policy: "Native observation dict, action mask, and caches stay source-private."
+    latency_profile: "per-step"
+    observable_refs:
+      - entry-client
+  defender-view:
+    projection_basis: "Defender scan visibility over the subnet."
+    redaction_policy: "Native detection state stays source-private."
+    latency_profile: "per-scan"
+    observable_refs:
+      - enterprise-lan
+
+propositions:
+  network-owned:
+    description: "The attacker owns the terminal customer-data host."
+    subjects:
+      - customer-data
+    basis: declared_state
+    predicate:
+      kind: presence
+      property: ownership.attacker
+      semantic_ref: "urn:raes:cyberbattlesim:ownership"
+      operator: exists
+  sla-maintained:
+    description: "The defender preserves network availability above the SLA floor."
+    subjects:
+      - enterprise-lan
+    basis: declared_state
+    predicate:
+      kind: boolean
+      property: availability.sla_maintained
+      semantic_ref: "urn:raes:cyberbattlesim:sla"
+      operator: equals
+      expected: true
+
+assertions:
+  ownership-postcondition:
+    description: "Attacker ownership of the terminal host is achieved."
+    proposition: network-owned
+    role: postcondition
+    polarity: positive
+  sla-invariant:
+    description: "Availability SLA holds throughout the episode."
+    proposition: sla-maintained
+    role: invariant
+    polarity: positive
+
+objectives:
+  own-network:
+    description: "Red team owns the terminal host at the end of the chain."
+    agent: attacker
+    actions:
+      - local-vulnerability
+      - remote-vulnerability
+      - connect
+    targets:
+      - customer-data
+    success:
+      mode: all_of
+      assertions:
+        - ownership-postcondition
+  maintain-availability:
+    description: "Blue team keeps the network available above the SLA floor."
+    entity: blue-team
+    targets:
+      - enterprise-lan
+    success:
+      mode: all_of
+      assertions:
+        - sla-invariant
+
+agents:
+  attacker:
+    entity: red-team
+    description: "CredentialCacheExploiter baseline attacker."
+    actions:
+      - local-vulnerability
+      - remote-vulnerability
+      - connect
+    starting_accounts:
+      - relay-service
+    initial_knowledge:
+      hosts:
+        - entry-client
+    observation_boundaries:
+      - attacker-view
+    allowed_subnets:
+      - enterprise-lan
+  defender:
+    entity: blue-team
+    description: "ScanAndReimageCompromisedMachines basic defender."
+    actions:
+      - scan-and-reimage
+    observation_boundaries:
+      - defender-view
+    allowed_subnets:
+      - enterprise-lan
+
+evidence_requirements:
+  attacker-action-log:
+    description: "Portable record of attacker action outcomes for adjudication."
+    source_class: participant_action
+    scope: "attacker actions across the chain"
+    window: "full episode"
+    channel: log
+    sensitivity: redacted
+    redaction: redact_secrets
+    integrity: checksum
+    retention: run_lifetime
+    loss_disclosure: best_effort
+  availability-series:
+    description: "Portable record of per-step network availability."
+    source_class: scenario_state
+    scope: "network availability over the episode"
+    window: "per-step"
+    channel: metric
+    sensitivity: plain
+    redaction: none
+    integrity: checksum
+    retention: run_lifetime
+    loss_disclosure: best_effort

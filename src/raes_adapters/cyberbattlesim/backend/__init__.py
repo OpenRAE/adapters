@@ -12,6 +12,7 @@ from .conformance import (
     run_cyberbattlesim_conformance,
 )
 from .driver import (
+    AutonomousActionProposal,
     CyberBattleSimDriver,
     CyberBattleSimDriverProtocol,
     DriverCleanupReport,
@@ -37,6 +38,7 @@ from .target import (
 
 __all__ = [
     "ACTION_EVIDENCE_REF",
+    "AutonomousActionProposal",
     "CYBERBATTLESIM_BACKEND_NAME",
     "CyberBattleSimDriver",
     "CyberBattleSimDriverProtocol",

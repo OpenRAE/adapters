@@ -10,9 +10,9 @@ identities, metric ids, propositions, subjects, and variant selection).
 
 This module is the single shared implementation of that structural boilerplate,
 parameterized by the backend-local values the caller supplies. It holds no
-backend semantics: CAGE-2's blue/red-variant selection and NASim's single
-red-attacker selection stay in their own modules and reach these builders only
-as explicit arguments.
+backend semantics: CAGE-2's blue/red-variant selection and each gym backend's
+single red-attacker selection stay in their own modules and reach these builders
+only as explicit arguments.
 """
 
 from __future__ import annotations
@@ -28,6 +28,10 @@ from raes_contracts.contracts import (  # type: ignore[import-untyped]
     ExperimentRunModel,
     ExperimentStudyModel,
     ExperimentTaskModel,
+    ParticipantConfigurationResultModel,
+    ParticipantImplementationManifestModel,
+    ParticipantImplementationProvenanceModel,
+    ParticipantImplementationSelectionModel,
 )
 from raes_contracts.contracts.time_model import (  # type: ignore[import-untyped]
     ClockDeclarationModel,
@@ -35,6 +39,17 @@ from raes_contracts.contracts.time_model import (  # type: ignore[import-untyped
     TimeDomainDeclarationModel,
     TimeModelDeclarationModel,
     TimeProgressionPolicyDeclarationModel,
+)
+from raes_contracts.diagnostics import (  # type: ignore[import-untyped]
+    DiagnosticModel,
+    diagnostic_model,
+)
+from raes_contracts.participant_configuration import (  # type: ignore[import-untyped]
+    realize_participant_configuration,
+    validate_participant_configuration_selection,
+)
+from raes_contracts.participant_episode import (  # type: ignore[import-untyped]
+    ParticipantEpisodeInitializeRequest,
 )
 from raes_contracts.planning import (  # type: ignore[import-untyped]
     ChangeAction,
@@ -45,6 +60,98 @@ from raes_contracts.planning import (  # type: ignore[import-untyped]
     PlannedResource,
     RuntimeDomain,
 )
+from raes_contracts.runtime_state import RuntimeSnapshot  # type: ignore[import-untyped]
+from raes_contracts.satisfiability import canonical_contract_digest  # type: ignore[import-untyped]
+from raes_runtime.manager import RuntimeManager  # type: ignore[import-untyped]
+from raes_runtime.registry import RuntimeTarget  # type: ignore[import-untyped]
+
+
+@dataclass(frozen=True)
+class RedParticipantRunControls(object):
+    """Backend-neutral values for one bounded single-red-participant run."""
+
+    run_id: str
+    seed: int
+    max_steps: int
+    red_manifest: ParticipantImplementationManifestModel
+    red_selection: ParticipantImplementationSelectionModel
+    red_configuration: ParticipantConfigurationResultModel
+
+    def validate_common(self, participant_address: str) -> None:
+        """Validate shared scalar and published participant-contract bindings."""
+
+        self._validate_scalars()
+        self._validate_bindings(participant_address)
+        self._validate_capabilities()
+
+    def _validate_scalars(self) -> None:
+        if not 1 <= len(self.run_id) <= 64 or not self.run_id.replace("-", "").isalnum():
+            raise ValueError("run id is not a safe label")
+        if type(self.seed) is not int or not 0 <= self.seed <= 0xFFFFFFFF:
+            raise ValueError("seed is outside the supported range")
+        if type(self.max_steps) is not int or self.max_steps < 1:
+            raise ValueError("trial length must be positive")
+
+    def _validate_bindings(self, participant_address: str) -> None:
+        if self.red_selection.participant_address != participant_address:
+            raise ValueError("red implementation selection has the wrong participant address")
+        if self.red_manifest.implementation_kind != "policy":
+            raise ValueError("red implementation is not an executable policy")
+        if self.red_selection.implementation_identity != self.red_manifest.identity:
+            raise ValueError("red implementation selection is not bound to its manifest")
+        if (
+            self.red_configuration.configuration.implementation_identity
+            != self.red_manifest.identity
+        ):
+            raise ValueError("red configuration is not bound to its manifest")
+        if self.red_selection.manifest_digest != canonical_contract_digest(self.red_manifest):
+            raise ValueError("red implementation manifest digest is invalid")
+        validate_participant_configuration_selection(self.red_selection, self.red_configuration)
+        realized = realize_participant_configuration(
+            participant_address=participant_address,
+            manifest=self.red_manifest,
+            manifest_ref=self.red_selection.manifest_ref,
+            manifest_digest=self.red_selection.manifest_digest,
+            overrides=[],
+        )
+        if realized != self.red_configuration:
+            raise ValueError("red configuration is not realized from its admitted manifest")
+
+    def _validate_capabilities(self) -> None:
+        if self.red_selection.selected_decision_surface_mode not in (
+            self.red_manifest.capabilities.supported_decision_surface_modes
+        ):
+            raise ValueError("red decision-surface selection is unsupported")
+        if not set(self.red_selection.participant_contract_versions) <= set(
+            self.red_manifest.capabilities.supported_participant_contracts
+        ):
+            raise ValueError("red participant contract selection is unsupported")
+
+
+@dataclass(frozen=True)
+class EpisodeEvidence(object):
+    """Backend-neutral carrier for already validated RAES episode evidence."""
+
+    completed_steps: int
+    evidence_records: tuple[ExperimentEvidenceRecordModel, ...]
+    derived_measures: tuple[ExperimentDerivedMeasureModel, ...]
+    diagnostics: tuple[DiagnosticModel, ...]
+    cleanup_verified: bool
+
+
+def single_participant_provenance(
+    run_id: str,
+    selection: ParticipantImplementationSelectionModel,
+    backend_manifest_ref: str,
+) -> ParticipantImplementationProvenanceModel:
+    """Bind one admitted participant selection to an archival run."""
+
+    return ParticipantImplementationProvenanceModel(
+        run_id=run_id,
+        participant_implementations=[selection],
+        backend_manifest_ref=backend_manifest_ref,
+        metadata={"selection_source": "admitted-experiment-artifact"},
+    )
 
 
 def manifest_ref(
@@ -190,6 +297,85 @@ class ArchivalRunSpec(object):
     clock_authority: str
     result_summary_key: str
     metric_id: str
+
+
+def build_single_participant_archival_run(
+    episode: EpisodeEvidence,
+    evidence_artifact: ExperimentArtifactRefModel,
+    scenario_digest: str,
+    task: ExperimentTaskModel,
+    *,
+    apparatus_context: Callable[[object, ExperimentArtifactRefModel], dict[str, object]],
+    provenance: Callable[[str], dict[str, object]],
+    spec: ArchivalRunSpec,
+) -> ExperimentRunModel:
+    """Seal the common evidence and parameter surface of a single-participant run."""
+
+    return build_archival_run(
+        ArchivalRunInputs(
+            evidence_records=episode.evidence_records,
+            derived_measures=episode.derived_measures,
+            evidence_artifact=evidence_artifact,
+            scenario_digest=scenario_digest,
+            task=task,
+        ),
+        apparatus_context=apparatus_context,
+        provenance=provenance,
+        spec=spec,
+    )
+
+
+def start_single_participant_runtime(
+    target: RuntimeTarget,
+    scenario: object,
+    orchestration_plan: OrchestrationPlan,
+) -> tuple[RuntimeSnapshot, list[DiagnosticModel]]:
+    """Provision and start a backend-supplied single-participant plan."""
+
+    manager = RuntimeManager(target)
+    execution_plan = manager.plan(scenario)
+    diagnostics = [diagnostic_model(item) for item in execution_plan.diagnostics]
+    if (
+        any(item.is_error for item in execution_plan.diagnostics)
+        or target.provisioner is None
+        or target.orchestrator is None
+    ):
+        raise RuntimeError("researcher runtime admission failed")
+    provisioned = target.provisioner.apply(
+        execution_plan.provisioning, execution_plan.base_snapshot
+    )
+    diagnostics.extend(diagnostic_model(item) for item in provisioned.diagnostics)
+    if not provisioned.success:
+        raise RuntimeError("researcher provisioning admission failed")
+    started = target.orchestrator.start(orchestration_plan, provisioned.snapshot)
+    diagnostics.extend(diagnostic_model(item) for item in started.diagnostics)
+    if not started.success or target.participant_runtime is None or target.evaluator is None:
+        raise RuntimeError("researcher orchestration admission failed")
+    return started.snapshot, diagnostics
+
+
+def initialize_single_participant(
+    target: RuntimeTarget,
+    snapshot: RuntimeSnapshot,
+    participant_address: str,
+    episode_id: str,
+    diagnostics: list[DiagnosticModel],
+) -> RuntimeSnapshot:
+    """Initialize one backend-supplied participant through the published runtime."""
+
+    if target.participant_runtime is None:
+        raise RuntimeError("researcher participant runtime is unavailable")
+    initialized = target.participant_runtime.initialize(
+        ParticipantEpisodeInitializeRequest(
+            participant_address=participant_address,
+            episode_id=episode_id,
+        ),
+        snapshot,
+    )
+    diagnostics.extend(diagnostic_model(item) for item in initialized.diagnostics)
+    if not initialized.success:
+        raise RuntimeError("researcher participant admission failed")
+    return initialized.snapshot
 
 
 def build_archival_run(

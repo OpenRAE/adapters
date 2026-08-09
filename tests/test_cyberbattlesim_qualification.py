@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import tomllib
 from pathlib import Path
+
+import pytest
+import yaml
 
 import raes_adapters.cyberbattlesim as cyberbattlesim
 
@@ -28,6 +32,61 @@ def test_public_resources_select_one_immutable_source_and_protocol() -> None:
     assert "`CyberBattleChain-v0`" in protocol
     assert "`CredentialCacheExploiter`" in protocol
     assert hashlib.sha256(protocol.encode("utf-8")).hexdigest() == record["protocol"]["sha256"]
+
+
+def test_researcher_pack_is_external_and_validator_is_installed() -> None:
+    """The release pack is repository content, never a Python package resource."""
+
+    project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    extra = project["project"]["optional-dependencies"]["cyberbattlesim"]
+    pack = REPO_ROOT / "environments" / "cyberbattlesim-chain"
+
+    assert extra == ["raes-env-packs==3.6.2"]
+    assert (pack / "pack.yaml").is_file()
+    assert (pack / "pack.compatibility.yaml").is_file()
+    assert (pack / "docs" / "golden-readiness-checklist.md").is_file()
+    assert "environments" not in project["tool"]["hatch"]["build"]["targets"]["sdist"]["include"]
+
+
+def test_external_pack_mirrors_the_installed_selected_contracts() -> None:
+    """The release asset cannot drift from the adapter's qualified selection."""
+
+    pack = REPO_ROOT / "environments" / "cyberbattlesim-chain"
+    package = REPO_ROOT / "src" / "raes_adapters" / "cyberbattlesim"
+    assert (pack / "sdl" / "cyberbattlesim-chain.sdl.yaml").read_bytes() == (
+        package / "scenario" / "cyberbattle-chain.sdl.yaml"
+    ).read_bytes()
+    for stem in ("spec", "task"):
+        external = json.loads(
+            (pack / "experiment" / f"cyberbattlesim-chain.{stem}.exp.json").read_text()
+        )
+        installed = yaml.safe_load(
+            (package / "experiment" / f"cyberbattle-chain.{stem}.exp.yaml").read_text()
+        )
+        if stem == "spec":
+            participant_artifacts = external.pop("artifact_refs")
+            assert {item["role"] for item in participant_artifacts} == {
+                "manifest",
+                "configuration",
+            }
+            external["intended_scenario_ref"]["ref_path"] = "scenario/cyberbattle-chain.sdl.yaml"
+        else:
+            external["scenario_ref"]["ref_path"] = "scenario/cyberbattle-chain.sdl.yaml"
+        assert external == installed
+
+
+def test_external_pack_content_manifest_is_exact_and_immutable() -> None:
+    derive_pack_content_manifest = pytest.importorskip(
+        "raes_env_packs"
+    ).derive_pack_content_manifest
+
+    pack = REPO_ROOT / "environments" / "cyberbattlesim-chain"
+    recorded = json.loads((pack / "pack.content-manifest.json").read_text())
+    derived = derive_pack_content_manifest(pack).model_dump(mode="json")
+    assert recorded == derived
+    assert recorded["set_digest"] == (
+        "sha256:08ae7e997b50bb396c290c4a5537a65e9e7d8b8e6abc97d1ff65022c4258e417"
+    )
 
 
 def test_clean_install_and_source_native_smoke_are_bounded_and_complete() -> None:
@@ -68,7 +127,7 @@ def test_runtime_artifact_attestation_covers_complete_import_roots() -> None:
         "include": "all regular files; symlinks and unlisted files are rejected",
         "file_count": 48,
         "canonicalization": ("Sorted POSIX path, NUL, lowercase SHA-256 of raw file bytes, LF."),
-        "sha256": "aa97624b86b2f5c9ad80ea52a345d5fd6f8fa89cad31070c5e4748c55510ba02",
+        "sha256": "1b8bf39a7cb9c172b51b5223dfac13b9d01e166b34dc2bb29297cddb254a06fe",
     }
     source_files = {entry["path"]: entry["sha256"] for entry in record["source_files"]}
     assert source_files["cyberbattle/__init__.py"] == (
@@ -80,7 +139,7 @@ def test_runtime_artifact_attestation_covers_complete_import_roots() -> None:
         {
             "path": "cyberbattle",
             "file_count": 48,
-            "sha256": ("aa97624b86b2f5c9ad80ea52a345d5fd6f8fa89cad31070c5e4748c55510ba02"),
+            "sha256": ("1b8bf39a7cb9c172b51b5223dfac13b9d01e166b34dc2bb29297cddb254a06fe"),
         }
     ]
     assert artifacts["gymnasium"]["artifact"]["sha256"] == (
@@ -172,5 +231,5 @@ def test_qualification_admits_selected_backend_and_bounds_claim_strength() -> No
         "run_evidence": "attestable",
         "outcome_reproduction": "stochastic-bounded",
     }
-    assert extras["cyberbattlesim"] == []
+    assert extras["cyberbattlesim"] == ["raes-env-packs==3.6.2"]
     assert extras["cyborg"] == ["raes-env-packs==3.6.2"]

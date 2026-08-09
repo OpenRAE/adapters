@@ -211,5 +211,5 @@ def test_qualification_admits_selected_backend_and_bounds_claim_strength() -> No
     # The primaite extra is dependency-light; base and the other simulator
     # extras remain independent and unchanged.
     assert extras["primaite"] == []
-    assert extras["cyberbattlesim"] == []
+    assert extras["cyberbattlesim"] == ["raes-env-packs==3.6.2"]
     assert extras["cyborg"] == ["raes-env-packs==3.6.2"]

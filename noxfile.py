@@ -41,6 +41,14 @@ MAX_LARGE_FILE_KB = "500"
 COVERAGE_FAIL_UNDER = "80"
 PRIVATE_KEY_EXCLUDE = ("tests/",)
 CYBERBATTLESIM_CONFORMANCE_PROBE = r"""
+import sys
+from pathlib import Path
+
+from raes_contracts.contracts import (
+    ParticipantConfigurationResultModel,
+    ParticipantImplementationManifestModel,
+    ParticipantImplementationSelectionModel,
+)
 from raes_adapters.cyberbattlesim.backend import (
     DriverCleanupReport,
     DriverEvaluation,
@@ -107,7 +115,23 @@ class Driver:
 
 
 assert validate_all() == []
-report = run_cyberbattlesim_conformance(driver=Driver(), seed=20260729)
+participant_root = Path(sys.argv[1]) / "participant"
+participant_manifest = ParticipantImplementationManifestModel.model_validate_json(
+    (participant_root / "cyberbattlesim-red-credential-cache.manifest.json").read_text()
+)
+participant_selection = ParticipantImplementationSelectionModel.model_validate_json(
+    (participant_root / "cyberbattlesim-red-credential-cache.selection.json").read_text()
+)
+participant_configuration = ParticipantConfigurationResultModel.model_validate_json(
+    (participant_root / "cyberbattlesim-red-credential-cache.configuration.json").read_text()
+)
+report = run_cyberbattlesim_conformance(
+    driver=Driver(),
+    seed=20260729,
+    participant_manifest=participant_manifest,
+    participant_selection=participant_selection,
+    participant_configuration=participant_configuration,
+)
 payload = cyberbattlesim_backend_conformance_payload(report)
 assert payload["passed"] is True
 assert payload["native_conformance"] is False
@@ -541,6 +565,66 @@ def _distributions(session: nox.Session) -> None:
             "-I",
             "-c",
             CYBERBATTLESIM_CONFORMANCE_PROBE,
+            str(REPO_ROOT / "environments" / "cyberbattlesim-chain"),
+            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+        )
+        _run(
+            session,
+            str(conformance_venv / "bin" / "raes-adapters"),
+            "inspect",
+            "--backend",
+            "cyberbattlesim-chain",
+            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+        )
+        _run(
+            session,
+            str(conformance_venv / "bin" / "raes-adapters"),
+            "validate",
+            "--mode",
+            "smoke",
+            "--backend",
+            "cyberbattlesim-chain",
+            "--pack",
+            str(REPO_ROOT / "environments" / "cyberbattlesim-chain"),
+            "--pack-digest",
+            "sha256:08ae7e997b50bb396c290c4a5537a65e9e7d8b8e6abc97d1ff65022c4258e417",
+            "--scenario",
+            "sdl/cyberbattlesim-chain.sdl.yaml",
+            "--scenario-digest",
+            "sha256:9d696ea7fa23a1e7cf4c1cbc145a7989370dc4e9afff2cd5a17d6d1af887b528",
+            "--experiment",
+            "experiment/cyberbattlesim-chain.spec.exp.json",
+            "--task",
+            "experiment/cyberbattlesim-chain.task.exp.json",
+            "--participant-implementation",
+            "cyberbattlesim-red-credential-cache",
+            "--participant-manifest",
+            "participant/cyberbattlesim-red-credential-cache.manifest.json",
+            "--participant-selection",
+            "participant/cyberbattlesim-red-credential-cache.selection.json",
+            "--participant-configuration",
+            "participant/cyberbattlesim-red-credential-cache.configuration.json",
+            "--trial-length",
+            "600",
+            "--seed",
+            "20260729",
+            "--run-id",
+            "distribution-validation",
+            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+        )
+        _run(
+            session,
+            str(conformance_venv / "bin" / "raes-pack-validate"),
+            "--pack",
+            str(REPO_ROOT / "environments" / "cyberbattlesim-chain"),
+            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+        )
+        _run(
+            session,
+            str(conformance_venv / "bin" / "raes-pack-release"),
+            "check",
+            "--pack",
+            str(REPO_ROOT / "environments" / "cyberbattlesim-chain"),
             env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
         )
 
