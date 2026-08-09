@@ -937,6 +937,7 @@ def test_autonomous_binding_preserves_selected_security_context() -> None:
         participant_configuration=configuration,
     )
 
+    empty_snapshot = RuntimeSnapshot()
     request = runtime.bind_autonomous_action(
         selection.participant_address,
         "participant.action-contract.connect",
@@ -944,7 +945,7 @@ def test_autonomous_binding_preserves_selected_security_context() -> None:
         selection.manifest_ref,
         "red-action-1",
         (),
-        RuntimeSnapshot(),
+        empty_snapshot,
     )
 
     assert request.participant_address == selection.participant_address
@@ -966,7 +967,7 @@ def test_autonomous_binding_preserves_selected_security_context() -> None:
             selection.manifest_ref,
             "impostor-action",
             (),
-            RuntimeSnapshot(),
+            empty_snapshot,
         )
     with pytest.raises(ValueError, match="binding is unavailable"):
         runtime.bind_autonomous_action(
@@ -976,7 +977,7 @@ def test_autonomous_binding_preserves_selected_security_context() -> None:
             selection.manifest_ref,
             "hidden-boundary-action",
             (),
-            RuntimeSnapshot(),
+            empty_snapshot,
         )
 
 

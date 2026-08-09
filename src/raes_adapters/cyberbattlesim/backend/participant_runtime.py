@@ -107,42 +107,83 @@ class CyberBattleSimParticipantRuntime(GymParticipantRuntime):
         """Pass only an exact portable autonomous authorization to the driver."""
 
         selected = request.validated_selection
-        if selected is None:
+        target = selected.argument_map.get("target_address") if selected is not None else None
+        if selected is None or target is None or self._is_conformance_probe_binding(request):
             return self._driver.step(action_kind)
-        target = selected.argument_map.get("target_address")
-        if target is None:
-            return self._driver.step(action_kind)
-        if self._is_conformance_probe_binding(request):
-            return self._driver.step(action_kind)
-        manifest = self._participant_manifest
-        selection = self._participant_selection
-        configuration = self._participant_configuration
-        expected = _TARGET_BY_ACTION_CONTRACT.get(request.action_contract_address)
-        if (
-            manifest is None
-            or selection is None
-            or configuration is None
-            or request.participant_address != _RED
-            or request.observation_boundary_address != _OBSERVATION_BOUNDARY
-            or request.visible_refs != (_OBSERVATION_BOUNDARY,)
-            or request.disclosed_refs != (_OBSERVATION_BOUNDARY,)
-            or request.implementation_manifest != manifest
-            or request.implementation_selection != selection
-            or selection.participant_address != _RED
-            or tuple(selection.exposure_policy.visibility_scope_refs) != (_RED,)
-            or _OBSERVATION_BOUNDARY not in selection.exposure_policy.disclosed_refs
-            or selection.implementation_identity != manifest.identity
-            or configuration.configuration.implementation_identity != manifest.identity
-            or selected.action_contract_address != request.action_contract_address
-            or not isinstance(target, str)
-            or target != expected
-            or request.target_addresses != (target,)
-        ):
-            raise ValueError("autonomous action authorization is invalid")
+        self._require_autonomous_authorization(request, selected, target)
         return self._driver.step(
             action_kind,
             target_address=target,
             proposal_ref=selected.proposal_ref,
+        )
+
+    def _require_autonomous_authorization(
+        self,
+        request: ParticipantActionAdmissionRequest,
+        selected: ParticipantValidatedActionSelection,
+        target: object,
+    ) -> None:
+        """Reject any autonomous request that differs from configured artifacts."""
+
+        manifest = self._participant_manifest
+        selection = self._participant_selection
+        configuration = self._participant_configuration
+        if manifest is None or selection is None or configuration is None:
+            raise ValueError("autonomous action authorization is invalid")
+        authorization_matches = all(
+            (
+                self._request_scope_matches(request),
+                self._participant_artifacts_match(request, manifest, selection, configuration),
+                self._selected_action_matches(request, selected, target),
+            )
+        )
+        if not authorization_matches:
+            raise ValueError("autonomous action authorization is invalid")
+
+    @staticmethod
+    def _request_scope_matches(request: ParticipantActionAdmissionRequest) -> bool:
+        return all(
+            (
+                request.participant_address == _RED,
+                request.observation_boundary_address == _OBSERVATION_BOUNDARY,
+                request.visible_refs == (_OBSERVATION_BOUNDARY,),
+                request.disclosed_refs == (_OBSERVATION_BOUNDARY,),
+            )
+        )
+
+    @staticmethod
+    def _participant_artifacts_match(
+        request: ParticipantActionAdmissionRequest,
+        manifest: ParticipantImplementationManifestModel,
+        selection: ParticipantImplementationSelectionModel,
+        configuration: ParticipantConfigurationResultModel,
+    ) -> bool:
+        return all(
+            (
+                request.implementation_manifest == manifest,
+                request.implementation_selection == selection,
+                selection.participant_address == _RED,
+                tuple(selection.exposure_policy.visibility_scope_refs) == (_RED,),
+                _OBSERVATION_BOUNDARY in selection.exposure_policy.disclosed_refs,
+                selection.implementation_identity == manifest.identity,
+                configuration.configuration.implementation_identity == manifest.identity,
+            )
+        )
+
+    @staticmethod
+    def _selected_action_matches(
+        request: ParticipantActionAdmissionRequest,
+        selected: ParticipantValidatedActionSelection,
+        target: object,
+    ) -> bool:
+        expected = _TARGET_BY_ACTION_CONTRACT.get(request.action_contract_address)
+        return all(
+            (
+                selected.action_contract_address == request.action_contract_address,
+                isinstance(target, str),
+                target == expected,
+                request.target_addresses == (target,),
+            )
         )
 
     def _is_conformance_probe_binding(
@@ -171,43 +212,23 @@ class CyberBattleSimParticipantRuntime(GymParticipantRuntime):
     ) -> ParticipantActionAdmissionRequest:
         """Bind one source-policy proposal to its exact configured apparatus."""
 
-        manifest = self._participant_manifest
-        selection = self._participant_selection
-        configuration = self._participant_configuration
-        conformance_binding = (
-            self._conformance_mode
-            and participant_address in {"participant.conformance", "participant.conformance-2"}
-            and action_instance_id.startswith("participant-execution-conformance-")
-            and "participant.autonomous-execution.conformance"
-            in snapshot.participant_execution_services
+        conformance_binding = self._is_conformance_bind_request(
+            participant_address,
+            action_instance_id,
+            snapshot,
         )
-        if (
-            manifest is None
-            or selection is None
-            or configuration is None
-            or selection.manifest_ref != participant_implementation_ref
-            or action_contract_address not in _ACTION_KIND_BY_CONTRACT
-            or (not conformance_binding and selection.participant_address != participant_address)
-            or (
-                not conformance_binding
-                and tuple(selection.exposure_policy.visibility_scope_refs) != (participant_address,)
-            )
-            or observation_boundary_address not in selection.exposure_policy.disclosed_refs
-            or selection.implementation_identity != manifest.identity
-            or configuration.configuration.implementation_identity != manifest.identity
-        ):
-            raise ValueError("autonomous participant binding is unavailable")
-        bound_selection = selection
-        if conformance_binding:
-            exposure_policy = selection.exposure_policy.model_copy(
-                update={"visibility_scope_refs": [participant_address]}
-            )
-            bound_selection = selection.model_copy(
-                update={
-                    "participant_address": participant_address,
-                    "exposure_policy": exposure_policy,
-                }
-            )
+        manifest, selection = self._require_available_binding(
+            participant_address,
+            action_contract_address,
+            observation_boundary_address,
+            participant_implementation_ref,
+            conformance_binding,
+        )
+        bound_selection = self._bound_selection(
+            selection,
+            participant_address,
+            conformance_binding,
+        )
         target_address = _TARGET_BY_ACTION_CONTRACT[action_contract_address]
         return ParticipantActionAdmissionRequest(
             participant_address=participant_address,
@@ -228,6 +249,75 @@ class CyberBattleSimParticipantRuntime(GymParticipantRuntime):
             temporal_contexts=temporal_contexts,
             target_addresses=(target_address,),
             requires_terminal_outcome=True,
+        )
+
+    def _is_conformance_bind_request(
+        self,
+        participant_address: str,
+        action_instance_id: str,
+        snapshot: RuntimeSnapshot,
+    ) -> bool:
+        return all(
+            (
+                self._conformance_mode,
+                participant_address in {"participant.conformance", "participant.conformance-2"},
+                action_instance_id.startswith("participant-execution-conformance-"),
+                "participant.autonomous-execution.conformance"
+                in snapshot.participant_execution_services,
+            )
+        )
+
+    def _require_available_binding(
+        self,
+        participant_address: str,
+        action_contract_address: str,
+        observation_boundary_address: str,
+        participant_implementation_ref: str,
+        conformance_binding: bool,
+    ) -> tuple[
+        ParticipantImplementationManifestModel,
+        ParticipantImplementationSelectionModel,
+    ]:
+        manifest = self._participant_manifest
+        selection = self._participant_selection
+        configuration = self._participant_configuration
+        if manifest is None or selection is None or configuration is None:
+            raise ValueError("autonomous participant binding is unavailable")
+        artifacts_match = all(
+            (
+                selection.manifest_ref == participant_implementation_ref,
+                action_contract_address in _ACTION_KIND_BY_CONTRACT,
+                observation_boundary_address in selection.exposure_policy.disclosed_refs,
+                selection.implementation_identity == manifest.identity,
+                configuration.configuration.implementation_identity == manifest.identity,
+            )
+        )
+        scope_matches = conformance_binding or all(
+            (
+                selection.participant_address == participant_address,
+                tuple(selection.exposure_policy.visibility_scope_refs) == (participant_address,),
+            )
+        )
+        if not artifacts_match or not scope_matches:
+            raise ValueError("autonomous participant binding is unavailable")
+        return manifest, selection
+
+    @staticmethod
+    def _bound_selection(
+        selection: ParticipantImplementationSelectionModel,
+        participant_address: str,
+        conformance_binding: bool,
+    ) -> ParticipantImplementationSelectionModel:
+        if not conformance_binding:
+            return selection
+        exposure_policy = selection.exposure_policy.model_copy(
+            update={"visibility_scope_refs": [participant_address]}
+        )
+        return selection.model_copy(
+            update={
+                "participant_address": participant_address,
+                "exposure_policy": exposure_policy,
+            }
         )
 
     def control_execution(

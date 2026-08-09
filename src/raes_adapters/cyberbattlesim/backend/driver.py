@@ -29,9 +29,12 @@ _PORTABLE_TARGET_BY_ACTION_KIND = {
     "local-vulnerability": "provision.node.linux-relay",
     "remote-vulnerability": "provision.node.windows-relay",
 }
+_CREDENTIAL_CACHE_SOURCE_PATH = "cyberbattle/agents/baseline/agent_randomcredlookup.py"
+_CREDENTIAL_CACHE_MODULE = "cyberbattle.agents.baseline.agent_randomcredlookup"
+_AGENT_WRAPPER_MODULE = "cyberbattle.agents.baseline.agent_wrapper"
 _RUNTIME_SOURCE_PATHS = (
     "cyberbattle/__init__.py",
-    "cyberbattle/agents/baseline/agent_randomcredlookup.py",
+    _CREDENTIAL_CACHE_SOURCE_PATH,
     "cyberbattle/agents/baseline/learner.py",
     "cyberbattle/_env/cyberbattle_env.py",
     "cyberbattle/_env/defender.py",
@@ -67,11 +70,11 @@ def _verify_selected_source_identity(
     for module_name, path in (
         ("cyberbattle", "cyberbattle/__init__.py"),
         (
-            "cyberbattle.agents.baseline.agent_randomcredlookup",
-            "cyberbattle/agents/baseline/agent_randomcredlookup.py",
+            _CREDENTIAL_CACHE_MODULE,
+            _CREDENTIAL_CACHE_SOURCE_PATH,
         ),
         (
-            "cyberbattle.agents.baseline.agent_wrapper",
+            _AGENT_WRAPPER_MODULE,
             "cyberbattle/agents/baseline/agent_wrapper.py",
         ),
     ):
@@ -497,18 +500,11 @@ class CyberBattleSimDriver(object):
             if self._last_observation is None:
                 raise RuntimeError("selected simulator must be reset before action execution")
             operation_ref = self._next_operation_ref("step")
-            autonomous = self._pending_native_action is not None
-            if autonomous:
-                if (
-                    action_kind != self._pending_action_kind
-                    or target_address != self._pending_target_address
-                    or proposal_ref != self._pending_proposal_ref
-                ):
-                    self._clear_pending_action()
-                    raise ValueError("autonomous proposal does not match admitted authorization")
-                native_action = self._pending_native_action
-            else:
-                native_action = self._resolve_native_action(action_kind)
+            native_action, autonomous = self._admitted_native_action(
+                action_kind,
+                target_address,
+                proposal_ref,
+            )
             if native_action is None:
                 return DriverStep(
                     operation_ref=operation_ref,
@@ -559,6 +555,29 @@ class CyberBattleSimDriver(object):
                 truncated=self._truncated,
                 terminal_cause=self._terminal_cause,
             )
+
+    def _admitted_native_action(
+        self,
+        action_kind: str,
+        target_address: str | None,
+        proposal_ref: str | None,
+    ) -> tuple[dict[str, object] | None, bool]:
+        """Return the native action only when a pending proposal matches exactly."""
+
+        autonomous = self._pending_native_action is not None
+        if not autonomous:
+            return self._resolve_native_action(action_kind), False
+        matches_pending = all(
+            (
+                action_kind == self._pending_action_kind,
+                target_address == self._pending_target_address,
+                proposal_ref == self._pending_proposal_ref,
+            )
+        )
+        if not matches_pending:
+            self._clear_pending_action()
+            raise ValueError("autonomous proposal does not match admitted authorization")
+        return self._pending_native_action, True
 
     def evaluate(self) -> DriverEvaluation:
         """Return evaluator-only facts without advancing the simulator."""
@@ -614,22 +633,22 @@ class CyberBattleSimDriver(object):
                 raise RuntimeError("selected simulator must be reset before action selection")
             policy_module = cast(
                 _SourcePolicyModule,
-                importlib.import_module("cyberbattle.agents.baseline.agent_randomcredlookup"),
+                importlib.import_module(_CREDENTIAL_CACHE_MODULE),
             )
             wrapper_module = cast(
                 _SourceWrapperModule,
-                importlib.import_module("cyberbattle.agents.baseline.agent_wrapper"),
+                importlib.import_module(_AGENT_WRAPPER_MODULE),
             )
             selected_distribution = self._selected_distribution
             if selected_distribution is None:
                 raise RuntimeError("selected simulator source identity is unavailable")
             _source_admission.verify_package_origin(
-                "cyberbattle.agents.baseline.agent_randomcredlookup",
+                _CREDENTIAL_CACHE_MODULE,
                 selected_distribution,
-                "cyberbattle/agents/baseline/agent_randomcredlookup.py",
+                _CREDENTIAL_CACHE_SOURCE_PATH,
             )
             _source_admission.verify_package_origin(
-                "cyberbattle.agents.baseline.agent_wrapper",
+                _AGENT_WRAPPER_MODULE,
                 selected_distribution,
                 "cyberbattle/agents/baseline/agent_wrapper.py",
             )

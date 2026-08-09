@@ -88,6 +88,71 @@ from raes_adapters.nasim.backend import (
     verify_selected_nasim_source,
 )
 
+_COMMON_EXAMPLE_MEMBERS = (
+    "pack.yaml",
+    "pack.compatibility.yaml",
+    "pack.content-manifest.json",
+    "docs/attack-path.md",
+    "docs/concepts.md",
+    "docs/golden-readiness-checklist.md",
+    "docs/provenance-ledger.yaml",
+)
+_RED_PARTICIPANT_ADDRESS = "participant.behavior.red"
+
+
+def _single_participant_native_args_complete(args: argparse.Namespace) -> bool:
+    """Require one participant's complete native admission surface."""
+
+    required = (
+        args.pack,
+        args.pack_digest,
+        args.scenario,
+        args.scenario_digest,
+        args.experiment,
+        args.task,
+        args.participant_implementation,
+        args.participant_manifest,
+        args.participant_selection,
+        args.participant_configuration,
+        args.trial_length,
+        args.seed,
+        args.run_id,
+    )
+    foreign = (
+        args.red_variant,
+        args.blue_implementation,
+        args.blue_manifest,
+        args.blue_selection,
+        args.blue_configuration,
+    )
+    return all(value is not None for value in required) and all(value is None for value in foreign)
+
+
+def _single_participant_experiment_bindings_match(
+    args: argparse.Namespace,
+    scenario_digest: str,
+    spec: ExperimentSpecModel,
+    task: ExperimentTaskModel,
+    artifact_bindings_admitted: bool,
+) -> bool:
+    """Verify common scenario, task, plan, and artifact bindings."""
+
+    intended = spec.intended_scenario_ref
+    return all(
+        (
+            scenario_digest == args.scenario_digest,
+            intended is not None,
+            intended is not None and intended.ref_digest == args.scenario_digest,
+            intended is not None and intended.ref_path == args.scenario.as_posix(),
+            task.scenario_ref.ref_digest == args.scenario_digest,
+            task.scenario_ref.ref_path == args.scenario.as_posix(),
+            spec.task_ref.ref_id == task.task_id,
+            spec.run_plan.episode_control.max_steps == args.trial_length,
+            artifact_bindings_admitted,
+        )
+    )
+
+
 EXIT_USAGE = 2
 EXIT_VALIDATION = 3
 EXIT_OUTPUT = 4
@@ -326,13 +391,7 @@ def cyborg_inspection_payload() -> dict[str, object]:
 # --- CybORG backend adapter --------------------------------------------------
 
 _CYBORG_EXAMPLE_MEMBERS = (
-    "pack.yaml",
-    "pack.compatibility.yaml",
-    "pack.content-manifest.json",
-    "docs/attack-path.md",
-    "docs/concepts.md",
-    "docs/golden-readiness-checklist.md",
-    "docs/provenance-ledger.yaml",
+    *_COMMON_EXAMPLE_MEMBERS,
     "experiment/cage2-research.spec.exp.json",
     "experiment/cage2-research.task.exp.json",
     "participant/cyborg-blue-sleep-policy.configuration.json",
@@ -524,13 +583,7 @@ def _cyborg_machine_software() -> dict[str, str]:
 # --- NASim backend adapter ---------------------------------------------------
 
 _NASIM_EXAMPLE_MEMBERS = (
-    "pack.yaml",
-    "pack.compatibility.yaml",
-    "pack.content-manifest.json",
-    "docs/attack-path.md",
-    "docs/concepts.md",
-    "docs/golden-readiness-checklist.md",
-    "docs/provenance-ledger.yaml",
+    *_COMMON_EXAMPLE_MEMBERS,
     "experiment/nasim-tiny.spec.exp.json",
     "experiment/nasim-tiny.task.exp.json",
     "participant/nasim-red-bruteforce.configuration.json",
@@ -543,29 +596,7 @@ _NASIM_EXAMPLE_MEMBERS = (
 def _nasim_native_args_complete(args: argparse.Namespace) -> bool:
     """Return whether every NASim native admission argument was supplied."""
 
-    required = (
-        args.pack,
-        args.pack_digest,
-        args.scenario,
-        args.scenario_digest,
-        args.experiment,
-        args.task,
-        args.participant_implementation,
-        args.participant_manifest,
-        args.participant_selection,
-        args.participant_configuration,
-        args.trial_length,
-        args.seed,
-        args.run_id,
-    )
-    foreign = (
-        args.red_variant,
-        args.blue_implementation,
-        args.blue_manifest,
-        args.blue_selection,
-        args.blue_configuration,
-    )
-    return all(value is not None for value in required) and all(value is None for value in foreign)
+    return _single_participant_native_args_complete(args)
 
 
 def _nasim_participant_paths(args: argparse.Namespace) -> tuple[str, Path, Path, Path]:
@@ -592,20 +623,12 @@ def _nasim_experiment_bindings_match(
     admitted participant implementation.
     """
 
-    intended = spec.intended_scenario_ref
-    plan = spec.run_plan
-    return all(
-        (
-            scenario_digest == args.scenario_digest,
-            intended is not None,
-            intended is not None and intended.ref_digest == args.scenario_digest,
-            intended is not None and intended.ref_path == args.scenario.as_posix(),
-            task.scenario_ref.ref_digest == args.scenario_digest,
-            task.scenario_ref.ref_path == args.scenario.as_posix(),
-            spec.task_ref.ref_id == task.task_id,
-            plan.episode_control.max_steps == args.trial_length,
-            artifact_bindings_admitted,
-        )
+    return _single_participant_experiment_bindings_match(
+        args,
+        scenario_digest,
+        spec,
+        task,
+        artifact_bindings_admitted,
     )
 
 
@@ -621,7 +644,7 @@ def _nasim_participant_bindings_match(
     return all(
         (
             args.participant_implementation == manifest.identity.name,
-            selection.participant_address == "participant.behavior.red",
+            selection.participant_address == _RED_PARTICIPANT_ADDRESS,
             selection.implementation_identity == manifest.identity,
             configuration.configuration.implementation_identity == manifest.identity,
             selection.manifest_ref == args.participant_manifest.as_posix(),
@@ -734,13 +757,7 @@ def _nasim_machine_software() -> dict[str, str]:
 # --- CyberBattleSim backend adapter -----------------------------------------
 
 _CYBERBATTLESIM_EXAMPLE_MEMBERS = (
-    "pack.yaml",
-    "pack.compatibility.yaml",
-    "pack.content-manifest.json",
-    "docs/attack-path.md",
-    "docs/concepts.md",
-    "docs/golden-readiness-checklist.md",
-    "docs/provenance-ledger.yaml",
+    *_COMMON_EXAMPLE_MEMBERS,
     "experiment/cyberbattlesim-chain.spec.exp.json",
     "experiment/cyberbattlesim-chain.task.exp.json",
     "participant/cyberbattlesim-red-credential-cache.configuration.json",
@@ -756,29 +773,7 @@ _CYBERBATTLESIM_PACK_DIGEST = (
 def _cyberbattlesim_native_args_complete(args: argparse.Namespace) -> bool:
     """Require the complete chain pack surface and reject foreign arguments."""
 
-    required = (
-        args.pack,
-        args.pack_digest,
-        args.scenario,
-        args.scenario_digest,
-        args.experiment,
-        args.task,
-        args.participant_implementation,
-        args.participant_manifest,
-        args.participant_selection,
-        args.participant_configuration,
-        args.trial_length,
-        args.seed,
-        args.run_id,
-    )
-    foreign = (
-        args.red_variant,
-        args.blue_implementation,
-        args.blue_manifest,
-        args.blue_selection,
-        args.blue_configuration,
-    )
-    return all(value is not None for value in required) and all(value is None for value in foreign)
+    return _single_participant_native_args_complete(args)
 
 
 def _cyberbattlesim_participant_paths(
@@ -803,20 +798,12 @@ def _cyberbattlesim_experiment_bindings_match(
 ) -> bool:
     """Verify the exact selected chain scenario, protocol, and participant bytes."""
 
-    intended = spec.intended_scenario_ref
-    plan = spec.run_plan
-    return all(
-        (
-            scenario_digest == args.scenario_digest,
-            intended is not None,
-            intended is not None and intended.ref_digest == args.scenario_digest,
-            intended is not None and intended.ref_path == args.scenario.as_posix(),
-            task.scenario_ref.ref_digest == args.scenario_digest,
-            task.scenario_ref.ref_path == args.scenario.as_posix(),
-            spec.task_ref.ref_id == task.task_id,
-            plan.episode_control.max_steps == args.trial_length,
-            artifact_bindings_admitted,
-        )
+    return _single_participant_experiment_bindings_match(
+        args,
+        scenario_digest,
+        spec,
+        task,
+        artifact_bindings_admitted,
     )
 
 
@@ -837,7 +824,7 @@ def _cyberbattlesim_participant_bindings_match(
     return all(
         (
             args.participant_implementation == manifest.identity.name,
-            selection.participant_address == "participant.behavior.red",
+            selection.participant_address == _RED_PARTICIPANT_ADDRESS,
             selection.implementation_identity == manifest.identity,
             configuration.configuration.implementation_identity == manifest.identity,
             selection.manifest_ref == args.participant_manifest.as_posix(),
@@ -973,7 +960,7 @@ _BACKENDS: dict[str, _BackendAdapter] = {
     ),
     "nasim-tiny": _BackendAdapter(
         name="nasim-tiny",
-        participant_address="participant.behavior.red",
+        participant_address=_RED_PARTICIPANT_ADDRESS,
         pack_example_id="nasim-tiny",
         pack_package="raes_adapters.nasim",
         packaged_example=True,
@@ -1001,7 +988,7 @@ _BACKENDS: dict[str, _BackendAdapter] = {
     ),
     "cyberbattlesim-chain": _BackendAdapter(
         name="cyberbattlesim-chain",
-        participant_address="participant.behavior.red",
+        participant_address=_RED_PARTICIPANT_ADDRESS,
         pack_example_id="cyberbattlesim-chain",
         pack_package="raes_adapters.cyberbattlesim",
         packaged_example=False,
