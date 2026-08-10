@@ -338,6 +338,10 @@ def test_rejected_attempt_series_remains_timestamped_and_inventory_bound() -> No
     }
     assert rejection["scientific_conditions_changed"] is False
     assert rejection["retention_note"].endswith("issuecomment-5235757215")
+    assert rejection["superseded_at"] == "2026-08-10T04:33:59.394Z"
+    assert rejection["superseded_by"] == (
+        "f09ec5759021cf1d5de9b260e0299934bf6f6cc4161b822e8f5f0b76bdb96b53"
+    )
 
     for stage in rejection["retained_stages"]:
         stage_root = root / stage["path"]
@@ -353,3 +357,31 @@ def test_rejected_attempt_series_remains_timestamped_and_inventory_bound() -> No
 
     assert len(reproduction.load_terminal_rows(root / "native-oracle")) == 10
     assert len(reproduction.load_terminal_rows(root / "mediated")) == 10
+
+
+def test_checked_in_revision_2_bundle_recomputes_with_failed_outcome_tier() -> None:
+    root = REPRODUCTION_ROOT / ("f09ec5759021cf1d5de9b260e0299934bf6f6cc4161b822e8f5f0b76bdb96b53")
+
+    result = reproduction.verify_bundle(root)
+    aggregates = reproduction.load_strict_json(root / "aggregates.json")
+    tiers = reproduction.load_strict_json(root / "tiers.json")["tiers"]
+
+    assert result == {
+        "disposition": "verified",
+        "scheduled_count": 20,
+        "tier_count": 6,
+        "bench_note_count": 39,
+        "inventory_sha256": ("4653bc5afbf501f005f997df782f73f282cccbe28f9cbe176d5a9c3f5970a292"),
+    }
+    assert aggregates["comparisons"]["cumulative_attacker_reward"]["result"] == ("bounded")
+    assert aggregates["comparisons"]["steps_to_termination"]["result"] == ("outside-tolerance")
+    assert aggregates["comparisons"]["network_availability"]["result"] == ("unavailable")
+    assert aggregates["comparisons"]["terminal_cause"]["result"] == "unavailable"
+    assert {tier["tier"]: tier["result"] for tier in tiers} == {
+        "authored-source": "passed",
+        "contract": "passed",
+        "execution-control": "weakened",
+        "state-observation": "weakened",
+        "outcome-evaluation": "failed",
+        "disclosure": "passed",
+    }

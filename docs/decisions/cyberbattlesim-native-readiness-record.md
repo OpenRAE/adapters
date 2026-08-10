@@ -40,3 +40,51 @@ traceback. Native stdout and stderr were discarded by the command boundary.
 The golden-readiness checklist remains unchecked. Advancing from `built` to
 `golden` still requires its full manual participant-equivalent walkthrough and
 durable golden evidence.
+
+## Baseline reproduction evidence — 2026-08-10
+
+Issue [OpenRAE/adapters#30](https://github.com/OpenRAE/adapters/issues/30)
+executed the exact source-native and installed RAES-mediated paths from an
+offline CPython 3.12.3 environment on four x86-64 vCPUs with 16 GiB RAM. The
+apparatus used implementation commit
+`bf1cbff7bfeace506324910651697ef7b00b5de6`, adapter wheel SHA-256
+`52550a728936151208dd6875b5112b274edd9e3b93e844e34f34497026aa1808`,
+and upstream wheel SHA-256
+`d921703d77b82f14aeaff223cfeaf3753916b1518119d474dfd5e4444170b9a5`.
+The admitted pack digest was
+`sha256:66493882579d5cba87248c5722782ff5ded5f0d7423f4e559f15bfb61712a905`.
+
+The accepted declaration is
+`f09ec5759021cf1d5de9b260e0299934bf6f6cc4161b822e8f5f0b76bdb96b53`.
+All ten source-native and ten mediated attempts terminalized valid with cleanup
+verified and zero retries. The final 128-file bundle passed structural leakage
+scanning, contract validation, digest-bound citation validation, inventory
+verification, and independent offline recomputation. Its inventory file
+SHA-256 is
+`4653bc5afbf501f005f997df782f73f282cccbe28f9cbe176d5a9c3f5970a292`.
+
+The scientific result is deliberately not described as passing overall:
+
+| Tier or metric | Result |
+| --- | --- |
+| Authored source / contract / disclosure | passed / passed / passed |
+| Execution control / state-observation | weakened / weakened |
+| Outcome-evaluation | failed |
+| Cumulative reward | bounded; mean difference 19.2, 95% interval `[-91.8025, 130.1025]` within ±500 |
+| Steps to termination | outside tolerance; mean difference 33.5, 95% interval `[-55.0, 119.5]` exceeds ±60 |
+| Availability / terminal cause | unavailable because the mediated evaluator does not retain them |
+
+The first 20-attempt series remains retained under declaration
+`825dde3b4cd66f228e0f93157a2add35e3c9a822a7adac1d8ffd322b32116232`
+with a machine-readable rejection record. Its bound byte scanner could not
+distinguish RAES `withheld_refs` names from native values, so its criteria and
+scanner were not edited in place; the accepted revision used disjoint
+identities and unchanged scientific conditions.
+
+This evidence supplies the CyberBattleSim apparatus/readiness slice for
+[OpenRAE/research#14](https://github.com/OpenRAE/research/issues/14) and the
+content-addressed, recomputable publication slice for
+[OpenRAE/research#20](https://github.com/OpenRAE/research/issues/20). It does
+not by itself close corpus-wide readiness, complete the paper, assign a
+persistent identifier, mark the environment pack golden, or establish
+deterministic replay or outcome equivalence.

@@ -30,5 +30,6 @@
   ],
   "durable_note": "https://github.com/OpenRAE/adapters/issues/30#issuecomment-5235719750",
   "retention_note": "https://github.com/OpenRAE/adapters/issues/30#issuecomment-5235757215",
-  "superseded_by": null
+  "superseded_at": "2026-08-10T04:33:59.394Z",
+  "superseded_by": "f09ec5759021cf1d5de9b260e0299934bf6f6cc4161b822e8f5f0b76bdb96b53"
 }

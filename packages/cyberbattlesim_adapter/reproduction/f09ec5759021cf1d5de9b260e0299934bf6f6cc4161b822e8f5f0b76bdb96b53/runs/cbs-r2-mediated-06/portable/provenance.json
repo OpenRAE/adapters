@@ -1,0 +1,409 @@
+{
+  "adapter": {
+    "distribution": "raes-adapters",
+    "version": "0.0.0"
+  },
+  "backend_manifest": {
+    "capabilities": {
+      "cleanup": {
+        "name": "cyberbattlesim-cleanup",
+        "supported_action_kinds": [
+          "destroy",
+          "reset",
+          "verify"
+        ],
+        "supported_contract_versions": [
+          "trial-cleanup-plan-v1",
+          "trial-cleanup-receipt-v1"
+        ],
+        "supported_verification_methods": [
+          "probe",
+          "receipt"
+        ],
+        "supports_residual_state_disclosure": true,
+        "supports_reusable_state": true
+      },
+      "evaluator": {
+        "constraints": {
+          "objective_terminal_state": "running until a distinct mapped terminal cause is available",
+          "outcome_reproduction": "stochastic-bounded",
+          "proposition_projection": "binding-preserving unknown under lossy source evidence",
+          "reward_owner": "evaluator"
+        },
+        "name": "cyberbattlesim-evaluator",
+        "preserves_binding_provenance": true,
+        "supported_evidence_channels": [
+          "api_response"
+        ],
+        "supported_predicate_families": [
+          "boolean",
+          "number",
+          "presence",
+          "string"
+        ],
+        "supported_quantifiers": [
+          "all",
+          "any",
+          "at_least"
+        ],
+        "supported_sections": [
+          "assertions",
+          "conditions",
+          "objectives",
+          "propositions"
+        ],
+        "supported_time_domains": [
+          "wall_clock"
+        ],
+        "supported_truth_outcomes": [
+          "false",
+          "true",
+          "unknown",
+          "unsupported"
+        ],
+        "supports_objectives": true,
+        "supports_scoring": true
+      },
+      "observation": null,
+      "orchestrator": {
+        "constraints": {
+          "native_transition_owner": "participant-runtime",
+          "workflow_scope": "episode lifecycle and serialized participant steps"
+        },
+        "name": "cyberbattlesim-orchestrator",
+        "supported_sections": [
+          "events",
+          "workflows"
+        ],
+        "supported_workflow_features": [
+          "call"
+        ],
+        "supported_workflow_state_predicates": [],
+        "supports_assertion_refs": false,
+        "supports_inject_bindings": false,
+        "supports_workflows": true
+      },
+      "participant_runtime": {
+        "constraints": {
+          "autonomous_policy": "qualified CredentialCacheExploiter through RAES action admission",
+          "max_in_flight_native_transitions": "1",
+          "native_action_coordinates": "driver-private",
+          "native_target_attribution": "unavailable; request targets remain intent and are not echoed as realized effect targets",
+          "participant_action_scope": "connect, local-vulnerability, and remote-vulnerability attacker contracts",
+          "source_internal_defender": "scan-and-reimage executes inside the selected source step and is not a participant-admitted action"
+        },
+        "execution_bindings": [
+          {
+            "action_contract_address": "participant.action-contract.connect",
+            "binding_id": "cyberbattlesim-connect",
+            "constraint_refs": [
+              "constraint:serialized-native-transition"
+            ],
+            "evidence_refs": [
+              "source-ledger:credential-cache-exploiter"
+            ],
+            "max_action_attempts": 1,
+            "max_in_flight": 1,
+            "max_retries": 0,
+            "participant_implementation_ref": "participant/cyberbattlesim-red-credential-cache.manifest.json",
+            "schema_version": "participant-execution-binding/v1",
+            "target_addresses": [
+              "provision.node.customer-data"
+            ],
+            "timeout_seconds": 30
+          },
+          {
+            "action_contract_address": "participant.action-contract.local-vulnerability",
+            "binding_id": "cyberbattlesim-local-vulnerability",
+            "constraint_refs": [
+              "constraint:serialized-native-transition"
+            ],
+            "evidence_refs": [
+              "source-ledger:credential-cache-exploiter"
+            ],
+            "max_action_attempts": 1,
+            "max_in_flight": 1,
+            "max_retries": 0,
+            "participant_implementation_ref": "participant/cyberbattlesim-red-credential-cache.manifest.json",
+            "schema_version": "participant-execution-binding/v1",
+            "target_addresses": [
+              "provision.node.linux-relay"
+            ],
+            "timeout_seconds": 30
+          },
+          {
+            "action_contract_address": "participant.action-contract.remote-vulnerability",
+            "binding_id": "cyberbattlesim-remote-vulnerability",
+            "constraint_refs": [
+              "constraint:serialized-native-transition"
+            ],
+            "evidence_refs": [
+              "source-ledger:credential-cache-exploiter"
+            ],
+            "max_action_attempts": 1,
+            "max_in_flight": 1,
+            "max_retries": 0,
+            "participant_implementation_ref": "participant/cyberbattlesim-red-credential-cache.manifest.json",
+            "schema_version": "participant-execution-binding/v1",
+            "target_addresses": [
+              "provision.node.windows-relay"
+            ],
+            "timeout_seconds": 30
+          }
+        ],
+        "feature_support": [
+          {
+            "constraint_refs": [],
+            "disclosure_refs": [
+              "docs/decisions/cyberbattlesim-backend-guardrails.md"
+            ],
+            "evidence_refs": [],
+            "feature": "interference",
+            "limitation_refs": [
+              "limitation:cyberbattlesim:source-internal-defender"
+            ],
+            "support_level": "disclosed_weak"
+          }
+        ],
+        "max_autonomous_action_attempts": 1,
+        "max_autonomous_burst_size": 1,
+        "max_autonomous_in_flight": 1,
+        "max_autonomous_occurrences": 10000,
+        "max_autonomous_participants": 1,
+        "max_autonomous_retries_per_occurrence": 1,
+        "max_concurrent_actions": 2,
+        "max_execution_services": 1,
+        "name": "cyberbattlesim-participant-runtime",
+        "resource_budgets": null,
+        "supported_autonomous_action_contracts": [
+          "participant.action-contract.connect",
+          "participant.action-contract.local-vulnerability",
+          "participant.action-contract.remote-vulnerability"
+        ],
+        "supported_autonomous_activity_features": [],
+        "supported_autonomous_observation_boundaries": [
+          "participant.observation-boundary.attacker-view"
+        ],
+        "supported_autonomous_policy_profiles": [
+          "participant-autonomous-execution/v1"
+        ],
+        "supported_autonomous_random_stream_profiles": [],
+        "supported_autonomous_selection_strategies": [
+          "ordered_cycle"
+        ],
+        "supported_autonomous_target_addresses": [
+          "provision.node.customer-data",
+          "provision.node.linux-relay",
+          "provision.node.windows-relay"
+        ],
+        "supported_behavior_features": [
+          "action_contracts",
+          "attribution_support",
+          "autonomous_execution",
+          "behavior_history",
+          "effects",
+          "failure_classes",
+          "observation_boundaries",
+          "outcome_interpretation",
+          "preconditions",
+          "state_transitions",
+          "temporal_contracts"
+        ],
+        "supported_execution_control_actions": [
+          "drain",
+          "pause",
+          "reset",
+          "resume",
+          "start",
+          "teardown"
+        ],
+        "supported_interaction_features": [
+          "interference"
+        ],
+        "supported_participant_roles": [
+          "red"
+        ],
+        "supports_autonomous_execution": true,
+        "supports_bounded_concurrency": true,
+        "supports_execution_control": true
+      },
+      "provisioner": {
+        "constraints": {
+          "account_realization": "auth method and group intent map to source-generated credentials; no source identity equivalence",
+          "topology_realization": "selected generated chain; authored topology is representative"
+        },
+        "max_total_nodes": 10,
+        "name": "cyberbattlesim-provisioner",
+        "supported_account_features": [
+          "auth_method",
+          "groups"
+        ],
+        "supported_content_types": [],
+        "supported_domain_profiles": [],
+        "supported_generated_artifact_kinds": [],
+        "supported_node_types": [
+          "switch",
+          "vm"
+        ],
+        "supported_os_families": [
+          "linux",
+          "windows"
+        ],
+        "supported_service_materialization_profiles": [],
+        "supports_accounts": true,
+        "supports_acls": false,
+        "supports_generated_artifacts": false,
+        "supports_persistent_volumes": false
+      }
+    },
+    "compatibility": {
+      "processors": [
+        "raes-reference-processor"
+      ]
+    },
+    "concept_bindings": [
+      {
+        "family": "assets",
+        "scope": "capabilities.provisioner.supported_node_types"
+      },
+      {
+        "family": "assets",
+        "scope": "capabilities.provisioner.supported_os_families"
+      },
+      {
+        "family": "tools-and-artifacts",
+        "scope": "capabilities.provisioner.supported_content_types"
+      },
+      {
+        "family": "identities",
+        "scope": "capabilities.provisioner.supported_account_features"
+      },
+      {
+        "family": "identities",
+        "scope": "capabilities.provisioner.supported_domain_profiles"
+      },
+      {
+        "family": "tools-and-artifacts",
+        "scope": "capabilities.provisioner.supported_service_materialization_profiles"
+      },
+      {
+        "family": "actions-and-events",
+        "scope": "capabilities.orchestrator.supported_sections"
+      },
+      {
+        "family": "observables",
+        "scope": "capabilities.evaluator.supported_sections"
+      },
+      {
+        "family": "identities",
+        "scope": "capabilities.participant_runtime.supported_participant_roles"
+      },
+      {
+        "family": "actions-and-events",
+        "scope": "capabilities.participant_runtime.supported_behavior_features"
+      },
+      {
+        "family": "relationships",
+        "scope": "capabilities.participant_runtime.supported_interaction_features"
+      }
+    ],
+    "constraints": {
+      "dependency_installation": "separately-installed-pinned-source",
+      "execution_controls": "partial",
+      "outcome_reproduction": "stochastic-bounded",
+      "protocol_configuration": "attested",
+      "run_evidence": "attestable",
+      "source_identity": "qualified-complete-runtime-artifact-roots-attested"
+    },
+    "identity": {
+      "name": "cyberbattlesim",
+      "version": "0.0.0"
+    },
+    "realization_support": [
+      {
+        "artifact_mechanisms": [],
+        "constraints": {
+          "source_profile": "cyberbattlesim-chain-public-854d696",
+          "topology": "representative authored topology maps to generated size-10 chain"
+        },
+        "disclosure_kinds": [
+          "backend-manifest-v2",
+          "operation-status-v1",
+          "runtime-snapshot-v1"
+        ],
+        "domain": "runtime-realization",
+        "observation_capabilities": {},
+        "support_mode": "constrained",
+        "supported_constraint_kinds": [
+          "account-feature",
+          "node-type",
+          "os-family",
+          "workflow-feature",
+          "workflow-state-predicate"
+        ],
+        "supported_exact_requirement_kinds": [
+          "declared-capability-match"
+        ]
+      }
+    ],
+    "schema_version": "backend-manifest/v2",
+    "supported_contract_versions": [
+      "backend-manifest-v2",
+      "provisioning-plan-v1",
+      "orchestration-plan-v1",
+      "evaluation-plan-v1",
+      "operation-receipt-v1",
+      "operation-status-v1",
+      "runtime-snapshot-v1",
+      "workflow-result-envelope-v1",
+      "workflow-history-event-stream-v1",
+      "evaluation-result-envelope-v1",
+      "proposition-truth-result-v1",
+      "evaluation-history-event-stream-v1",
+      "participant-episode-state-envelope-v1",
+      "participant-episode-history-event-stream-v1",
+      "participant-behavior-history-event-stream-v1",
+      "participant-execution-binding-v1",
+      "participant-execution-control-v1",
+      "participant-execution-service-state-v1",
+      "participant-control-occurrence-v1",
+      "participant-crossing-occurrence-v1",
+      "participant-lifecycle-event-v1",
+      "participant-observation-envelope-v1",
+      "participant-shared-state-record-v1",
+      "participant-joint-action-record-v1",
+      "participant-time-management-context-v1",
+      "experiment-capture-spec-v1",
+      "experiment-evidence-record-v1",
+      "experiment-derived-measure-v1",
+      "trial-cleanup-plan-v1",
+      "trial-cleanup-receipt-v1"
+    ]
+  },
+  "configuration": {
+    "experiment_id": "cyberbattlesim-chain-spec",
+    "experiment_version": "1.0.0",
+    "mode": "smoke",
+    "participant_configuration": "participant/cyberbattlesim-red-credential-cache.configuration.json",
+    "participant_implementation": "cyberbattlesim-red-credential-cache",
+    "participant_manifest": "participant/cyberbattlesim-red-credential-cache.manifest.json",
+    "participant_selection": "participant/cyberbattlesim-red-credential-cache.selection.json",
+    "run_id": "cbs-r2-mediated-06",
+    "seeds": [
+      20260729
+    ],
+    "trial_length": 600
+  },
+  "environment_pack": {
+    "digest": "sha256:66493882579d5cba87248c5722782ff5ded5f0d7423f4e559f15bfb61712a905",
+    "identity": "cyberbattlesim-chain"
+  },
+  "scenario": {
+    "digest": "sha256:9d696ea7fa23a1e7cf4c1cbc145a7989370dc4e9afff2cd5a17d6d1af887b528",
+    "identity": "sdl/cyberbattlesim-chain.sdl.yaml"
+  },
+  "source": {
+    "commit": "854d6966607fb68645651f55b0f97221bd293e0d",
+    "version": "0.1.0"
+  }
+}
