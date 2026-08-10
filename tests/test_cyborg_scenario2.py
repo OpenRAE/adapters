@@ -252,12 +252,13 @@ def test_scenario2_realization_rejects_resource_identical_digest_mismatch() -> N
         1,
     )
     altered = parse_sdl(altered_source)
+    driver = _CapturingDriver()
 
     with pytest.raises(
         ValueError,
         match="CybORG scenario does not match the selected Scenario2 profile",
     ):
-        create_cyborg_target(driver=_CapturingDriver(), scenario=altered, seed=7)
+        create_cyborg_target(driver=driver, scenario=altered, seed=7)
 
 
 def test_pack_snapshot_is_byte_identical_to_canonical_scenario() -> None:

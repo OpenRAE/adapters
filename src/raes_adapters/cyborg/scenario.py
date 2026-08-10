@@ -44,11 +44,14 @@ _SCENARIO2_NATIVE_HOSTS = {
     "user-3": ("User3", "linux_user_host1"),
     "user-4": ("User4", "linux_user_host2"),
 }
+_SCENARIO2_BLUE_PARTICIPANT = "participant.behavior.blue"
+_SCENARIO2_GREEN_PARTICIPANT = "participant.behavior.green"
+_SCENARIO2_RED_PARTICIPANT = "participant.behavior.red"
 _SCENARIO2_PARTICIPANTS = frozenset(
     {
-        "participant.behavior.blue",
-        "participant.behavior.green",
-        "participant.behavior.red",
+        _SCENARIO2_BLUE_PARTICIPANT,
+        _SCENARIO2_GREEN_PARTICIPANT,
+        _SCENARIO2_RED_PARTICIPANT,
     }
 )
 _SCENARIO2_OBSERVATION_BOUNDARIES = (
@@ -60,6 +63,9 @@ _SCENARIO2_OBJECTIVES = (
     "evaluation.objective.defend-operational-service",
     "evaluation.objective.impact-operational-service",
 )
+_IP_ADDRESS = "IP Address"
+_SYSTEM_INFO = "System info"
+_USER_INFO = "User info"
 _SCENARIO2_NATIVE_ACTIONS_BY_CONTRACT = {
     "participant.action-contract.sleep": ("Sleep",),
     "participant.action-contract.monitor": ("Monitor",),
@@ -495,22 +501,66 @@ def _scenario2_profile_issue(
 ) -> CyborgTranslationIssue | None:
     """Require the exact compiled portable resource closure selected for Scenario2."""
 
+    issue: CyborgTranslationIssue | None = None
     if {resource.resource_type for resource in resources} - _SUPPORTED_RESOURCE_TYPES:
-        return CyborgTranslationIssue(
+        issue = CyborgTranslationIssue(
             "cyborg-backend.plan.unsupported-resource",
             "The provisioning plan contains a resource CybORG cannot represent.",
         )
-    if scenario_binding is None:
-        return CyborgTranslationIssue(
+    elif scenario_binding is None:
+        issue = CyborgTranslationIssue(
             "cyborg-backend.plan.scenario-profile-unbound",
             "The CAGE-2 Scenario2 plan is not bound to its canonical RAES contracts.",
         )
-    if not _is_scenario2_resources(resources, scenario_binding):
-        return CyborgTranslationIssue(
+    elif not _is_scenario2_resources(resources, scenario_binding):
+        issue = CyborgTranslationIssue(
             "cyborg-backend.plan.scenario-profile-mismatch",
             "The CAGE-2 Scenario2 resources do not match the selected mapping profile.",
         )
-    return None
+    return issue
+
+
+def _scenario2_action_contracts_match(participant: CyborgParticipantBinding) -> bool:
+    """Return whether one participant has a non-empty supported action surface."""
+
+    return bool(participant.action_contract_addresses) and set(
+        participant.action_contract_addresses
+    ).issubset(_SCENARIO2_NATIVE_ACTIONS_BY_CONTRACT)
+
+
+def _scenario2_resource_has_type(
+    resources: dict[str, CyborgScenarioResource],
+    address: str,
+    resource_types: frozenset[str],
+) -> bool:
+    """Return whether a compiled participant reference names an expected resource."""
+
+    resource = resources.get(address)
+    return resource is not None and resource.resource_type in resource_types
+
+
+def _scenario2_participant_resources_match(
+    binding: CyborgScenarioBinding,
+    resources: dict[str, CyborgScenarioResource],
+) -> bool:
+    """Validate compiled account, knowledge, and subnet references."""
+
+    account_types = frozenset({"account-placement"})
+    knowledge_types = frozenset({"network", "node"})
+    return all(
+        all(
+            _scenario2_resource_has_type(resources, address, account_types)
+            for address in participant.starting_account_addresses
+        )
+        and all(
+            _scenario2_resource_has_type(resources, address, knowledge_types)
+            for address in (
+                *participant.initial_knowledge_addresses,
+                *participant.allowed_subnet_addresses,
+            )
+        )
+        for participant in binding.participants
+    )
 
 
 def _scenario2_binding_issue(
@@ -525,49 +575,33 @@ def _scenario2_binding_issue(
         for participant in binding.participants
         for boundary in participant.observation_boundary_addresses
     )
-    if set(participants) != _SCENARIO2_PARTICIPANTS or any(
-        not participant.action_contract_addresses
-        or any(
-            contract not in _SCENARIO2_NATIVE_ACTIONS_BY_CONTRACT
-            for contract in participant.action_contract_addresses
-        )
-        for participant in binding.participants
+    issue: CyborgTranslationIssue | None = None
+    if set(participants) != _SCENARIO2_PARTICIPANTS or not all(
+        _scenario2_action_contracts_match(participant) for participant in binding.participants
     ):
-        return CyborgTranslationIssue(
+        issue = CyborgTranslationIssue(
             "cyborg-backend.plan.scenario-participants-mismatch",
             "The Scenario2 participant action contracts do not match the selected mapping.",
         )
-    if any(
-        resources.get(address) is None or resources[address].resource_type != "account-placement"
-        for participant in binding.participants
-        for address in participant.starting_account_addresses
-    ) or any(
-        resources.get(address) is None
-        or resources[address].resource_type not in {"network", "node"}
-        for participant in binding.participants
-        for address in (
-            *participant.initial_knowledge_addresses,
-            *participant.allowed_subnet_addresses,
-        )
-    ):
-        return CyborgTranslationIssue(
+    elif not _scenario2_participant_resources_match(binding, resources):
+        issue = CyborgTranslationIssue(
             "cyborg-backend.plan.scenario-participants-mismatch",
             "The Scenario2 participant resources do not match the compiled contracts.",
         )
-    if (
+    elif (
         participant_boundaries != _SCENARIO2_OBSERVATION_BOUNDARIES
         or binding.observation_boundary_addresses != _SCENARIO2_OBSERVATION_BOUNDARIES
     ):
-        return CyborgTranslationIssue(
+        issue = CyborgTranslationIssue(
             "cyborg-backend.plan.scenario-observations-mismatch",
             "The Scenario2 observation contracts do not match the selected mapping.",
         )
-    if binding.objective_addresses != _SCENARIO2_OBJECTIVES:
-        return CyborgTranslationIssue(
+    elif binding.objective_addresses != _SCENARIO2_OBJECTIVES:
+        issue = CyborgTranslationIssue(
             "cyborg-backend.plan.scenario-objectives-mismatch",
             "The Scenario2 objective contracts do not match the selected mapping.",
         )
-    return None
+    return issue
 
 
 def _is_scenario2_resources(
@@ -652,7 +686,7 @@ def _scenario2_host_facts(native_name: str) -> dict[str, object]:
         "Enterprise2": {
             "info": {
                 "Enterprise2": {"Interfaces": "All"},
-                "Op_Server0": {"Interfaces": "IP Address"},
+                "Op_Server0": {"Interfaces": _IP_ADDRESS},
             },
             "ConfidentialityValue": "Medium",
             "AvailabilityValue": "Medium",
@@ -677,28 +711,28 @@ def _scenario2_host_facts(native_name: str) -> dict[str, object]:
         },
         "User1": {
             "info": {
-                "Enterprise1": {"Interfaces": "IP Address"},
+                "Enterprise1": {"Interfaces": _IP_ADDRESS},
                 "User1": {"Interfaces": "All"},
             },
             "AvailabilityValue": "None",
         },
         "User2": {
             "info": {
-                "Enterprise1": {"Interfaces": "IP Address"},
+                "Enterprise1": {"Interfaces": _IP_ADDRESS},
                 "User2": {"Interfaces": "All"},
             },
             "AvailabilityValue": "None",
         },
         "User3": {
             "info": {
-                "Enterprise0": {"Interfaces": "IP Address"},
+                "Enterprise0": {"Interfaces": _IP_ADDRESS},
                 "User3": {"Interfaces": "All"},
             },
             "AvailabilityValue": "None",
         },
         "User4": {
             "info": {
-                "Enterprise0": {"Interfaces": "IP Address"},
+                "Enterprise0": {"Interfaces": _IP_ADDRESS},
                 "User4": {"Interfaces": "All"},
             },
             "AvailabilityValue": "None",
@@ -783,18 +817,18 @@ def _scenario2_agent_declarations(
 ) -> dict[str, object]:
     """Return the exact selected Scenario2 role, knowledge, and session surface."""
 
-    blue_known_hosts = _scenario2_known_hosts(binding, "participant.behavior.blue")
-    green_known_hosts = _scenario2_known_hosts(binding, "participant.behavior.green")
-    red_known_hosts = _scenario2_known_hosts(binding, "participant.behavior.red")
+    blue_known_hosts = _scenario2_known_hosts(binding, _SCENARIO2_BLUE_PARTICIPANT)
+    green_known_hosts = _scenario2_known_hosts(binding, _SCENARIO2_GREEN_PARTICIPANT)
+    red_known_hosts = _scenario2_known_hosts(binding, _SCENARIO2_RED_PARTICIPANT)
     blue_visible_hosts = {
-        hostname: {"Interfaces": "All", "System info": "All", "User info": "All"}
+        hostname: {"Interfaces": "All", _SYSTEM_INFO: "All", _USER_INFO: "All"}
         for hostname in blue_known_hosts
     }
     green_visible_hosts = {
-        hostname: {"Interfaces": "All", "System info": "All", "User info": "All"}
+        hostname: {"Interfaces": "All", _SYSTEM_INFO: "All", _USER_INFO: "All"}
         for hostname in green_known_hosts
     }
-    blue_accounts = _scenario2_account_sessions(binding, "participant.behavior.blue")
+    blue_accounts = _scenario2_account_sessions(binding, _SCENARIO2_BLUE_PARTICIPANT)
     blue_clients: list[dict[str, object]] = [
         {
             "hostname": native,
@@ -818,23 +852,23 @@ def _scenario2_agent_declarations(
             "username": defender_username,
         }
     )
-    green_accounts = _scenario2_account_sessions(binding, "participant.behavior.green")
-    red_accounts = _scenario2_account_sessions(binding, "participant.behavior.red")
+    green_accounts = _scenario2_account_sessions(binding, _SCENARIO2_GREEN_PARTICIPANT)
+    red_accounts = _scenario2_account_sessions(binding, _SCENARIO2_RED_PARTICIPANT)
     return {
         "Blue": {
-            "AllowedSubnets": _scenario2_allowed_subnets(binding, "participant.behavior.blue"),
+            "AllowedSubnets": _scenario2_allowed_subnets(binding, _SCENARIO2_BLUE_PARTICIPANT),
             "INT": {"Hosts": blue_visible_hosts},
             "adversary": "Red",
-            "actions": _scenario2_native_actions(binding, "participant.behavior.blue"),
+            "actions": _scenario2_native_actions(binding, _SCENARIO2_BLUE_PARTICIPANT),
             "agent_type": "SleepAgent",
             "reward_calculator_type": "HybridAvailabilityConfidentiality",
             "starting_sessions": blue_clients,
             "wrappers": [],
         },
         "Green": {
-            "AllowedSubnets": _scenario2_allowed_subnets(binding, "participant.behavior.green"),
+            "AllowedSubnets": _scenario2_allowed_subnets(binding, _SCENARIO2_GREEN_PARTICIPANT),
             "INT": {"Hosts": green_visible_hosts},
-            "actions": _scenario2_native_actions(binding, "participant.behavior.green"),
+            "actions": _scenario2_native_actions(binding, _SCENARIO2_GREEN_PARTICIPANT),
             "agent_type": "SleepAgent",
             "reward_calculator_type": "None",
             "starting_sessions": [
@@ -849,14 +883,14 @@ def _scenario2_agent_declarations(
             "wrappers": [],
         },
         "Red": {
-            "AllowedSubnets": _scenario2_allowed_subnets(binding, "participant.behavior.red"),
+            "AllowedSubnets": _scenario2_allowed_subnets(binding, _SCENARIO2_RED_PARTICIPANT),
             "INT": {
                 "Hosts": {
-                    hostname: {"Interfaces": "All", "System info": "All"}
+                    hostname: {"Interfaces": "All", _SYSTEM_INFO: "All"}
                     for hostname in red_known_hosts
                 }
             },
-            "actions": _scenario2_native_actions(binding, "participant.behavior.red"),
+            "actions": _scenario2_native_actions(binding, _SCENARIO2_RED_PARTICIPANT),
             "agent_type": "SleepAgent",
             "reward_calculator_type": "HybridImpactPwn",
             "starting_sessions": [
@@ -885,8 +919,8 @@ def _agent_declarations(
     visible_hosts = {
         hostname: {
             "Interfaces": "All",
-            "System info": "All",
-            "User info": "All",
+            _SYSTEM_INFO: "All",
+            _USER_INFO: "All",
         }
         for hostname in host_names
     }
@@ -924,7 +958,7 @@ def _agent_declarations(
                 "Hosts": {
                     first_host: {
                         "Interfaces": "All",
-                        "System info": "All",
+                        _SYSTEM_INFO: "All",
                     }
                 }
             },

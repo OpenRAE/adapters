@@ -64,9 +64,10 @@ _COMPILED_OPERATOR_NAMES = {
     "greater_than": "gt",
     "greater_than_or_equal": "gte",
 }
+_REWARD_COMPONENT_SOURCE_ROW = "source-ledger:reward-components"
 _EVIDENCE_REQUIREMENT_BINDINGS: dict[str, tuple[str, str | None]] = {
-    "source-ledger:reward-components": ("source-ledger:reward-components", None),
-    "operational-service-state": ("source-ledger:reward-components", _BLUE),
+    _REWARD_COMPONENT_SOURCE_ROW: (_REWARD_COMPONENT_SOURCE_ROW, None),
+    "operational-service-state": (_REWARD_COMPONENT_SOURCE_ROW, _BLUE),
 }
 _CAPTURE_SPEC_ID = "capture-spec.cyborg-cage2.reward-projection"
 _CAPTURE_REQUIREMENT_ID = "capture-requirement.cyborg-cage2.reward-fact"
