@@ -1,0 +1,55 @@
+{
+  "backend_manifest_ref": "manifest.cyberbattlesim-chain",
+  "metadata": {
+    "selection_source": "admitted-experiment-artifact"
+  },
+  "participant_implementations": [
+    {
+      "configuration_digest": "sha256:2254dad60b577628a134a55484d36487ead453f9033313150eb684060b6e1b07",
+      "configuration_ref": "participant/cyberbattlesim-red-credential-cache.configuration.json",
+      "exposure_policy": {
+        "constraints": {},
+        "disclosed_refs": [
+          "participant.observation-boundary.attacker-view"
+        ],
+        "exposure_policy_kinds": [
+          "hidden-truth",
+          "observation-stream"
+        ],
+        "policy_digest": null,
+        "policy_id": "cyberbattlesim-red-observation-boundary",
+        "policy_version": null,
+        "tool_affordance_refs": [],
+        "visibility_scope_refs": [
+          "participant.behavior.red"
+        ],
+        "withheld_refs": [
+          "action_mask",
+          "credential_cache_matrix",
+          "credential_cache_length",
+          "nodes_privilegelevel",
+          "discovered_nodes_properties",
+          "native-action-coordinate",
+          "reward-vector",
+          "<cyberbattle"
+        ]
+      },
+      "implementation_identity": {
+        "name": "cyberbattlesim-red-credential-cache",
+        "version": "1.0.0"
+      },
+      "manifest_digest": "sha256:6ce5cf29e35ceba75799e764a24affc9abb9b7b950d2ad63758e5102be1b0062",
+      "manifest_ref": "participant/cyberbattlesim-red-credential-cache.manifest.json",
+      "participant_address": "participant.behavior.red",
+      "participant_contract_versions": [
+        "participant-episode-state-envelope-v1",
+        "participant-behavior-history-event-stream-v1",
+        "participant-decision-surface-v2"
+      ],
+      "selected_decision_surface_mode": "policy-directed"
+    }
+  ],
+  "processor_manifest_ref": null,
+  "run_id": "driver.reset.1",
+  "schema_version": "participant-implementation-provenance/v1"
+}

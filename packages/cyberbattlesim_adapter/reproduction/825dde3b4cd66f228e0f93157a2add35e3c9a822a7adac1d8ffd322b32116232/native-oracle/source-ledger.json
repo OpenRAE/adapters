@@ -1,0 +1,107 @@
+{
+  "adapter": {
+    "distribution": "raes-adapters",
+    "runner_artifact_ids": [
+      "reproduction-runner",
+      "mediated-researcher",
+      "mediated-driver",
+      "selected-source-helper"
+    ],
+    "version": "0.0.0"
+  },
+  "artifact_refs": [
+    {
+      "artifact_id": "qualification",
+      "path": "src/raes_adapters/cyberbattlesim/qualification.json",
+      "sha256": "0b55f88c0ff628980c976a50f38f71ff7ec0f94b2e50e2b87f6498d5dd01c147"
+    },
+    {
+      "artifact_id": "public-protocol",
+      "path": "src/raes_adapters/cyberbattlesim/public-protocol.md",
+      "sha256": "0de0d8585ee9e3bb0901bd2d71b71a9504774b38bdab38f6f5509d0a9e34d26f"
+    },
+    {
+      "artifact_id": "source-ledger",
+      "path": "src/raes_adapters/cyberbattlesim/mapping/source-ledger.jsonl",
+      "sha256": "8776a340873e6b56a55767e4257f05ba1bb71fa2b37003a2023b0fe3b0cce553"
+    },
+    {
+      "artifact_id": "loss-disclosures",
+      "path": "src/raes_adapters/cyberbattlesim/mapping/loss-disclosures.md",
+      "sha256": "3c2530553a6ab035a6c505e80bf02298f1ab07dd3ffc72216f87f6381113181c"
+    },
+    {
+      "artifact_id": "reproduction-runner",
+      "path": "src/raes_adapters/cyberbattlesim/reproduction.py",
+      "sha256": "44c5573635a2adc655e78eff8765c25c58b469a3f378975fce83f21c6c4ead98"
+    },
+    {
+      "artifact_id": "mediated-researcher",
+      "path": "src/raes_adapters/cyberbattlesim/researcher.py",
+      "sha256": "35a320b319fd2fd880a49ce2a670576c23a754ff4a67d80618be848fb42fc0d1"
+    },
+    {
+      "artifact_id": "mediated-driver",
+      "path": "src/raes_adapters/cyberbattlesim/backend/driver.py",
+      "sha256": "1f86e3522c6e7ff5b17f8ac4eed5d9567da3c674218b5f1bf3cd8c0e10028202"
+    },
+    {
+      "artifact_id": "selected-source-helper",
+      "path": "src/raes_adapters/cyberbattlesim/backend/source.py",
+      "sha256": "977b91e77d0c1fe23f265ab59151a8c478b43fff20d44afd79b0392c20bf62de"
+    },
+    {
+      "artifact_id": "task",
+      "path": "environments/cyberbattlesim-chain/experiment/cyberbattlesim-chain.task.exp.json",
+      "sha256": "6588ac115931b8de7052d52ccb94bbd258c5e6c78ffb9d5f5d1c0570f9236ce5"
+    },
+    {
+      "artifact_id": "spec",
+      "path": "environments/cyberbattlesim-chain/experiment/cyberbattlesim-chain.spec.exp.json",
+      "sha256": "c31d2f4376ad7877d756e6a572a5e9e344b0899c4e8e996e1b5f57eaa78be391"
+    },
+    {
+      "artifact_id": "pack-manifest",
+      "path": "environments/cyberbattlesim-chain/pack.content-manifest.json",
+      "sha256": "8131a2a294da39fceeca1595da1f987dbbc934a234c635fbb935e7d223cf103c"
+    },
+    {
+      "artifact_id": "participant-manifest",
+      "path": "environments/cyberbattlesim-chain/participant/cyberbattlesim-red-credential-cache.manifest.json",
+      "sha256": "2ea827eb709a036b1721a91fabce787a320845bf26e3e6f0a0e5e768e7f9d93b"
+    },
+    {
+      "artifact_id": "participant-selection",
+      "path": "environments/cyberbattlesim-chain/participant/cyberbattlesim-red-credential-cache.selection.json",
+      "sha256": "ce920ca6362b37e8cde6af12190ee9b84e9ea3c3fc89842d31366f0ec6031935"
+    },
+    {
+      "artifact_id": "participant-configuration",
+      "path": "environments/cyberbattlesim-chain/participant/cyberbattlesim-red-credential-cache.configuration.json",
+      "sha256": "2b5e0fd0ef0be839af33763199e76192196a4928ca555a230af0f685c38eeced"
+    }
+  ],
+  "compatibility_patches": [],
+  "exclusions": [
+    "historical benchmark output from a different commit",
+    "native observations, action coordinates, credentials, hidden state, and reward vectors",
+    "provider logs, credentials, environment dumps, and tracebacks"
+  ],
+  "loss_refs": [
+    "loss-abstracted-topology",
+    "loss-benchmark-defects",
+    "loss-no-source-artifact",
+    "loss-observation-abstraction",
+    "loss-unbound-random-streams"
+  ],
+  "schema_version": "cyberbattlesim-baseline-source-ledger/v1",
+  "source": {
+    "commit": "854d6966607fb68645651f55b0f97221bd293e0d",
+    "notebook_path": "notebooks/notebook_withdefender.py",
+    "notebook_sha256": "847999b0a907c22a6e64b93c96d444d43e0a66dbfba2a2bd0a9ba888cfa41fcc",
+    "repository": "https://github.com/microsoft/CyberBattleSim",
+    "runtime_tree_sha256": "1b8bf39a7cb9c172b51b5223dfac13b9d01e166b34dc2bb29297cddb254a06fe",
+    "tree": "4271b137ab2de593be52d7afb0a51bee59045a45",
+    "version": "0.1.0"
+  }
+}

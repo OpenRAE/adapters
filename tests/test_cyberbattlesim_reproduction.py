@@ -10,6 +10,7 @@ import pytest
 from raes_adapters.cyberbattlesim import reproduction
 
 PROJECT_ROOT = Path(__file__).parents[1]
+REPRODUCTION_ROOT = PROJECT_ROOT / "packages/cyberbattlesim_adapter/reproduction"
 
 
 def _native_episode(index: int) -> dict[str, object]:
@@ -40,6 +41,10 @@ def test_declaration_uses_published_contracts_and_unique_attempts() -> None:
     assert len({item["run_id"] for item in schedule}) == 20
     assert len({item["attempt_id"] for item in schedule}) == 20
     assert {item["lane"] for item in schedule} == {"source-native", "raes-mediated"}
+    assert all(item["run_id"].startswith("cbs-r2-") for item in schedule)
+    assert not {item["attempt_id"] for item in schedule} & set(
+        protocol["declaration"]["prior_attempts"]["attempt_ids"]
+    )
     assert protocol["declaration"]["study"]["schema_version"] == "experiment-study/v1"
     assert source_ledger["source"]["commit"] == ("854d6966607fb68645651f55b0f97221bd293e0d")
 
@@ -289,3 +294,62 @@ def test_offline_verifier_rejects_forbidden_native_material(tmp_path: Path) -> N
 
     with pytest.raises(ValueError, match="forbidden native value"):
         reproduction.verify_bundle(bundle)
+
+
+def test_portable_scan_distinguishes_withheld_names_from_native_fields(tmp_path: Path) -> None:
+    safe = tmp_path / "safe"
+    safe.mkdir()
+    (safe / "provenance.json").write_text(
+        json.dumps(
+            {"visibility_policy": {"withheld_refs": ["action_mask", "credential_cache_matrix"]}}
+        ),
+        encoding="utf-8",
+    )
+
+    reproduction._scan_portable(safe)
+
+    unsafe = tmp_path / "unsafe"
+    unsafe.mkdir()
+    (unsafe / "evidence.json").write_text(json.dumps({"action_mask": [1, 0, 1]}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="forbidden native value"):
+        reproduction._scan_portable(unsafe)
+
+    serialized = tmp_path / "serialized"
+    serialized.mkdir()
+    (serialized / "payload.json").write_text(
+        json.dumps([json.dumps({"credential_cache_matrix": [[1]]})]),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="forbidden native value"):
+        reproduction._scan_portable(serialized)
+
+
+def test_rejected_attempt_series_remains_timestamped_and_inventory_bound() -> None:
+    root = REPRODUCTION_ROOT / ("825dde3b4cd66f228e0f93157a2add35e3c9a822a7adac1d8ffd322b32116232")
+    rejection = reproduction.load_strict_json(root / "rejection.json")
+
+    assert rejection["publication_eligible"] is False
+    assert rejection["publication_disposition"] == "rejected"
+    assert rejection["terminalized_counts"] == {
+        "source-native": 10,
+        "raes-mediated": 10,
+    }
+    assert rejection["scientific_conditions_changed"] is False
+    assert rejection["retention_note"].endswith("issuecomment-5235757215")
+
+    for stage in rejection["retained_stages"]:
+        stage_root = root / stage["path"]
+        reproduction._verify_inventory(stage_root)
+        reproduction._scan_portable(stage_root)
+        assert (
+            reproduction._sha256_file(stage_root / "inventory.json") == (stage["inventory_sha256"])
+        )
+        notes = reproduction.load_strict_json(stage_root / "bench-notes.json")["notes"]
+        for note in notes:
+            parsed = datetime.fromisoformat(note["recorded_at"].replace("Z", "+00:00"))
+            assert parsed.tzinfo == UTC
+
+    assert len(reproduction.load_terminal_rows(root / "native-oracle")) == 10
+    assert len(reproduction.load_terminal_rows(root / "mediated")) == 10

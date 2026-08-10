@@ -47,6 +47,17 @@ schedule. Native reward vectors exist only in private scratch; portable rows
 retain cumulative reward, steps, availability, and a source-backed terminal
 cause.
 
+The first terminalized 20-attempt series under declaration
+`825dde3b4cd66f228e0f93157a2add35e3c9a822a7adac1d8ffd322b32116232`
+is rejected from final publication. Its byte-oriented leak gate treated the
+names of fields explicitly listed in RAES `withheld_refs` as if native values
+had leaked. The scanner bound into that declaration was not changed in place.
+The replacement declaration discloses the rejection and allocates disjoint
+`cbs-r2-*` run and attempt identities while leaving the source, conditions,
+metrics, aggregation, tolerances, and tier policy unchanged. The structural
+gate permits those names only as withheld-reference strings; the same names as
+JSON keys, embedded payload strings, or non-JSON content still fail closed.
+
 Every stage also writes `bench-notes.json`. Each closed note has an RFC 3339
 UTC timestamp with millisecond precision, phase, severity, stable event code,
 concise observation, disposition, and relative evidence references. Collection

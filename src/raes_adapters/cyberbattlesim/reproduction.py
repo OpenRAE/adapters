@@ -47,7 +47,7 @@ from raes_adapters.cyberbattlesim.backend.driver import (
     verify_selected_cyberbattlesim_source,
 )
 
-_SCHEMA = "cyberbattlesim-baseline-reproduction/v1"
+_SCHEMA = "cyberbattlesim-baseline-reproduction/v2"
 _SOURCE_LEDGER_SCHEMA = "cyberbattlesim-baseline-source-ledger/v1"
 _RUN_SCHEMA = "cyberbattlesim-baseline-run/v1"
 _AGGREGATE_SCHEMA = "cyberbattlesim-baseline-aggregates/v1"
@@ -71,6 +71,8 @@ _TIERS = (
 )
 _ATTEMPTS_PER_LANE = 10
 _SEED_LABEL = 20260729
+_ATTEMPT_SERIES = "cbs-r2"
+_REJECTED_DECLARATION_SHA256 = "825dde3b4cd66f228e0f93157a2add35e3c9a822a7adac1d8ffd322b32116232"
 _BENCH_PHASES = frozenset({"declaration", "native", "mediated", "finalize", "verify"})
 _BENCH_SEVERITIES = frozenset({"info", "warning", "error"})
 _BENCH_DISPOSITIONS = frozenset({"observed", "passed", "failed", "weakened"})
@@ -94,11 +96,11 @@ _BENCH_EVENT_CODES = frozenset(
 )
 _PRIVATE_KEY_MARKER = "BEGIN OPENSSH " + "PRIVATE KEY"
 _FORBIDDEN_PORTABLE_TOKENS = (
-    "credential_cache_matrix",
-    '"action_mask"',
-    '"_explored_network"',
     _PRIVATE_KEY_MARKER,
     "Traceback (most recent call last)",
+)
+_FORBIDDEN_NATIVE_FIELD_NAMES = frozenset(
+    {"action_mask", "credential_cache_matrix", "_explored_network"}
 )
 
 
@@ -451,7 +453,7 @@ def _study(task: ExperimentTaskModel) -> dict[str, object]:
     )
 
 
-def _schedule() -> list[dict[str, object]]:
+def _schedule(series: str) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for lane in _LANES:
         short = "native" if lane == "source-native" else "mediated"
@@ -460,12 +462,29 @@ def _schedule() -> list[dict[str, object]]:
                 {
                     "lane": lane,
                     "replicate": replicate,
-                    "run_id": f"cbs-{short}-{replicate:02d}",
-                    "attempt_id": f"cbs-{short}-{replicate:02d}-attempt-01",
+                    "run_id": f"{series}-{short}-{replicate:02d}",
+                    "attempt_id": f"{series}-{short}-{replicate:02d}-attempt-01",
                     "seed_label": _SEED_LABEL,
                 }
             )
     return rows
+
+
+def _prior_attempt_disclosure() -> dict[str, object]:
+    prior_schedule = _schedule("cbs")
+    return {
+        "declaration_sha256": _REJECTED_DECLARATION_SHA256,
+        "publication_disposition": "rejected",
+        "reason_code": "withheld-ref-scanner-false-positive",
+        "reason": (
+            "The byte-oriented leak gate could not distinguish RAES withheld_refs field "
+            "names from native values; the bound scanner was not changed in place."
+        ),
+        "run_ids": [entry["run_id"] for entry in prior_schedule],
+        "attempt_ids": [entry["attempt_id"] for entry in prior_schedule],
+        "terminalized_counts": {"source-native": 10, "raes-mediated": 10},
+        "durable_note": ("https://github.com/OpenRAE/adapters/issues/30#issuecomment-5235719750"),
+    }
 
 
 def build_declaration(repo_root: Path) -> tuple[dict[str, object], dict[str, object]]:
@@ -584,7 +603,9 @@ def build_declaration(repo_root: Path) -> tuple[dict[str, object], dict[str, obj
             "epsilon_exponential_decay": 10000,
             "epsilon_minimum": 0.1,
         },
-        "schedule": _schedule(),
+        "attempt_series": _ATTEMPT_SERIES,
+        "prior_attempts": _prior_attempt_disclosure(),
+        "schedule": _schedule(_ATTEMPT_SERIES),
         "retry_budget": 0,
         "terminal_dispositions": sorted(_DISPOSITIONS),
         "bench_notes": _bench_note_policy(),
@@ -772,6 +793,8 @@ def validate_protocol(payload: Mapping[str, object], *, require_oracle: bool) ->
             "artifacts",
             "source_selection",
             "condition",
+            "attempt_series",
+            "prior_attempts",
             "schedule",
             "retry_budget",
             "terminal_dispositions",
@@ -790,6 +813,11 @@ def validate_protocol(payload: Mapping[str, object], *, require_oracle: bool) ->
     ExperimentStudyModel.model_validate(declaration["study"])
     if declaration["retry_budget"] != 0:
         raise ValueError("retry policy is invalid")
+    if declaration["attempt_series"] != _ATTEMPT_SERIES:
+        raise ValueError("attempt series is invalid")
+    prior_attempts = declaration["prior_attempts"]
+    if prior_attempts != _prior_attempt_disclosure():
+        raise ValueError("prior attempt disclosure is invalid")
     if declaration["bench_notes"] != _bench_note_policy():
         raise ValueError("bench note policy is invalid")
     if declaration["metrics"] != list(_METRICS):
@@ -841,6 +869,14 @@ def validate_protocol(payload: Mapping[str, object], *, require_oracle: bool) ->
         counts[cast(str, lane)] += 1
     if set(counts.values()) != {_ATTEMPTS_PER_LANE}:
         raise ValueError("attempt schedule is invalid")
+    prior_run_ids = set(cast(list[str], prior_attempts["run_ids"]))
+    prior_attempt_ids = set(cast(list[str], prior_attempts["attempt_ids"]))
+    if run_ids & prior_run_ids or attempt_ids & prior_attempt_ids:
+        raise ValueError("attempt identities overlap the rejected series")
+    if any(not run_id.startswith(f"{_ATTEMPT_SERIES}-") for run_id in run_ids):
+        raise ValueError("attempt schedule series is invalid")
+    if any(not attempt_id.startswith(f"{_ATTEMPT_SERIES}-") for attempt_id in attempt_ids):
+        raise ValueError("attempt schedule series is invalid")
     oracle = payload["oracle"]
     if oracle is None:
         if require_oracle:
@@ -1688,6 +1724,11 @@ def _environment_payload(lane: str) -> dict[str, object]:
             ),
         },
         "limitations": [
+            (
+                "A prior 20-attempt series was terminalized but rejected from final "
+                "publication after its byte-oriented leak gate produced a false positive; "
+                "the fresh series uses disjoint identities and unchanged scientific conditions."
+            ),
             "The upstream source has no selected public index or release artifact.",
             "Python-global and NumPy-global random streams are unbound in the mediated lane.",
             "All four observed random streams are unbound in the source-native lane.",
@@ -2416,12 +2457,32 @@ def _resolve_pointer(document: object, pointer: str) -> object:
 
 
 def _scan_portable(root: Path) -> None:
+    def contains_native_field_name(value: str) -> bool:
+        folded = value.casefold()
+        return any(name.casefold() in folded for name in _FORBIDDEN_NATIVE_FIELD_NAMES)
+
+    def scan_json_value(value: object, *, withheld_ref: bool = False) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if contains_native_field_name(key):
+                    raise ValueError("portable artifact contains a forbidden native value")
+                scan_json_value(child, withheld_ref=key == "withheld_refs")
+        elif isinstance(value, list):
+            for child in value:
+                scan_json_value(child, withheld_ref=withheld_ref)
+        elif isinstance(value, str) and not withheld_ref and contains_native_field_name(value):
+            raise ValueError("portable artifact contains a forbidden native value")
+
     for path in sorted(item for item in root.rglob("*") if item.is_file()):
         content = path.read_bytes()
         if len(content) > 500 * 1024:
             raise ValueError("portable artifact exceeds the repository size limit")
         text = content.decode("utf-8", errors="ignore")
         if any(token.casefold() in text.casefold() for token in _FORBIDDEN_PORTABLE_TOKENS):
+            raise ValueError("portable artifact contains a forbidden native value")
+        if path.suffix == ".json":
+            scan_json_value(_load_strict_value(path))
+        elif contains_native_field_name(text):
             raise ValueError("portable artifact contains a forbidden native value")
         if any(prefix in text for prefix in ("/home/", "/tmp/", "file:///home/", "file:///tmp/")):
             raise ValueError("portable artifact contains a host path")

@@ -1,0 +1,391 @@
+{
+  "apparatus_context": {
+    "apparatus_context_id": "apparatus-cbs-mediated-06-1",
+    "clocks": [
+      {
+        "authority": "cyberbattlesim-chain runtime",
+        "clock_id": "time.clock.cyberbattlesim-chain",
+        "synchronization": null,
+        "time_domain": "logical"
+      }
+    ],
+    "compatibility_declarations": [
+      {
+        "ref_id": "cyberbattlesim-chain-public-854d696",
+        "ref_kind": "profile",
+        "ref_version": "854d6966607fb68645651f55b0f97221bd293e0d"
+      }
+    ],
+    "components": {
+      "backend": {
+        "compatibility_refs": [],
+        "component_kind": "backend",
+        "identity": {
+          "name": "cyberbattlesim",
+          "version": "0.0.0"
+        },
+        "limitations": [],
+        "manifest_ref": {
+          "ref_digest": null,
+          "ref_id": "cyberbattlesim",
+          "ref_kind": "manifest",
+          "ref_path": null,
+          "ref_version": "backend-manifest/v2",
+          "subject_ref": {
+            "ref_digest": null,
+            "ref_id": "cyberbattlesim",
+            "ref_kind": "backend",
+            "ref_path": null,
+            "ref_version": "0.0.0"
+          }
+        },
+        "observed": true
+      },
+      "processor": {
+        "compatibility_refs": [],
+        "component_kind": "processor",
+        "identity": {
+          "name": "raes-runtime-manager",
+          "version": "3.3.0"
+        },
+        "limitations": [],
+        "manifest_ref": {
+          "ref_digest": null,
+          "ref_id": "raes-runtime-manager",
+          "ref_kind": "manifest",
+          "ref_path": null,
+          "ref_version": "processor-manifest/v2",
+          "subject_ref": {
+            "ref_digest": null,
+            "ref_id": "raes-runtime-manager",
+            "ref_kind": "processor",
+            "ref_path": null,
+            "ref_version": "3.3.0"
+          }
+        },
+        "observed": true
+      },
+      "red-policy": {
+        "compatibility_refs": [],
+        "component_kind": "participant-implementation",
+        "identity": {
+          "name": "cyberbattlesim-red-credential-cache",
+          "version": "1.0.0"
+        },
+        "limitations": [],
+        "manifest_ref": {
+          "ref_digest": null,
+          "ref_id": "cyberbattlesim-red-credential-cache",
+          "ref_kind": "manifest",
+          "ref_path": null,
+          "ref_version": "participant-implementation-manifest/v1",
+          "subject_ref": {
+            "ref_digest": null,
+            "ref_id": "cyberbattlesim-red-credential-cache",
+            "ref_kind": "participant-implementation",
+            "ref_path": null,
+            "ref_version": "1.0.0"
+          }
+        },
+        "observed": true
+      }
+    },
+    "configuration_parameters": [
+      {
+        "name": "red-policy",
+        "redaction": "none",
+        "value": "CredentialCacheExploiter",
+        "value_kind": "apparatus"
+      }
+    ],
+    "context_version": "1.0.0",
+    "declared_at": "2026-08-10T03:59:12.701512Z",
+    "known_limitations": [
+      {
+        "category": "apparatus",
+        "mitigation": null,
+        "note": "Native internals are withheld at the adapter boundary."
+      },
+      {
+        "category": "internal",
+        "mitigation": null,
+        "note": "The public evaluator leaves Python and global NumPy streams unbound; the recorded seed is not a deterministic-replay claim."
+      }
+    ],
+    "measurement_channels": [
+      {
+        "ref_id": "cyberbattlesim-reward-projection",
+        "ref_kind": "measurement-channel",
+        "ref_version": "1.0.0"
+      }
+    ],
+    "observed_setup_evidence": [
+      {
+        "artifact_id": "researcher-setup-evidence",
+        "checksum": {
+          "algorithm": "sha256",
+          "value": "3c66dfd94a862fa6e5219c075d50492ec8385d9a130bae6bd2795bb05268b6eb"
+        },
+        "created_at": "2026-08-10T03:59:12.701512Z",
+        "description": null,
+        "media_type": "application/json",
+        "role": "apparatus-evidence",
+        "satisfies_refs": [
+          {
+            "ref_id": "attacker-action-log",
+            "ref_kind": "evidence",
+            "ref_version": null
+          },
+          {
+            "ref_id": "availability-series",
+            "ref_kind": "evidence",
+            "ref_version": null
+          }
+        ],
+        "sensitivity": "redacted",
+        "size_bytes": 2381,
+        "source": "cyberbattlesim-chain evaluator projection",
+        "uri": "runs/cbs-mediated-06-1/evidence-records.json"
+      }
+    ],
+    "schema_version": "experiment-apparatus-context/v1",
+    "selected_manifests": [
+      {
+        "ref_digest": null,
+        "ref_id": "raes-runtime-manager",
+        "ref_kind": "manifest",
+        "ref_path": null,
+        "ref_version": "processor-manifest/v2",
+        "subject_ref": {
+          "ref_digest": null,
+          "ref_id": "raes-runtime-manager",
+          "ref_kind": "processor",
+          "ref_path": null,
+          "ref_version": "3.3.0"
+        }
+      },
+      {
+        "ref_digest": null,
+        "ref_id": "cyberbattlesim",
+        "ref_kind": "manifest",
+        "ref_path": null,
+        "ref_version": "backend-manifest/v2",
+        "subject_ref": {
+          "ref_digest": null,
+          "ref_id": "cyberbattlesim",
+          "ref_kind": "backend",
+          "ref_path": null,
+          "ref_version": "0.0.0"
+        }
+      },
+      {
+        "ref_digest": null,
+        "ref_id": "cyberbattlesim-red-credential-cache",
+        "ref_kind": "manifest",
+        "ref_path": null,
+        "ref_version": "participant-implementation-manifest/v1",
+        "subject_ref": {
+          "ref_digest": null,
+          "ref_id": "cyberbattlesim-red-credential-cache",
+          "ref_kind": "participant-implementation",
+          "ref_path": null,
+          "ref_version": "1.0.0"
+        }
+      }
+    ],
+    "stochastic_controls": [
+      {
+        "control_id": "cyberbattlesim-gym-reset-seed",
+        "description": null,
+        "executable_binding": null,
+        "role": "seed",
+        "value": 20260729
+      }
+    ]
+  },
+  "augmentation_disclosures": [],
+  "clock_context": {
+    "authority": "cyberbattlesim-chain runtime",
+    "clock_id": "time.clock.cyberbattlesim-chain",
+    "synchronization": null,
+    "time_domain": "logical"
+  },
+  "derived_from_refs": [],
+  "deviations": [],
+  "difficulty_provenance": null,
+  "ended_at": "2026-08-10T03:59:12.701512Z",
+  "evidence_artifacts": [
+    {
+      "artifact_id": "portable-evidence-1",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "3c66dfd94a862fa6e5219c075d50492ec8385d9a130bae6bd2795bb05268b6eb"
+      },
+      "created_at": "2026-08-10T03:59:12.701512Z",
+      "description": null,
+      "media_type": "application/json",
+      "role": "observation",
+      "satisfies_refs": [
+        {
+          "ref_id": "attacker-action-log",
+          "ref_kind": "evidence",
+          "ref_version": null
+        },
+        {
+          "ref_id": "availability-series",
+          "ref_kind": "evidence",
+          "ref_version": null
+        }
+      ],
+      "sensitivity": "redacted",
+      "size_bytes": 2381,
+      "source": "cyberbattlesim-chain evaluator projection",
+      "uri": "runs/cbs-mediated-06-1/evidence-records.json"
+    }
+  ],
+  "generated_refs": [],
+  "invalidation": null,
+  "outcome_status": "succeeded",
+  "parameter_set": [
+    {
+      "name": "red-implementation",
+      "redaction": "none",
+      "value": "cyberbattlesim-red-credential-cache",
+      "value_kind": "apparatus"
+    },
+    {
+      "name": "trial-length",
+      "redaction": "none",
+      "value": 600,
+      "value_kind": "protocol"
+    }
+  ],
+  "participant_implementation_provenance": {
+    "backend_manifest_ref": "manifest.cyberbattlesim-chain",
+    "metadata": {
+      "selection_source": "admitted-experiment-artifact"
+    },
+    "participant_implementations": [
+      {
+        "configuration_digest": "sha256:2254dad60b577628a134a55484d36487ead453f9033313150eb684060b6e1b07",
+        "configuration_ref": "participant/cyberbattlesim-red-credential-cache.configuration.json",
+        "exposure_policy": {
+          "constraints": {},
+          "disclosed_refs": [
+            "participant.observation-boundary.attacker-view"
+          ],
+          "exposure_policy_kinds": [
+            "hidden-truth",
+            "observation-stream"
+          ],
+          "policy_digest": null,
+          "policy_id": "cyberbattlesim-red-observation-boundary",
+          "policy_version": null,
+          "tool_affordance_refs": [],
+          "visibility_scope_refs": [
+            "participant.behavior.red"
+          ],
+          "withheld_refs": [
+            "action_mask",
+            "credential_cache_matrix",
+            "credential_cache_length",
+            "nodes_privilegelevel",
+            "discovered_nodes_properties",
+            "native-action-coordinate",
+            "reward-vector",
+            "<cyberbattle"
+          ]
+        },
+        "implementation_identity": {
+          "name": "cyberbattlesim-red-credential-cache",
+          "version": "1.0.0"
+        },
+        "manifest_digest": "sha256:6ce5cf29e35ceba75799e764a24affc9abb9b7b950d2ad63758e5102be1b0062",
+        "manifest_ref": "participant/cyberbattlesim-red-credential-cache.manifest.json",
+        "participant_address": "participant.behavior.red",
+        "participant_contract_versions": [
+          "participant-episode-state-envelope-v1",
+          "participant-behavior-history-event-stream-v1",
+          "participant-decision-surface-v2"
+        ],
+        "selected_decision_surface_mode": "policy-directed"
+      }
+    ],
+    "processor_manifest_ref": null,
+    "run_id": "driver.reset.1",
+    "schema_version": "participant-implementation-provenance/v1"
+  },
+  "realized_bindings": [],
+  "realized_form_disclosures": [],
+  "realized_time_model": null,
+  "result_summaries": {
+    "cyberbattlesim-cumulative-attacker-reward-result": {
+      "evidence_refs": [
+        {
+          "ref_id": "portable-evidence-1",
+          "ref_kind": "evidence"
+        }
+      ],
+      "metric_id": "cumulative_attacker_reward",
+      "notes": null,
+      "uncertainty": null,
+      "value": 5894.0,
+      "value_status": "reported"
+    }
+  },
+  "run_id": "driver.reset.1",
+  "run_status": "sealed",
+  "run_version": "1.0.0",
+  "scenario_snapshot_ref": {
+    "ref_digest": "sha256:9d696ea7fa23a1e7cf4c1cbc145a7989370dc4e9afff2cd5a17d6d1af887b528",
+    "ref_id": "cyberbattlesim-chain",
+    "ref_kind": "scenario-snapshot",
+    "ref_path": "sdl/cyberbattlesim-chain.sdl.yaml",
+    "ref_version": null
+  },
+  "schema_version": "experiment-run/v1",
+  "started_at": "2026-08-10T03:59:12.701512Z",
+  "stochastic_controls": [
+    {
+      "control_id": "cyberbattlesim-gym-reset-seed",
+      "description": null,
+      "executable_binding": null,
+      "role": "seed",
+      "value": 20260729
+    }
+  ],
+  "stochastic_draws": [],
+  "task_ref": {
+    "ref_id": "cyberbattlesim-chain-task",
+    "ref_kind": "task",
+    "ref_version": "1.0.0"
+  },
+  "traceability": {
+    "capture_spec_refs": [
+      {
+        "ref_id": "cyberbattlesim-evaluator-capture.d60d9f9c96354972ada424f62e23546de444a921962010632149728df7f4977d",
+        "ref_kind": "capture-spec",
+        "ref_version": "1.0.0"
+      }
+    ],
+    "claim_refs": [],
+    "derived_measure_refs": [
+      {
+        "ref_id": "measure.cyberbattlesim.cumulative-attacker-reward.d60d9f9c96354972ada424f62e23546de444a921962010632149728df7f4977d",
+        "ref_kind": "derived-measure",
+        "ref_version": "1.0.0"
+      }
+    ],
+    "evidence_record_refs": [
+      {
+        "ref_id": "evidence-record.cyberbattlesim.evaluator-summary.d60d9f9c96354972ada424f62e23546de444a921962010632149728df7f4977d",
+        "ref_kind": "evidence-record",
+        "ref_version": "1.0.0"
+      }
+    ],
+    "notes": []
+  },
+  "trial_provenance": null,
+  "used_refs": [],
+  "validation_basis_disclosures": []
+}
