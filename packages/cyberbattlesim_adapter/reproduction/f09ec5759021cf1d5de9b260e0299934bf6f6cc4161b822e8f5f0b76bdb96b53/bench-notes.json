@@ -17,6 +17,180 @@
       "recorded_at": "2026-08-10T04:29:06.323Z",
       "severity": "info",
       "summary": "The declaration and 20 never-reused attempt identities were written before experiment effects."
+    },
+    {
+      "disposition": "observed",
+      "event_code": "native-collection-started",
+      "evidence_refs": [
+        {
+          "path": "protocol.json"
+        },
+        {
+          "path": "source-ledger.json"
+        },
+        {
+          "path": "environment.json"
+        }
+      ],
+      "note_id": "native-001",
+      "phase": "native",
+      "recorded_at": "2026-08-10T04:30:24.318Z",
+      "severity": "info",
+      "summary": "The exact admitted upstream ten-episode evaluator batch was started."
+    },
+    {
+      "disposition": "passed",
+      "event_code": "native-attempt-terminalized",
+      "evidence_refs": [
+        {
+          "path": "runs/cbs-r2-native-01/record.json"
+        }
+      ],
+      "note_id": "native-002",
+      "phase": "native",
+      "recorded_at": "2026-08-10T04:30:33.103Z",
+      "severity": "info",
+      "summary": "Scheduled source-native attempt cbs-r2-native-01 was terminalized as valid."
+    },
+    {
+      "disposition": "passed",
+      "event_code": "native-attempt-terminalized",
+      "evidence_refs": [
+        {
+          "path": "runs/cbs-r2-native-02/record.json"
+        }
+      ],
+      "note_id": "native-003",
+      "phase": "native",
+      "recorded_at": "2026-08-10T04:30:33.103Z",
+      "severity": "info",
+      "summary": "Scheduled source-native attempt cbs-r2-native-02 was terminalized as valid."
+    },
+    {
+      "disposition": "passed",
+      "event_code": "native-attempt-terminalized",
+      "evidence_refs": [
+        {
+          "path": "runs/cbs-r2-native-03/record.json"
+        }
+      ],
+      "note_id": "native-004",
+      "phase": "native",
+      "recorded_at": "2026-08-10T04:30:33.103Z",
+      "severity": "info",
+      "summary": "Scheduled source-native attempt cbs-r2-native-03 was terminalized as valid."
+    },
+    {
+      "disposition": "passed",
+      "event_code": "native-attempt-terminalized",
+      "evidence_refs": [
+        {
+          "path": "runs/cbs-r2-native-04/record.json"
+        }
+      ],
+      "note_id": "native-005",
+      "phase": "native",
+      "recorded_at": "2026-08-10T04:30:33.103Z",
+      "severity": "info",
+      "summary": "Scheduled source-native attempt cbs-r2-native-04 was terminalized as valid."
+    },
+    {
+      "disposition": "passed",
+      "event_code": "native-attempt-terminalized",
+      "evidence_refs": [
+        {
+          "path": "runs/cbs-r2-native-05/record.json"
+        }
+      ],
+      "note_id": "native-006",
+      "phase": "native",
+      "recorded_at": "2026-08-10T04:30:33.103Z",
+      "severity": "info",
+      "summary": "Scheduled source-native attempt cbs-r2-native-05 was terminalized as valid."
+    },
+    {
+      "disposition": "passed",
+      "event_code": "native-attempt-terminalized",
+      "evidence_refs": [
+        {
+          "path": "runs/cbs-r2-native-06/record.json"
+        }
+      ],
+      "note_id": "native-007",
+      "phase": "native",
+      "recorded_at": "2026-08-10T04:30:33.103Z",
+      "severity": "info",
+      "summary": "Scheduled source-native attempt cbs-r2-native-06 was terminalized as valid."
+    },
+    {
+      "disposition": "passed",
+      "event_code": "native-attempt-terminalized",
+      "evidence_refs": [
+        {
+          "path": "runs/cbs-r2-native-07/record.json"
+        }
+      ],
+      "note_id": "native-008",
+      "phase": "native",
+      "recorded_at": "2026-08-10T04:30:33.103Z",
+      "severity": "info",
+      "summary": "Scheduled source-native attempt cbs-r2-native-07 was terminalized as valid."
+    },
+    {
+      "disposition": "passed",
+      "event_code": "native-attempt-terminalized",
+      "evidence_refs": [
+        {
+          "path": "runs/cbs-r2-native-08/record.json"
+        }
+      ],
+      "note_id": "native-009",
+      "phase": "native",
+      "recorded_at": "2026-08-10T04:30:33.103Z",
+      "severity": "info",
+      "summary": "Scheduled source-native attempt cbs-r2-native-08 was terminalized as valid."
+    },
+    {
+      "disposition": "passed",
+      "event_code": "native-attempt-terminalized",
+      "evidence_refs": [
+        {
+          "path": "runs/cbs-r2-native-09/record.json"
+        }
+      ],
+      "note_id": "native-010",
+      "phase": "native",
+      "recorded_at": "2026-08-10T04:30:33.103Z",
+      "severity": "info",
+      "summary": "Scheduled source-native attempt cbs-r2-native-09 was terminalized as valid."
+    },
+    {
+      "disposition": "passed",
+      "event_code": "native-attempt-terminalized",
+      "evidence_refs": [
+        {
+          "path": "runs/cbs-r2-native-10/record.json"
+        }
+      ],
+      "note_id": "native-011",
+      "phase": "native",
+      "recorded_at": "2026-08-10T04:30:33.104Z",
+      "severity": "info",
+      "summary": "Scheduled source-native attempt cbs-r2-native-10 was terminalized as valid."
+    },
+    {
+      "disposition": "passed",
+      "event_code": "native-collection-passed",
+      "evidence_refs": [
+        {
+          "path": "protocol.json"
+        }
+      ],
+      "note_id": "native-012",
+      "phase": "native",
+      "recorded_at": "2026-08-10T04:30:33.104Z",
+      "severity": "info",
+      "summary": "The exact upstream evaluator returned all ten scheduled terminal results."
     }
   ],
   "schema_version": "cyberbattlesim-baseline-bench-notes/v1"
