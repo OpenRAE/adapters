@@ -1,0 +1,23 @@
+{
+  "declaration_sha256": "f09ec5759021cf1d5de9b260e0299934bf6f6cc4161b822e8f5f0b76bdb96b53",
+  "notes": [
+    {
+      "disposition": "passed",
+      "event_code": "protocol-declared",
+      "evidence_refs": [
+        {
+          "path": "protocol.json"
+        },
+        {
+          "path": "source-ledger.json"
+        }
+      ],
+      "note_id": "declaration-001",
+      "phase": "declaration",
+      "recorded_at": "2026-08-10T04:29:06.323Z",
+      "severity": "info",
+      "summary": "The declaration and 20 never-reused attempt identities were written before experiment effects."
+    }
+  ],
+  "schema_version": "cyberbattlesim-baseline-bench-notes/v1"
+}

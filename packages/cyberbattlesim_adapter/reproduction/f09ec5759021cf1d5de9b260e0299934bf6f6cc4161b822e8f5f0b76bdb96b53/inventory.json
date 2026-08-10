@@ -1,0 +1,22 @@
+{
+  "artifacts": [
+    {
+      "media_type": "application/json",
+      "path": "bench-notes.json",
+      "sha256": "ecbc0572544ec0d53ffffc128955e7f1e7f743a38e788a50b21f17686d408d1c",
+      "size_bytes": 662
+    },
+    {
+      "media_type": "application/json",
+      "path": "protocol.json",
+      "sha256": "1d4bc1647e759f77644afb0936caad6f3e48dd543f4b0582c0ec333680e112ef",
+      "size_bytes": 19429
+    },
+    {
+      "media_type": "application/json",
+      "path": "source-ledger.json",
+      "sha256": "81bf3c562e16b8c6564be8f5cac49cd6ba363b4095a375fb14020a99932b7b1c",
+      "size_bytes": 4338
+    }
+  ]
+}
