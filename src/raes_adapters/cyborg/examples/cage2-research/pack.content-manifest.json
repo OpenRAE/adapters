@@ -1,7 +1,7 @@
 {
   "schema_version": "associated-artifact-manifest/v1",
   "manifest_id": "cage2-research-associated-artifacts",
-  "manifest_version": "1.0.0",
+  "manifest_version": "2.0.0",
   "canonicalization_profile": "associated-artifact-set/v1",
   "scope": "scenario",
   "parent_ref": {
@@ -19,11 +19,11 @@
       "uri": "raes-environment-pack:/pack.yaml",
       "checksum": {
         "algorithm": "sha256",
-        "value": "df4e34bb9248e83f81e59c8eae5b1d41f254a7ea81c5ad108f08755446a36057"
+        "value": "a75f9c2baeecc583b0467b68811ecee525f35a728eb43d19ee36d7f9567acdb0"
       },
-      "size_bytes": 446,
-      "created_at": "2026-08-02T00:00:00Z",
-      "source": "OpenRAE/adapters#20",
+      "size_bytes": 465,
+      "created_at": "2026-08-10T00:00:00Z",
+      "source": "OpenRAE/adapters#77",
       "satisfies_refs": [],
       "sensitivity": "public",
       "description": null
@@ -35,11 +35,11 @@
       "uri": "raes-environment-pack:/pack.compatibility.yaml",
       "checksum": {
         "algorithm": "sha256",
-        "value": "95858dda07f360f894b67325df320208fa9e8d1695b90f03290a357ed56115ea"
+        "value": "815dd9bf05bc316e7a59ce641e29e979356a11a92e9aca56a3036b45e26c49bc"
       },
-      "size_bytes": 3258,
-      "created_at": "2026-08-08T00:00:00Z",
-      "source": "OpenRAE/adapters#21",
+      "size_bytes": 3284,
+      "created_at": "2026-08-10T00:00:00Z",
+      "source": "OpenRAE/adapters#77",
       "satisfies_refs": [],
       "sensitivity": "public",
       "description": null
@@ -51,11 +51,11 @@
       "uri": "raes-environment-pack:/sdl/cage2-research.sdl.yaml",
       "checksum": {
         "algorithm": "sha256",
-        "value": "84dd6bbd6d056b5858f08b47c5e330f7247e7f314dbfd5401cb03e0c66177fe9"
+        "value": "14da37a9e4c4e09136fe7d6fc10a75d515ac29243bfe2b98cf81839847b3a544"
       },
-      "size_bytes": 245,
-      "created_at": "2026-08-02T00:00:00Z",
-      "source": "OpenRAE/adapters#20",
+      "size_bytes": 27339,
+      "created_at": "2026-08-10T00:00:00Z",
+      "source": "OpenRAE/adapters#77",
       "satisfies_refs": [],
       "sensitivity": "public",
       "description": null
@@ -67,11 +67,11 @@
       "uri": "raes-environment-pack:/docs/attack-path.md",
       "checksum": {
         "algorithm": "sha256",
-        "value": "bea179314dc6cca73bd44779e2a5a1713d8c78a75e88a28553755651e01e58f3"
+        "value": "0b11152e2222c863220dccca4f7c692b1b521059e3cc72bc72a8b4dadc4201d4"
       },
-      "size_bytes": 215,
-      "created_at": "2026-08-02T00:00:00Z",
-      "source": "OpenRAE/adapters#20",
+      "size_bytes": 617,
+      "created_at": "2026-08-10T00:00:00Z",
+      "source": "OpenRAE/adapters#77",
       "satisfies_refs": [],
       "sensitivity": "public",
       "description": null
@@ -83,11 +83,11 @@
       "uri": "raes-environment-pack:/docs/concepts.md",
       "checksum": {
         "algorithm": "sha256",
-        "value": "d3b6682e721a4a3c5cf33121edb8c60cc3cd160747b1cc9000de8fde6660d13f"
+        "value": "22060fe896f186f83c4b779f0164fa64cd0ae637957412eeb0ebdd04ac641529"
       },
-      "size_bytes": 235,
-      "created_at": "2026-08-02T00:00:00Z",
-      "source": "OpenRAE/adapters#20",
+      "size_bytes": 617,
+      "created_at": "2026-08-10T00:00:00Z",
+      "source": "OpenRAE/adapters#77",
       "satisfies_refs": [],
       "sensitivity": "public",
       "description": null
@@ -99,11 +99,11 @@
       "uri": "raes-environment-pack:/docs/golden-readiness-checklist.md",
       "checksum": {
         "algorithm": "sha256",
-        "value": "2a4c666b108df5c021dc95633c6f3713ad14daae85e3c4f5afa8c04fe2ff3954"
+        "value": "c5acaf1b4cf113e066612292f34e0024eefe928ca0ff4f2bd0adcf4cf20ce0ae"
       },
-      "size_bytes": 2840,
-      "created_at": "2026-08-08T00:00:00Z",
-      "source": "OpenRAE/adapters#21",
+      "size_bytes": 2828,
+      "created_at": "2026-08-10T00:00:00Z",
+      "source": "OpenRAE/adapters#77",
       "satisfies_refs": [],
       "sensitivity": "public",
       "description": null
@@ -115,11 +115,11 @@
       "uri": "raes-environment-pack:/docs/provenance-ledger.yaml",
       "checksum": {
         "algorithm": "sha256",
-        "value": "bd918a3ce37f151b01531d6aed2bb1a0c6cecec7f9463ec1e01870af24e77b1c"
+        "value": "86ac744678bce910cd8a6e4459835909d0f6906bd89ab32dbd6418b39f08ea07"
       },
-      "size_bytes": 5322,
-      "created_at": "2026-08-02T00:00:00Z",
-      "source": "OpenRAE/adapters#20",
+      "size_bytes": 5318,
+      "created_at": "2026-08-10T00:00:00Z",
+      "source": "OpenRAE/adapters#77",
       "satisfies_refs": [],
       "sensitivity": "public",
       "description": null
@@ -131,11 +131,11 @@
       "uri": "raes-environment-pack:/experiment/cage2-research.task.exp.json",
       "checksum": {
         "algorithm": "sha256",
-        "value": "71f083a6047cedbc98ebb7c7e8018ef76abe1844d892e7fe170ff23741b5dd0e"
+        "value": "e04872ff2c8308741cd149b7403c968b0cf64d9a46c6f5ba55c8c73c21f000ae"
       },
-      "size_bytes": 2569,
-      "created_at": "2026-08-02T00:00:00Z",
-      "source": "OpenRAE/adapters#20",
+      "size_bytes": 2621,
+      "created_at": "2026-08-10T00:00:00Z",
+      "source": "OpenRAE/adapters#77",
       "satisfies_refs": [],
       "sensitivity": "public",
       "description": null
@@ -147,11 +147,11 @@
       "uri": "raes-environment-pack:/experiment/cage2-research.spec.exp.json",
       "checksum": {
         "algorithm": "sha256",
-        "value": "07d084ee3b6d5e12ef72a74902956c4f6b9cb688cc778f1c9ccada21e3dc7197"
+        "value": "7a0140d85ae0114d76b4248197d391661d3596dffcd82464022e31b83b1caa0e"
       },
       "size_bytes": 3102,
-      "created_at": "2026-08-02T00:00:00Z",
-      "source": "OpenRAE/adapters#20",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source": "OpenRAE/adapters#77",
       "satisfies_refs": [],
       "sensitivity": "public",
       "description": null
@@ -205,5 +205,5 @@
       "description": null
     }
   },
-  "set_digest": "sha256:99bf6eb0a75bdab8d222689f8c7fadd4594289c255d02c0c904bec734532c752"
+  "set_digest": "sha256:72925d81fdc570b7b8bfa884b4b85a642f38f97d2cef8939856933439541deab"
 }

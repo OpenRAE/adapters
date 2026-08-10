@@ -168,6 +168,7 @@ def test_adapter_probes_cover_every_runtime_surface_with_valid_diagnostics() -> 
         "reward-evaluation.validated",
         "cleanup.validated",
         "portable-output.validated",
+        "scenario2-realization.validated",
     }
     assert {str(item["code"]).removeprefix("cyborg.probe.") for item in payloads} == (
         expected_suffixes

@@ -42,8 +42,8 @@ infrastructure:
     properties: {cidr: 10.20.0.0/24, gateway: 10.20.0.1}
   user-host: {count: 1, links: [user-net]}
 """
-_PACK_DIGEST = "sha256:99bf6eb0a75bdab8d222689f8c7fadd4594289c255d02c0c904bec734532c752"
-_SCENARIO_DIGEST = "sha256:926f13857da070f1ebdc3afbb3193c7c13f4aa9fe324b3eb93e1c2595871abda"
+_PACK_DIGEST = "sha256:72925d81fdc570b7b8bfa884b4b85a642f38f97d2cef8939856933439541deab"
+_SCENARIO_DIGEST = "sha256:58aa6b438c38bb53a5d6636e11835e44ebd6e57b48561e48aa80f0f14bfa6bf2"
 _PACK_VALIDATOR_AVAILABLE = util.find_spec("raes_env_packs") is not None
 _EXAMPLE_ROOT = resources.files("raes_adapters.cyborg") / "examples" / "cage2-research"
 
@@ -192,6 +192,7 @@ class FakeResearchDriver:
         context: _NativeEvaluationContext,
     ) -> _NativeEvaluationTurn:
         assert handle in self.handles
+        scenario2 = "provision.node.op-server-0" in context.host_addresses.values()
         return _NativeEvaluationTurn(
             run_id=context.run_id,
             episode_id=context.episode_id,
@@ -202,9 +203,9 @@ class FakeResearchDriver:
             components=(
                 _NativeRewardComponent(
                     "participant.behavior.blue",
-                    "provision.node.user-host",
-                    "confidentiality",
-                    -0.1,
+                    ("provision.node.op-server-0" if scenario2 else "provision.node.user-host"),
+                    "availability" if scenario2 else "confidentiality",
+                    0.0 if scenario2 else -0.1,
                     "source-ledger:reward-components",
                 ),
             ),
@@ -498,11 +499,71 @@ def test_native_episode_binds_real_blue_selection_and_retains_raes_evidence() ->
     assert result.completed_steps == 1
     assert result.cleanup_verified
     assert result.evidence_records
+    assert not any(item.code == "runtime.backend-contract-invalid" for item in result.diagnostics)
     assert result.derived_measures
     # The provisional construction is cleaned when the selected red policy is
     # bound; the selected execution session is cleaned at final teardown.
     assert driver.cleanup_calls == 2
     assert driver.selections[0].action_contract_address == "participant.action-contract.sleep"
+
+
+def test_full_scenario_episode_consumes_authored_evaluation_plan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from raes_adapters.cyborg import researcher
+
+    def reject_placeholder_plan(*args: object, **kwargs: object) -> object:
+        del args, kwargs
+        raise AssertionError("the full scenario must not use the placeholder evaluation plan")
+
+    monkeypatch.setattr(researcher, "cage2_evaluation_plan", reject_placeholder_plan)
+    manifest, selection, configuration = _participant_artifacts()
+    scenario = parse_sdl(
+        (_EXAMPLE_ROOT / "sdl" / "cage2-research.sdl.yaml").read_text(encoding="utf-8")
+    )
+
+    result = execute_episode(
+        scenario,
+        RunControls(
+            run_id="research-scenario2",
+            seed=7,
+            max_steps=1,
+            red_variant="sleep",
+            blue_manifest=manifest,
+            blue_selection=selection,
+            blue_configuration=configuration,
+        ),
+        driver=FakeResearchDriver(),
+    )
+
+    assert result.cleanup_verified
+    assert result.evidence_records
+    assert (
+        result.proposition_truth_results["evaluation.assertion.operational-service-invariant"][
+            "proposition_outcome"
+        ]
+        == "true"
+    )
+    assert (
+        result.proposition_truth_results["evaluation.assertion.operational-service-invariant"][
+            "assertion_outcome"
+        ]
+        == "true"
+    )
+    assert (
+        result.proposition_truth_results["evaluation.assertion.operational-impact-postcondition"][
+            "assertion_outcome"
+        ]
+        == "false"
+    )
+    assert (
+        result.objective_results["evaluation.objective.defend-operational-service"]["passed"]
+        is True
+    )
+    assert (
+        result.objective_results["evaluation.objective.impact-operational-service"]["passed"]
+        is False
+    )
 
 
 @pytest.mark.skipif(not _PACK_VALIDATOR_AVAILABLE, reason="requires the cyborg extra")

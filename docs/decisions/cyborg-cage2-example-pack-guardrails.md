@@ -1,7 +1,7 @@
 # CybORG/CAGE-2 packaged example guardrails
 
-GitHub issue #21 is the authority for this requirement-free deliverable. The
-issue thread supersedes the original proposal for an editable
+GitHub issues #21 and #77 are the authority for this requirement-free
+deliverable. The issue threads supersede the original proposal for an editable
 `environments/cyborg-cage2/` tree: reusable pack source belongs in its owning
 federated catalog, while this repository retains adapter realization and
 backend-native evidence and consumes released pack identity. The concrete scope
@@ -14,12 +14,12 @@ adapter, evidence, or release schema and is not an implementation plan.
 
 ## Scope correction and semantic authority
 
-The installed example is a bounded researcher smoke surface created by issue
-#20. It is not the full CAGE Challenge 2 Scenario2 SDL and must not be promoted
-into one by silently copying, lowercasing, deleting, or reinterpreting legacy
-RAESystem/rae#637 content. The full reviewed Scenario2 authoring work moved to
-OpenRAE/adapters#77; when that work lands, any replacement of the packaged SDL
-must be explicit, reviewed, and resealed as a new pack identity.
+The installed example began as the bounded researcher smoke surface created by
+issue #20. Issue #77 replaces that placeholder with the full reviewed CAGE
+Challenge 2 Scenario2 portable projection, keeps the canonical authored module
+beside the adapter, and reseals the byte-identical pack snapshot as version
+2.0.0. The selected source remains the qualified source closure rather than
+legacy RAESystem/rae#637 content copied or reinterpreted without evidence.
 
 - RAES owns SDL, experiment, participant, associated-artifact, runtime, and
   conformance semantics.
@@ -55,10 +55,10 @@ digest; `validate_pack_content_manifest()` and the researcher command bind the
 declared bytes before planning or execution. The same set digest must appear in
 tests, the clean-install distribution probe, and the researcher walkthrough.
 
-A self-consistent manifest proves current snapshot identity, not equivalence to
-the full Scenario2 source. Issue #77 owns that semantic migration. The packaged
-example must retain its bounded-smoke description and explicit non-claims until
-that work supplies reviewed replacement content.
+A self-consistent manifest proves current snapshot identity, not state,
+observation, or outcome equivalence with the native source. Issue #77 supplies
+the reviewed Scenario2 replacement content; the pack retains explicit
+non-claims because apparatus completeness is not a replication result.
 
 ## Compatibility, provenance, and release boundaries
 
@@ -129,10 +129,10 @@ hints in participant-visible artifacts.
 
 ## Extension seam and non-goals
 
-Issue #77 may replace the bounded SDL and related experiment material through a
-new reviewed pack version and set digest. That change should update authored
-artifacts and identity data without modifying pack schemas, adding CAGE-specific
-SDL, changing adapter dispatch, or weakening current validators.
+Future Scenario2 revisions must use another reviewed pack version and set
+digest. They must update authored artifacts and identity data without modifying
+pack schemas, adding CAGE-specific SDL, changing adapter dispatch, or weakening
+current validators.
 
 This issue adds no emulator, cloud range, web service, daemon, scoreboard,
 training framework, plugin loader, runtime downloader, credential flow,

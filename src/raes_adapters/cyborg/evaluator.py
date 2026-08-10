@@ -56,6 +56,18 @@ _SUPPORTED_RESOURCE_TYPES = frozenset(
 )
 _SUPPORTED_COMPONENTS = frozenset({"confidentiality", "availability", "action-cost"})
 _OPERATORS = {"eq": eq, "ne": ne, "lt": lt, "lte": le, "gt": gt, "gte": ge}
+_COMPILED_OPERATOR_NAMES = {
+    "equals": "eq",
+    "not_equals": "ne",
+    "less_than": "lt",
+    "less_than_or_equal": "lte",
+    "greater_than": "gt",
+    "greater_than_or_equal": "gte",
+}
+_EVIDENCE_REQUIREMENT_BINDINGS: dict[str, tuple[str, str | None]] = {
+    "source-ledger:reward-components": ("source-ledger:reward-components", None),
+    "operational-service-state": ("source-ledger:reward-components", _BLUE),
+}
 _CAPTURE_SPEC_ID = "capture-spec.cyborg-cage2.reward-projection"
 _CAPTURE_REQUIREMENT_ID = "capture-requirement.cyborg-cage2.reward-fact"
 _CAPTURE_WINDOW_ID = "capture-window.cyborg-cage2.committed-turns"
@@ -84,7 +96,8 @@ class _PredicateBinding(NamedTuple):
     operator_name: str
     expected: float
     subject: str
-    requirement: str
+    source_row: str
+    participant_address: str | None
 
 
 class _EvaluationState(NamedTuple):
@@ -311,12 +324,15 @@ class CyborgEvaluator(_EvaluatorBase):
         proposition = propositions.get(str(proposition_address))
         result = None
         if proposition is not None and polarity in {"positive", "negative"}:
+            evaluation_basis = proposition.payload.get("evaluation_basis")
+            if not isinstance(evaluation_basis, str) or not evaluation_basis:
+                return None
             base = {
                 "result_id": f"truth.{assertion.address}",
                 "proposition_address": str(proposition_address),
                 "assertion_address": assertion.address,
                 "assertion_polarity": polarity,
-                "evaluation_basis": "observed_state",
+                "evaluation_basis": evaluation_basis,
             }
             binding, capability = CyborgEvaluator._predicate_binding(proposition)
             match = CyborgEvaluator._latest_component(facts, binding)
@@ -338,24 +354,34 @@ class CyborgEvaluator(_EvaluatorBase):
         spec = payload.get("spec")
         predicate = spec.get("predicate") if isinstance(spec, dict) else None
         property_name = predicate.get("property") if isinstance(predicate, dict) else None
-        operator_name = predicate.get("operator") if isinstance(predicate, dict) else None
-        expected = predicate.get("value") if isinstance(predicate, dict) else None
+        raw_operator = predicate.get("operator") if isinstance(predicate, dict) else None
+        operator_name = (
+            _COMPILED_OPERATOR_NAMES.get(raw_operator, raw_operator)
+            if isinstance(raw_operator, str)
+            else None
+        )
+        expected = None
+        if isinstance(predicate, dict):
+            expected = predicate.get("value", predicate.get("expected"))
         subjects = payload.get("subject_addresses")
         requirements = payload.get("evidence_requirement_refs")
         subject = CyborgEvaluator._single_subject(subjects)
+        requirement = CyborgEvaluator._single_requirement(requirements)
+        evidence_binding = _EVIDENCE_REQUIREMENT_BINDINGS.get(requirement or "")
         supported = (
             CyborgEvaluator._supported_predicate_values(property_name, operator_name, expected)
             and subject is not None
-            and requirements == ["source-ledger:reward-components"]
+            and evidence_binding is not None
         )
         binding = None
-        if supported:
+        if supported and evidence_binding is not None:
             binding = _PredicateBinding(
                 cast(str, property_name),
                 cast(str, operator_name),
                 float(cast(int | float, expected)),
                 cast(str, subject),
-                "source-ledger:reward-components",
+                evidence_binding[0],
+                evidence_binding[1],
             )
         capability = (
             "cyborg-cage2.evaluation.critical-impact-unavailable"
@@ -382,10 +408,19 @@ class CyborgEvaluator(_EvaluatorBase):
     def _single_subject(subjects: object) -> str | None:
         """Resolve one exact portable subject address from a compiled predicate."""
 
-        if not isinstance(subjects, list) or len(subjects) != 1:
+        if not isinstance(subjects, (list, tuple)) or len(subjects) != 1:
             return None
         subject = subjects[0]
         return subject if isinstance(subject, str) else None
+
+    @staticmethod
+    def _single_requirement(requirements: object) -> str | None:
+        """Resolve one exact compiled evidence-requirement reference."""
+
+        if not isinstance(requirements, (list, tuple)) or len(requirements) != 1:
+            return None
+        requirement = requirements[0]
+        return requirement if isinstance(requirement, str) else None
 
     @staticmethod
     def _latest_component(
@@ -402,7 +437,11 @@ class CyborgEvaluator(_EvaluatorBase):
             for component in turn.components
             if component.component == binding.property_name
             and component.target_address == binding.subject
-            and component.source_row == binding.requirement
+            and component.source_row == binding.source_row
+            and (
+                binding.participant_address is None
+                or component.participant_address == binding.participant_address
+            )
         ]
         return matches[-1] if matches else None
 
@@ -492,10 +531,10 @@ class CyborgEvaluator(_EvaluatorBase):
         success = spec.get("success") if isinstance(spec, dict) else None
         mode = success.get("mode") if isinstance(success, dict) else None
         valid = (
-            isinstance(addresses, list)
+            isinstance(addresses, (list, tuple))
             and bool(addresses)
             and all(isinstance(item, str) for item in addresses)
-            and mode in {"all", "any"}
+            and mode in {"all", "all_of", "any", "any_of"}
         )
         values = [outcomes.get(address, "unknown") for address in addresses] if valid else []
         if not terminal:
@@ -505,7 +544,7 @@ class CyborgEvaluator(_EvaluatorBase):
         else:
             booleans = [value == "true" for value in values]
             status = "ready"
-            passed = all(booleans) if mode == "all" else any(booleans)
+            passed = all(booleans) if mode in {"all", "all_of"} else any(booleans)
         return EvaluationResultStateModel(
             resource_type="objective",
             run_id=run_id,
@@ -530,9 +569,10 @@ class CyborgEvaluator(_EvaluatorBase):
                 status="running",
             ),
             EvaluationHistoryEventModel(
-                event_type=(
-                    "evaluation_ready" if result.status == "ready" else "evaluation_updated"
-                ),
+                event_type={
+                    "ready": "evaluation_ready",
+                    "failed": "evaluation_failed",
+                }.get(result.status, "evaluation_updated"),
                 timestamp=now,
                 status=result.status,
                 passed=result.passed,
