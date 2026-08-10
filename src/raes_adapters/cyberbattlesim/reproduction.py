@@ -953,6 +953,25 @@ def _validate_attempt_schedule(
     return schedule
 
 
+def _native_schedule_run_ids(schedule: Sequence[Mapping[str, object]]) -> list[object]:
+    """Return the source-native run identities in declared order."""
+
+    return [entry["run_id"] for entry in schedule if entry["lane"] == "source-native"]
+
+
+def _oracle_result_run_ids(results: object) -> list[object]:
+    """Validate and return the ordered oracle result identities."""
+
+    if not isinstance(results, list):
+        raise ValueError(_INVALID_ORACLE)
+    run_ids: list[object] = []
+    for item in results:
+        if not isinstance(item, dict):
+            raise ValueError(_INVALID_ORACLE)
+        run_ids.append(item.get("run_id"))
+    return run_ids
+
+
 def _validate_oracle(
     oracle: object,
     declaration_sha256: object,
@@ -976,14 +995,8 @@ def _validate_oracle(
         raise ValueError(_INVALID_ORACLE)
     if not _is_sha256(oracle["native_result_set_sha256"]):
         raise ValueError(_INVALID_ORACLE)
-    results = oracle["ordered_results"]
-    native_ids = [entry["run_id"] for entry in schedule if entry["lane"] == "source-native"]
-    observed_ids = (
-        [item.get("run_id") for item in results if isinstance(item, dict)]
-        if isinstance(results, list)
-        else []
-    )
-    if not isinstance(results, list) or observed_ids != native_ids:
+    native_ids = _native_schedule_run_ids(schedule)
+    if _oracle_result_run_ids(oracle["ordered_results"]) != native_ids:
         raise ValueError(_INVALID_ORACLE)
 
 
@@ -2590,6 +2603,35 @@ def _verify_finalized_stage(
         raise RuntimeError("final bundle offline verification failed") from None
 
 
+def _combined_bench_notes(
+    oracle_root: Path,
+    mediated_root: Path,
+    protocol: Mapping[str, object],
+) -> dict[str, object]:
+    """Combine and validate stage notes in their timestamped order."""
+
+    oracle_notes = _load_bench_notes(oracle_root, protocol)
+    mediated_notes = _load_bench_notes(mediated_root, protocol)
+    notes = sorted(
+        cast(list[dict[str, object]], oracle_notes["notes"])
+        + cast(list[dict[str, object]], mediated_notes["notes"]),
+        key=lambda note: (cast(str, note["recorded_at"]), cast(str, note["note_id"])),
+    )
+    bench_notes = _new_bench_notes(protocol, notes)
+    _validate_bench_notes(bench_notes, protocol)
+    return bench_notes
+
+
+def _copy_stage_runs(root: Path, *stage_roots: Path) -> None:
+    """Copy every stage run into the reserved final bundle."""
+
+    runs_root = root / "runs"
+    os.mkdir(runs_root, 0o700)
+    for stage in stage_roots:
+        for run in sorted((stage / "runs").iterdir()):
+            shutil.copytree(run, runs_root / run.name)
+
+
 def finalize_bundle(oracle_root: Path, mediated_root: Path, output: Path) -> Path:
     """Assemble and seal the accepted bundle exactly once."""
 
@@ -2614,15 +2656,7 @@ def finalize_bundle(oracle_root: Path, mediated_root: Path, output: Path) -> Pat
     oracle = cast(dict[str, object], protocol["oracle"])
     if sha256_payload(ordered_native) != oracle["native_result_set_sha256"]:
         raise ValueError("source-native oracle does not match retained terminal evidence")
-    oracle_notes = _load_bench_notes(oracle_root, protocol)
-    mediated_notes = _load_bench_notes(mediated_root, protocol)
-    combined_notes = sorted(
-        cast(list[dict[str, object]], oracle_notes["notes"])
-        + cast(list[dict[str, object]], mediated_notes["notes"]),
-        key=lambda note: (cast(str, note["recorded_at"]), cast(str, note["note_id"])),
-    )
-    bench_notes = _new_bench_notes(protocol, combined_notes)
-    _validate_bench_notes(bench_notes, protocol)
+    bench_notes = _combined_bench_notes(oracle_root, mediated_root, protocol)
     root = _reserve_directory(output)
     atomic_write_json_artifact(root / _PROTOCOL_FILE, protocol)
     source_ledger = load_strict_json(oracle_root / _SOURCE_LEDGER_FILE)
@@ -2640,11 +2674,7 @@ def finalize_bundle(oracle_root: Path, mediated_root: Path, output: Path) -> Pat
         evidence_paths=(_PROTOCOL_FILE, _SOURCE_LEDGER_FILE, _ENVIRONMENT_FILE),
     )
     _write_bench_notes(root, bench_notes)
-    runs_root = root / "runs"
-    os.mkdir(runs_root, 0o700)
-    for stage in (oracle_root, mediated_root):
-        for run in sorted((stage / "runs").iterdir()):
-            shutil.copytree(run, runs_root / run.name)
+    _copy_stage_runs(root, oracle_root, mediated_root)
     aggregates = compute_aggregates(protocol, rows)
     atomic_write_json_artifact(root / _AGGREGATES_FILE, aggregates)
     revision_value = protocol["declaration_sha256"]
@@ -2814,6 +2844,22 @@ def _verify_bench_evidence(root: Path, notes: Sequence[Mapping[str, object]]) ->
                 raise ValueError("bench note evidence reference is unresolved")
 
 
+def _verify_terminal_refs(run_root: Path, refs: object) -> None:
+    """Verify the structure, location, and digest of terminal evidence refs."""
+
+    if not isinstance(refs, list):
+        raise ValueError("terminal row evidence references are invalid")
+    resolved_root = run_root.resolve()
+    for ref in refs:
+        if not isinstance(ref, dict) or set(ref) != {"path", "sha256"}:
+            raise ValueError("terminal row evidence references are invalid")
+        target = (run_root / _safe_relative_path(ref["path"])).resolve()
+        if not target.is_relative_to(resolved_root) or not target.is_file():
+            raise ValueError("terminal row evidence reference is unresolved")
+        if _sha256_file(target) != ref["sha256"]:
+            raise ValueError("terminal row evidence digest is invalid")
+
+
 def _verify_terminal_evidence(
     root: Path,
     protocol: Mapping[str, object],
@@ -2830,17 +2876,7 @@ def _verify_terminal_evidence(
     run_root = root / "runs" / cast(str, row["run_id"])
     if mediated and row["disposition"] == "valid":
         _validate_mediated_portable(run_root, cast(str, row["run_id"]))
-    refs = row["evidence_refs"]
-    if not isinstance(refs, list):
-        raise ValueError("terminal row evidence references are invalid")
-    for ref in refs:
-        if not isinstance(ref, dict) or set(ref) != {"path", "sha256"}:
-            raise ValueError("terminal row evidence references are invalid")
-        target = (run_root / _safe_relative_path(ref["path"])).resolve()
-        if not target.is_relative_to(run_root.resolve()) or not target.is_file():
-            raise ValueError("terminal row evidence reference is unresolved")
-        if _sha256_file(target) != ref["sha256"]:
-            raise ValueError("terminal row evidence digest is invalid")
+    _verify_terminal_refs(run_root, row["evidence_refs"])
 
 
 def _verify_native_oracle(

@@ -56,7 +56,7 @@ class _GymnasiumModule(Protocol):
 
 
 @dataclass(frozen=True)
-class SelectedNativeRuntime(object):  # noqa: UP004
+class SelectedNativeRuntime(object):
     """Private installed objects for the one qualified native selection."""
 
     environment: object
