@@ -28,7 +28,7 @@ from raes_adapters.cyberbattlesim.backend.driver import (
 pytest.importorskip("raes_env_packs")
 
 PACK_ROOT = Path(__file__).parents[1] / "environments" / "cyberbattlesim-chain"
-PACK_DIGEST = "sha256:08ae7e997b50bb396c290c4a5537a65e9e7d8b8e6abc97d1ff65022c4258e417"
+PACK_DIGEST = "sha256:66493882579d5cba87248c5722782ff5ded5f0d7423f4e559f15bfb61712a905"
 SCENARIO_DIGEST = "sha256:9d696ea7fa23a1e7cf4c1cbc145a7989370dc4e9afff2cd5a17d6d1af887b528"
 SEED = 20260729
 

@@ -151,10 +151,14 @@
       "attacker": {
         "policy": "CredentialCacheExploiter",
         "episode_count": 10,
-        "iteration_count": 600,
-        "epsilon": 0.9,
-        "epsilon_exponential_decay": 10000,
-        "epsilon_minimum": 0.1
+      "iteration_count": 600,
+      "epsilon": 0.9,
+      "epsilon_exponential_decay": 10000,
+      "epsilon_minimum": 0.1,
+      "environment_bounds": {
+        "maximum_total_credentials": 22,
+        "maximum_node_count": 22
+      }
       },
       "defender": {
         "policy": "ScanAndReimageCompromisedMachines",

@@ -11,6 +11,11 @@ from typing import Protocol, TypedDict, cast
 
 from raes_adapters import _source_admission
 from raes_adapters.cyberbattlesim import load_qualification
+from raes_adapters.cyberbattlesim.backend.source import (
+    construct_selected_environment,
+    resolve_and_verify_selected_source,
+    verify_selected_source_identity,
+)
 
 _SUPPORTED_ACTION_KINDS = frozenset(
     {
@@ -32,16 +37,6 @@ _PORTABLE_TARGET_BY_ACTION_KIND = {
 _CREDENTIAL_CACHE_SOURCE_PATH = "cyberbattle/agents/baseline/agent_randomcredlookup.py"
 _CREDENTIAL_CACHE_MODULE = "cyberbattle.agents.baseline.agent_randomcredlookup"
 _AGENT_WRAPPER_MODULE = "cyberbattle.agents.baseline.agent_wrapper"
-_RUNTIME_SOURCE_PATHS = (
-    "cyberbattle/__init__.py",
-    _CREDENTIAL_CACHE_SOURCE_PATH,
-    "cyberbattle/agents/baseline/learner.py",
-    "cyberbattle/_env/cyberbattle_env.py",
-    "cyberbattle/_env/defender.py",
-    "cyberbattle/_env/cyberbattle_chain.py",
-    "cyberbattle/samples/chainpattern/chainpattern.py",
-)
-_RUNTIME_ARTIFACT_NAMES = frozenset({"cyberbattlesim", "gymnasium", "numpy"})
 _QUALIFICATION_INVALID = _source_admission.QUALIFICATION_INVALID
 
 
@@ -49,51 +44,9 @@ def _verify_selected_source_identity(
     qualification: dict[str, object],
     selected_distribution: Distribution,
 ) -> dict[str, Distribution]:
-    """Verify the complete pinned runtime without constructing an environment."""
+    """Compatibility wrapper around the backend-local shared verifier."""
 
-    distributions = _source_admission.verify_runtime_artifacts(
-        qualification,
-        selected_distribution,
-        expected_names=_RUNTIME_ARTIFACT_NAMES,
-        primary_name="cyberbattlesim",
-    )
-    _source_admission.verify_runtime_source_tree(
-        qualification,
-        selected_distribution,
-        import_root="cyberbattle",
-    )
-    _source_admission.verify_selected_source_files(
-        qualification,
-        selected_distribution,
-        source_paths=_RUNTIME_SOURCE_PATHS,
-    )
-    for module_name, path in (
-        ("cyberbattle", "cyberbattle/__init__.py"),
-        (
-            _CREDENTIAL_CACHE_MODULE,
-            _CREDENTIAL_CACHE_SOURCE_PATH,
-        ),
-        (
-            _AGENT_WRAPPER_MODULE,
-            "cyberbattle/agents/baseline/agent_wrapper.py",
-        ),
-    ):
-        _source_admission.verify_package_origin(
-            module_name,
-            selected_distribution,
-            path,
-        )
-    _source_admission.verify_package_origin(
-        "gymnasium",
-        distributions["gymnasium"],
-        "gymnasium/__init__.py",
-    )
-    _source_admission.verify_package_origin(
-        "numpy",
-        distributions["numpy"],
-        "numpy/__init__.py",
-    )
-    return distributions
+    return verify_selected_source_identity(qualification, selected_distribution)
 
 
 class _ActionSpace(Protocol):
@@ -351,61 +304,17 @@ class CyberBattleSimDriver(object):
             if self._environment is not None and not self._closed:
                 return
             qualification, source, selection = self._selected_configuration()
-            selected_distribution = _source_admission.resolve_selected_distribution(
-                source["package"],
-                source["version"],
+            runtime = construct_selected_environment(
+                qualification,
+                source,
+                selection,
+                module_loader=importlib.import_module,
             )
-
-            if not self._artifacts_verified:
-                _verify_selected_source_identity(qualification, selected_distribution)
-            self._selected_distribution = selected_distribution
-            # Importing ``cyberbattle`` registers CyberBattleChain-v0.
-            importlib.import_module("cyberbattle")
-            gymnasium = cast(_GymnasiumModule, importlib.import_module("gymnasium"))
-            numpy = cast(_NumpyModule, importlib.import_module("numpy"))
-            _source_admission.verify_package_origin(
-                "cyberbattle._env.cyberbattle_env",
-                selected_distribution,
-                "cyberbattle/_env/cyberbattle_env.py",
-            )
-            _source_admission.verify_package_origin(
-                "cyberbattle._env.defender",
-                selected_distribution,
-                "cyberbattle/_env/defender.py",
-            )
+            self._selected_distribution = runtime.selected_distribution
             self._artifacts_verified = True
-            source_environment = cast(
-                _SourceEnvironmentModule,
-                importlib.import_module("cyberbattle._env.cyberbattle_env"),
-            )
-            defender = cast(
-                _DefenderModule,
-                importlib.import_module("cyberbattle._env.defender"),
-            )
-            termination = selection["termination"]
-            defender_selection = selection["defender"]
-            attacker_goal = source_environment.AttackerGoal(
-                own_atleast=termination["attacker_own_atleast"],
-                own_atleast_percent=termination["attacker_own_atleast_percent"],
-            )
-            defender_constraint = source_environment.DefenderConstraint(
-                maintain_sla=termination["defender_maintain_sla"]
-            )
-            defender_agent = defender.ScanAndReimageCompromisedMachines(
-                probability=defender_selection["probability"],
-                scan_capacity=defender_selection["scan_capacity"],
-                scan_frequency=defender_selection["scan_frequency"],
-            )
-            environment = gymnasium.make(
-                selection["scenario"]["gym_id"],
-                size=selection["scenario"]["size"],
-                attacker_goal=attacker_goal,
-                defender_constraint=defender_constraint,
-                defender_agent=defender_agent,
-            ).unwrapped
-            self._environment = environment
-            self._numpy = numpy
-            self._max_steps = termination["evaluator_cutoff_steps"]
+            self._environment = cast(_NativeEnvironment, runtime.environment)
+            self._numpy = cast(_NumpyModule, runtime.numpy)
+            self._max_steps = selection["termination"]["evaluator_cutoff_steps"]
             self._closed = False
 
     def reset(self, seed: int | None) -> DriverResetReport:
@@ -807,10 +716,19 @@ def verify_selected_cyberbattlesim_source() -> None:
     """Verify the complete pinned source without importing or constructing it."""
 
     qualification, source, _selection = CyberBattleSimDriver._selected_configuration()
-    selected_distribution = _source_admission.resolve_selected_distribution(
-        source["package"], source["version"]
-    )
-    _verify_selected_source_identity(qualification, selected_distribution)
+    resolve_and_verify_selected_source(qualification, source)
+
+
+def construct_selected_cyberbattlesim_environment() -> object:
+    """Construct the exact admitted environment for the source-native evaluator."""
+
+    qualification, source, selection = CyberBattleSimDriver._selected_configuration()
+    return construct_selected_environment(
+        qualification,
+        source,
+        selection,
+        module_loader=importlib.import_module,
+    ).environment
 
 
 __all__ = [
@@ -821,5 +739,6 @@ __all__ = [
     "DriverEvaluation",
     "DriverResetReport",
     "DriverStep",
+    "construct_selected_cyberbattlesim_environment",
     "verify_selected_cyberbattlesim_source",
 ]

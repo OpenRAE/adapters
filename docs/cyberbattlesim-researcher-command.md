@@ -46,7 +46,7 @@ raes-pack-release check --pack cyberbattlesim-chain
 The admitted pack content digest is:
 
 ```text
-sha256:08ae7e997b50bb396c290c4a5537a65e9e7d8b8e6abc97d1ff65022c4258e417
+sha256:66493882579d5cba87248c5722782ff5ded5f0d7423f4e559f15bfb61712a905
 ```
 
 An asset with different bytes is rejected even if it is otherwise a valid
@@ -59,7 +59,7 @@ From the directory containing the extracted pack:
 ```bash
 raes-adapters validate --backend cyberbattlesim-chain --mode smoke \
   --pack cyberbattlesim-chain \
-  --pack-digest sha256:08ae7e997b50bb396c290c4a5537a65e9e7d8b8e6abc97d1ff65022c4258e417 \
+  --pack-digest sha256:66493882579d5cba87248c5722782ff5ded5f0d7423f4e559f15bfb61712a905 \
   --scenario sdl/cyberbattlesim-chain.sdl.yaml \
   --scenario-digest sha256:9d696ea7fa23a1e7cf4c1cbc145a7989370dc4e9afff2cd5a17d6d1af887b528 \
   --experiment experiment/cyberbattlesim-chain.spec.exp.json \
@@ -82,7 +82,7 @@ Use the same arguments with `run`, plus an unused invocation-relative output:
 ```bash
 raes-adapters run --backend cyberbattlesim-chain --mode smoke \
   --pack cyberbattlesim-chain \
-  --pack-digest sha256:08ae7e997b50bb396c290c4a5537a65e9e7d8b8e6abc97d1ff65022c4258e417 \
+  --pack-digest sha256:66493882579d5cba87248c5722782ff5ded5f0d7423f4e559f15bfb61712a905 \
   --scenario sdl/cyberbattlesim-chain.sdl.yaml \
   --scenario-digest sha256:9d696ea7fa23a1e7cf4c1cbc145a7989370dc4e9afff2cd5a17d6d1af887b528 \
   --experiment experiment/cyberbattlesim-chain.spec.exp.json \
