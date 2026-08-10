@@ -31,24 +31,32 @@ _RUNTIME_ARTIFACT_NAMES = frozenset({"cyberbattlesim", "gymnasium", "numpy"})
 
 
 class _SourceEnvironmentModule(Protocol):
+    """Typed surface of the selected native environment module."""
+
     AttackerGoal: Callable[..., object]
     DefenderConstraint: Callable[..., object]
 
 
 class _DefenderModule(Protocol):
+    """Typed surface of the selected native defender module."""
+
     ScanAndReimageCompromisedMachines: Callable[..., object]
 
 
 class _EnvironmentWrapper(Protocol):
+    """Typed surface returned by the admitted Gymnasium constructor."""
+
     unwrapped: object
 
 
 class _GymnasiumModule(Protocol):
+    """Typed surface of the admitted Gymnasium module."""
+
     def make(self, gym_id: object, **kwargs: object) -> _EnvironmentWrapper: ...
 
 
 @dataclass(frozen=True)
-class SelectedNativeRuntime:
+class SelectedNativeRuntime(object):  # noqa: UP004
     """Private installed objects for the one qualified native selection."""
 
     environment: object

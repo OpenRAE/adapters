@@ -4,10 +4,12 @@ import copy
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from raes_adapters.cyberbattlesim import reproduction
+from raes_adapters.cyberbattlesim.backend import source as source_module
 
 PROJECT_ROOT = Path(__file__).parents[1]
 REPRODUCTION_ROOT = PROJECT_ROOT / "packages/cyberbattlesim_adapter/reproduction"
@@ -385,3 +387,315 @@ def test_checked_in_revision_2_bundle_recomputes_with_failed_outcome_tier() -> N
         "outcome-evaluation": "failed",
         "disclosure": "passed",
     }
+
+
+def test_terminal_cause_uses_tolerant_frozen_classification() -> None:
+    assert reproduction._terminal_cause([], [], 600) is None
+    assert reproduction._terminal_cause([5000.0 + 1e-12], [0.7], 600) == "defender-sla"
+    assert reproduction._terminal_cause([5000.0], [0.9], 600) == "attacker-ownership"
+    assert reproduction._terminal_cause([0.0], [1.0], 2) == "defender-eviction"
+    assert reproduction._terminal_cause([1.0, 2.0], [1.0, 1.0], 2) == "evaluator-cutoff"
+
+
+@pytest.mark.parametrize(
+    ("metric", "value"),
+    [
+        ("steps_to_termination", True),
+        ("steps_to_termination", 601),
+        ("cumulative_attacker_reward", float("nan")),
+        ("cumulative_attacker_reward", False),
+        ("network_availability", []),
+        ("network_availability", [float("inf")]),
+        ("network_availability", [1.1]),
+        ("terminal_cause", "unknown"),
+    ],
+)
+def test_metric_validator_rejects_invalid_values(metric: str, value: object) -> None:
+    with pytest.raises(ValueError, match="run metric is invalid"):
+        reproduction._validate_metric_value(metric, value)
+
+
+def test_closed_protocol_helpers_reject_malformed_values() -> None:
+    protocol, _ledger = reproduction.build_declaration(PROJECT_ROOT)
+    declaration = protocol["declaration"]
+    prior = declaration["prior_attempts"]
+
+    malformed_artifacts: list[object] = [
+        [],
+        [None],
+        [{"artifact_id": "x", "path": "x", "sha256": "bad"}],
+        [
+            {"artifact_id": "x", "path": "x", "sha256": "a" * 64},
+            {"artifact_id": "x", "path": "y", "sha256": "b" * 64},
+        ],
+    ]
+    for value in malformed_artifacts:
+        with pytest.raises(ValueError):
+            reproduction._validate_declared_artifacts(value)
+
+    with pytest.raises(ValueError, match="attempt schedule"):
+        reproduction._validated_schedule_entry(None)
+    with pytest.raises(ValueError, match="attempt schedule"):
+        reproduction._validate_attempt_schedule([], prior)
+    with pytest.raises(ValueError, match="oracle is required"):
+        reproduction._validate_oracle(None, protocol["declaration_sha256"], [], True)
+    with pytest.raises(ValueError, match="oracle is invalid"):
+        reproduction._validate_oracle([], protocol["declaration_sha256"], [], False)
+
+
+def test_bench_note_helpers_reject_invalid_controlled_fields() -> None:
+    with pytest.raises(ValueError, match="evidence references"):
+        reproduction._validate_bench_evidence_refs("not-a-list")
+    with pytest.raises(ValueError, match="evidence references"):
+        reproduction._validate_bench_evidence_refs([{"path": "x", "extra": True}])
+
+    note = {
+        "phase": "invalid",
+        "severity": "info",
+        "event_code": "protocol-declared",
+        "disposition": "passed",
+        "summary": "bounded",
+        "evidence_refs": [],
+    }
+    with pytest.raises(ValueError, match="phase"):
+        reproduction._validate_bench_note_values(note)
+    note["phase"] = "declaration"
+    note["summary"] = ""
+    with pytest.raises(ValueError, match="summary"):
+        reproduction._validate_bench_note_values(note)
+
+
+def test_portable_file_scan_rejects_size_text_and_host_paths(tmp_path: Path) -> None:
+    oversized = tmp_path / "oversized.bin"
+    oversized.write_bytes(b"x" * (500 * 1024 + 1))
+    with pytest.raises(ValueError, match="size limit"):
+        reproduction._scan_portable_file(oversized)
+
+    native_text = tmp_path / "native.txt"
+    native_text.write_text("action_mask", encoding="utf-8")
+    with pytest.raises(ValueError, match="forbidden native value"):
+        reproduction._scan_portable_file(native_text)
+
+    host_path = tmp_path / "host.txt"
+    host_path.write_text("file:///tmp/private", encoding="utf-8")
+    with pytest.raises(ValueError, match="host path"):
+        reproduction._scan_portable_file(host_path)
+
+
+def test_pointer_and_mediated_measure_helpers_are_closed(tmp_path: Path) -> None:
+    document = {"items": [{"value": 3}]}
+    assert reproduction._resolve_pointer(document, "/items/0/value") == 3
+    with pytest.raises(ValueError, match="JSON Pointer"):
+        reproduction._resolve_pointer(document, "items")
+    with pytest.raises(ValueError, match="unresolved"):
+        reproduction._resolve_pointer(document, "/missing")
+
+    measure = tmp_path / "measure.json"
+    measure.write_text('[{"value": 4.5}]', encoding="utf-8")
+    assert reproduction._mediated_measure(measure) == 4.5
+    measure.write_text('[{"value": "bad"}]', encoding="utf-8")
+    with pytest.raises(RuntimeError, match="mediated evidence"):
+        reproduction._mediated_measure(measure)
+
+
+def test_installed_source_digest_supports_both_direct_url_shapes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    digest = "a" * 64
+    direct = SimpleNamespace(
+        read_text=lambda _name: json.dumps({"archive_info": {"hash": f"sha256={digest}"}})
+    )
+    monkeypatch.setattr(reproduction.importlib.metadata, "distribution", lambda _name: direct)
+    assert reproduction._installed_source_artifact_sha256() == digest
+
+    hashes = SimpleNamespace(
+        read_text=lambda _name: json.dumps({"archive_info": {"hashes": {"sha256": digest}}})
+    )
+    monkeypatch.setattr(reproduction.importlib.metadata, "distribution", lambda _name: hashes)
+    assert reproduction._installed_source_artifact_sha256() == digest
+
+
+def test_native_worker_and_batch_projection_are_bounded(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class Environment:
+        identifiers = object()
+        closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    environment = Environment()
+    qualification = {
+        "protocol": {
+            "selection": {
+                "attacker": {
+                    "environment_bounds": {
+                        "maximum_total_credentials": 22,
+                        "maximum_node_count": 10,
+                    },
+                    "episode_count": 10,
+                    "iteration_count": 600,
+                    "epsilon": 0.9,
+                    "epsilon_exponential_decay": 10000,
+                    "epsilon_minimum": 0.1,
+                }
+            }
+        }
+    }
+    learner = SimpleNamespace(
+        epsilon_greedy_search=lambda **_kwargs: {
+            "all_episodes_rewards": [[1.0] for _ in range(10)],
+            "all_episodes_availability": [[0.9] for _ in range(10)],
+        }
+    )
+    wrapper = SimpleNamespace(
+        EnvironmentBounds=SimpleNamespace(of_identifiers=lambda **_kwargs: "bounds"),
+        Verbosity=SimpleNamespace(Quiet="quiet"),
+    )
+    modules = {
+        "cyberbattle.agents.baseline.learner": learner,
+        "cyberbattle.agents.baseline.agent_randomcredlookup": SimpleNamespace(
+            CredentialCacheExploiter=lambda: "policy"
+        ),
+        "cyberbattle.agents.baseline.agent_wrapper": wrapper,
+    }
+    monkeypatch.setattr(reproduction, "verify_selected_cyberbattlesim_source", lambda: None)
+    monkeypatch.setattr(reproduction, "load_qualification", lambda: qualification)
+    monkeypatch.setattr(
+        reproduction, "construct_selected_cyberbattlesim_environment", lambda: environment
+    )
+    monkeypatch.setattr(reproduction.importlib, "import_module", modules.__getitem__)
+    output = tmp_path / "native-worker.json"
+
+    reproduction._native_worker(output)
+
+    payload = reproduction.load_strict_json(output)
+    assert len(payload["episodes"]) == 10
+    assert payload["cleanup_verified"] is True
+    assert environment.closed is True
+
+    def run_worker(command: list[str], **_kwargs: object) -> SimpleNamespace:
+        Path(command[-1]).write_text(json.dumps(payload), encoding="utf-8")
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(reproduction.subprocess, "run", run_worker)
+    results = reproduction._execute_native_batch()
+    assert len(results) == 10
+    assert {result["terminal_cause"] for result in results} == {None}
+
+
+def test_mediated_attempt_projects_only_portable_evidence(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    run_id = "cbs-r2-mediated-01"
+    run_root = tmp_path / "run"
+    archival = run_root / "portable" / "runs" / f"{run_id}-1"
+    archival.mkdir(parents=True)
+    portable = run_root / "portable"
+    (portable / "summary.json").write_text(
+        json.dumps({"disposition": "succeeded"}), encoding="utf-8"
+    )
+    (archival / "summary.json").write_text(
+        json.dumps({"completed_steps": 7, "cleanup_verified": True}), encoding="utf-8"
+    )
+    (archival / "derived-measures.json").write_text(json.dumps([{"value": 42.5}]), encoding="utf-8")
+    for name in ("run.json", "evidence-records.json"):
+        (archival / name).write_text("{}", encoding="utf-8")
+    (portable / "inventory.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        reproduction.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=0),
+    )
+
+    result = reproduction._execute_mediated_attempt(
+        {"pack_root": (tmp_path / "pack").as_posix(), "run_id": run_id}, run_root
+    )
+
+    assert result["steps_to_termination"] == 7
+    assert result["cumulative_attacker_reward"] == 42.5
+    assert result["cleanup_verified"] is True
+    assert len(result["evidence_refs"]) == 4
+
+
+def test_selected_source_helpers_verify_and_construct(monkeypatch: pytest.MonkeyPatch) -> None:
+    distribution = object()
+    gym_distribution = object()
+    numpy_distribution = object()
+    origins: list[tuple[str, object, str]] = []
+    monkeypatch.setattr(
+        source_module._source_admission,
+        "verify_runtime_artifacts",
+        lambda *_args, **_kwargs: {
+            "cyberbattlesim": distribution,
+            "gymnasium": gym_distribution,
+            "numpy": numpy_distribution,
+        },
+    )
+    monkeypatch.setattr(
+        source_module._source_admission,
+        "verify_runtime_source_tree",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        source_module._source_admission,
+        "verify_selected_source_files",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        source_module._source_admission,
+        "verify_package_origin",
+        lambda name, selected, path: origins.append((name, selected, path)),
+    )
+    source_module.verify_selected_source_identity({}, distribution)  # type: ignore[arg-type]
+    assert any(item[0] == "gymnasium" and item[1] is gym_distribution for item in origins)
+    assert any(item[0] == "numpy" and item[1] is numpy_distribution for item in origins)
+
+    monkeypatch.setattr(
+        source_module._source_admission,
+        "resolve_selected_distribution",
+        lambda package, version: distribution,
+    )
+    assert (
+        source_module.resolve_and_verify_selected_source(
+            {}, {"package": "cyberbattlesim", "version": "0.1.0"}
+        )
+        is distribution
+    )
+
+    monkeypatch.setattr(
+        source_module, "resolve_and_verify_selected_source", lambda *_args: distribution
+    )
+    goal = SimpleNamespace(
+        AttackerGoal=lambda **kwargs: ("goal", kwargs),
+        DefenderConstraint=lambda **kwargs: ("constraint", kwargs),
+    )
+    defender = SimpleNamespace(
+        ScanAndReimageCompromisedMachines=lambda **kwargs: ("defender", kwargs)
+    )
+    gymnasium = SimpleNamespace(make=lambda *_args, **_kwargs: SimpleNamespace(unwrapped="env"))
+    modules = {
+        "cyberbattle": object(),
+        "gymnasium": gymnasium,
+        "numpy": "numpy-module",
+        "cyberbattle._env.cyberbattle_env": goal,
+        "cyberbattle._env.defender": defender,
+    }
+    runtime = source_module.construct_selected_environment(
+        {},
+        {},
+        {
+            "termination": {
+                "attacker_own_atleast": 1,
+                "attacker_own_atleast_percent": 1.0,
+                "defender_maintain_sla": 0.8,
+            },
+            "defender": {"probability": 0.6, "scan_capacity": 2, "scan_frequency": 5},
+            "scenario": {"gym_id": "id", "size": 10},
+        },
+        module_loader=modules.__getitem__,
+    )
+    assert runtime.environment == "env"
+    assert runtime.numpy == "numpy-module"
+    assert runtime.selected_distribution is distribution

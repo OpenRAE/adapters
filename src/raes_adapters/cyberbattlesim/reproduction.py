@@ -25,7 +25,7 @@ import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
-from typing import Protocol, cast
+from typing import Never, Protocol, cast
 
 from raes_contracts.contracts import (  # type: ignore[import-untyped]
     ExperimentDerivedMeasureModel,
@@ -53,6 +53,23 @@ _RUN_SCHEMA = "cyberbattlesim-baseline-run/v1"
 _AGGREGATE_SCHEMA = "cyberbattlesim-baseline-aggregates/v1"
 _BENCH_NOTES_SCHEMA = "cyberbattlesim-baseline-bench-notes/v1"
 _INVENTORY_NAME = "inventory.json"
+_PROTOCOL_FILE = "protocol.json"
+_SOURCE_LEDGER_FILE = "source-ledger.json"
+_ENVIRONMENT_FILE = "environment.json"
+_COLLECTION_FILE = "collection.json"
+_AGGREGATES_FILE = "aggregates.json"
+_TIERS_FILE = "tiers.json"
+_BENCH_NOTES_FILE = "bench-notes.json"
+_INVALID_JSON = "invalid JSON artifact"
+_INVALID_BENCH_TIMESTAMP = "bench note timestamp is invalid"
+_INVALID_ARTIFACT_REFS = "artifact references are invalid"
+_INVALID_ATTEMPT_SCHEDULE = "attempt schedule is invalid"
+_INVALID_ORACLE = "source-native oracle is invalid"
+_INVALID_RUN_METRIC = "run metric is invalid"
+_INVALID_NATIVE_RESULT = "native evaluator returned an unsupported result"
+_INVALID_MEDIATED_EVIDENCE = "mediated evidence is invalid"
+_FORBIDDEN_PORTABLE_VALUE = "portable artifact contains a forbidden native value"
+_UTC_OFFSET = "+00:00"
 _LANES = ("source-native", "raes-mediated")
 _DISPOSITIONS = frozenset({"valid", "invalid", "failed", "excluded"})
 _METRICS = (
@@ -105,6 +122,8 @@ _FORBIDDEN_NATIVE_FIELD_NAMES = frozenset(
 
 
 class _NativeEvaluatorEnvironment(Protocol):
+    """Minimal native evaluator surface used by the isolated worker."""
+
     identifiers: object
 
     def close(self) -> None: ...
@@ -123,31 +142,39 @@ def sha256_payload(payload: object) -> str:
 
 
 def _sha256_file(path: Path) -> str:
+    """Hash one artifact without exposing its content."""
+
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _reject_constant(_value: str) -> object:
-    raise ValueError("invalid JSON artifact")
+    """Reject non-finite JSON constants."""
+
+    raise ValueError(_INVALID_JSON)
 
 
 def _closed_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    """Build a JSON object while rejecting duplicate keys."""
+
     result: dict[str, object] = {}
     for key, value in pairs:
         if key in result:
-            raise ValueError("invalid JSON artifact")
+            raise ValueError(_INVALID_JSON)
         result[key] = value
     return result
 
 
 def _load_strict_value(path: Path) -> object:
+    """Load one strict JSON value from disk."""
+
     try:
         return json.loads(
             path.read_text(encoding="utf-8"),
             object_pairs_hook=_closed_pairs,
             parse_constant=_reject_constant,
         )
-    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
-        raise ValueError("invalid JSON artifact") from error
+    except (OSError, ValueError) as error:
+        raise ValueError(_INVALID_JSON) from error
 
 
 def load_strict_json(path: Path) -> dict[str, object]:
@@ -155,16 +182,20 @@ def load_strict_json(path: Path) -> dict[str, object]:
 
     value = _load_strict_value(path)
     if not isinstance(value, dict):
-        raise ValueError("invalid JSON artifact")
+        raise ValueError(_INVALID_JSON)
     return value
 
 
 def _require_keys(value: Mapping[str, object], expected: frozenset[str], label: str) -> None:
+    """Require an exact closed set of object keys."""
+
     if set(value) != expected:
         raise ValueError(f"{label} has unknown or missing fields")
 
 
 def _safe_relative_path(value: object) -> str:
+    """Return a normalized safe relative POSIX path."""
+
     if not isinstance(value, str):
         raise ValueError("artifact relative path is invalid")
     path = PurePosixPath(value)
@@ -174,8 +205,10 @@ def _safe_relative_path(value: object) -> str:
 
 
 def _bench_note_policy() -> dict[str, object]:
+    """Return the frozen timestamped bench-note publication policy."""
+
     return {
-        "artifact": "bench-notes.json",
+        "artifact": _BENCH_NOTES_FILE,
         "schema_version": _BENCH_NOTES_SCHEMA,
         "timestamp_profile": "RFC3339 UTC with millisecond precision",
         "required_fields": [
@@ -196,23 +229,80 @@ def _bench_note_policy() -> dict[str, object]:
 
 
 def _utc_timestamp() -> str:
-    return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    """Return the current UTC time at the frozen millisecond precision."""
+
+    return datetime.now(UTC).isoformat(timespec="milliseconds").replace(_UTC_OFFSET, "Z")
 
 
 def _validate_bench_timestamp(value: object) -> str:
+    """Validate one canonical RFC3339 UTC bench timestamp."""
+
     if not isinstance(value, str) or not value.endswith("Z"):
-        raise ValueError("bench note timestamp is invalid")
+        raise ValueError(_INVALID_BENCH_TIMESTAMP)
     try:
-        parsed = datetime.fromisoformat(value[:-1] + "+00:00")
+        parsed = datetime.fromisoformat(value[:-1] + _UTC_OFFSET)
     except ValueError as error:
-        raise ValueError("bench note timestamp is invalid") from error
-    normalized = parsed.astimezone(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        raise ValueError(_INVALID_BENCH_TIMESTAMP) from error
+    normalized = parsed.astimezone(UTC).isoformat(timespec="milliseconds").replace(_UTC_OFFSET, "Z")
     if parsed.utcoffset() != UTC.utcoffset(None) or normalized != value:
-        raise ValueError("bench note timestamp is invalid")
+        raise ValueError(_INVALID_BENCH_TIMESTAMP)
     return value
 
 
+def _validate_bench_evidence_refs(value: object) -> None:
+    """Validate the closed relative-path evidence projection of one note."""
+
+    if not isinstance(value, list):
+        raise ValueError("bench note evidence references are invalid")
+    for ref in value:
+        if not isinstance(ref, dict) or set(ref) != {"path"}:
+            raise ValueError("bench note evidence references are invalid")
+        _safe_relative_path(ref["path"])
+
+
+def _validate_bench_note_values(note: Mapping[str, object]) -> None:
+    """Validate one note's bounded controlled vocabulary and prose."""
+
+    allowed_values = (
+        ("phase", _BENCH_PHASES),
+        ("severity", _BENCH_SEVERITIES),
+        ("event_code", _BENCH_EVENT_CODES),
+        ("disposition", _BENCH_DISPOSITIONS),
+    )
+    for field, allowed in allowed_values:
+        if note[field] not in allowed:
+            raise ValueError(f"bench note {field.replace('_', ' ')} is invalid")
+    summary = note["summary"]
+    if not isinstance(summary, str) or not summary or len(summary) > 240 or "\n" in summary:
+        raise ValueError("bench note summary is invalid")
+    _validate_bench_evidence_refs(note["evidence_refs"])
+
+
+def _validate_bench_note(value: object, note_ids: set[str], previous_timestamp: str) -> str:
+    """Validate one note and return its ordered canonical timestamp."""
+
+    if not isinstance(value, dict):
+        raise ValueError("bench note is invalid")
+    note = cast(dict[str, object], value)
+    _require_keys(
+        note,
+        frozenset(cast(list[str], _bench_note_policy()["required_fields"])),
+        "bench note",
+    )
+    note_id = note["note_id"]
+    if not isinstance(note_id, str) or note_id in note_ids:
+        raise ValueError("bench note identity is invalid")
+    note_ids.add(note_id)
+    recorded_at = _validate_bench_timestamp(note["recorded_at"])
+    if recorded_at < previous_timestamp:
+        raise ValueError("bench note timestamps are not ordered")
+    _validate_bench_note_values(note)
+    return recorded_at
+
+
 def _validate_bench_notes(payload: Mapping[str, object], protocol: Mapping[str, object]) -> None:
+    """Validate one declaration-bound, timestamp-ordered bench-note ledger."""
+
     _require_keys(
         payload,
         frozenset({"schema_version", "declaration_sha256", "notes"}),
@@ -229,44 +319,14 @@ def _validate_bench_notes(payload: Mapping[str, object], protocol: Mapping[str, 
     note_ids: set[str] = set()
     previous_timestamp = ""
     for note in notes:
-        if not isinstance(note, dict):
-            raise ValueError("bench note is invalid")
-        _require_keys(
-            note,
-            frozenset(cast(list[str], _bench_note_policy()["required_fields"])),
-            "bench note",
-        )
-        note_id = note["note_id"]
-        if not isinstance(note_id, str) or note_id in note_ids:
-            raise ValueError("bench note identity is invalid")
-        note_ids.add(note_id)
-        recorded_at = _validate_bench_timestamp(note["recorded_at"])
-        if recorded_at < previous_timestamp:
-            raise ValueError("bench note timestamps are not ordered")
-        previous_timestamp = recorded_at
-        if note["phase"] not in _BENCH_PHASES:
-            raise ValueError("bench note phase is invalid")
-        if note["severity"] not in _BENCH_SEVERITIES:
-            raise ValueError("bench note severity is invalid")
-        if note["event_code"] not in _BENCH_EVENT_CODES:
-            raise ValueError("bench note event code is invalid")
-        if note["disposition"] not in _BENCH_DISPOSITIONS:
-            raise ValueError("bench note disposition is invalid")
-        summary = note["summary"]
-        if not isinstance(summary, str) or not summary or len(summary) > 240 or "\n" in summary:
-            raise ValueError("bench note summary is invalid")
-        evidence_refs = note["evidence_refs"]
-        if not isinstance(evidence_refs, list):
-            raise ValueError("bench note evidence references are invalid")
-        for ref in evidence_refs:
-            if not isinstance(ref, dict) or set(ref) != {"path"}:
-                raise ValueError("bench note evidence references are invalid")
-            _safe_relative_path(ref["path"])
+        previous_timestamp = _validate_bench_note(note, note_ids, previous_timestamp)
 
 
 def _new_bench_notes(
     protocol: Mapping[str, object], notes: Sequence[Mapping[str, object]] = ()
 ) -> dict[str, object]:
+    """Create a declaration-bound bench-note ledger."""
+
     return {
         "schema_version": _BENCH_NOTES_SCHEMA,
         "declaration_sha256": protocol["declaration_sha256"],
@@ -276,7 +336,6 @@ def _new_bench_notes(
 
 def _append_bench_note(
     payload: dict[str, object],
-    protocol: Mapping[str, object],
     *,
     phase: str,
     severity: str,
@@ -285,6 +344,8 @@ def _append_bench_note(
     disposition: str,
     evidence_paths: Sequence[str],
 ) -> None:
+    """Append and validate one timestamped controlled bench observation."""
+
     notes = cast(list[dict[str, object]], payload["notes"])
     phase_count = sum(note.get("phase") == phase for note in notes)
     notes.append(
@@ -299,25 +360,100 @@ def _append_bench_note(
             "evidence_refs": [{"path": path} for path in evidence_paths],
         }
     )
-    _validate_bench_notes(payload, protocol)
+    _validate_bench_notes(payload, {"declaration_sha256": payload["declaration_sha256"]})
 
 
 def _write_bench_notes(root: Path, payload: Mapping[str, object]) -> None:
-    atomic_write_json_artifact(root / "bench-notes.json", dict(payload))
+    """Write the current bench-note ledger atomically."""
+
+    atomic_write_json_artifact(root / _BENCH_NOTES_FILE, dict(payload))
 
 
 def _load_bench_notes(root: Path, protocol: Mapping[str, object]) -> dict[str, object]:
-    payload = load_strict_json(root / "bench-notes.json")
+    """Load and validate a declaration-bound bench-note ledger."""
+
+    payload = load_strict_json(root / _BENCH_NOTES_FILE)
     _validate_bench_notes(payload, protocol)
     return payload
 
 
 def _artifact(repo_root: Path, artifact_id: str, relative: str) -> dict[str, object]:
+    """Describe one exact repository artifact in the declaration."""
+
     path = repo_root / relative
     return {"artifact_id": artifact_id, "path": relative, "sha256": _sha256_file(path)}
 
 
+def _behavioral_claim() -> dict[str, object]:
+    """Return the finite-case empirical-adequacy claim and its non-claims."""
+
+    return {
+        "taxonomy_id": "raes-behavioral-relations",
+        "taxonomy_revision": "rev12",
+        "relation_id": "empirical-adequacy",
+        "subject": "The fixed CyberBattleSim credential-cache baseline selection",
+        "left_carrier_ref": "condition:source-native",
+        "right_carrier_ref": "condition:raes-mediated",
+        "observation_projection_ref": "experiment-study-v1",
+        "observation_projection_revision": "rev1",
+        "quantifier_scope": "finite-cases",
+        "evidence_scope": "finite",
+        "assurance_axis": "bounded-test",
+        "evidence_boundary": (
+            "Exactly ten preallocated terminal attempts per lane under the frozen "
+            "issue-30 comparison and missingness rules."
+        ),
+        "assurance_status": "tested",
+        "limitations": ["The lanes have different stochastic bindings and evaluator paths."],
+        "explicit_non_claims": [
+            "No trace, state, observation, deterministic-replay, or outcome-equivalence "
+            "claim is made."
+        ],
+    }
+
+
+def _analysis_plan(metrics: list[object]) -> dict[str, object]:
+    """Return the frozen descriptive analysis and missingness policy."""
+
+    return {
+        "analysis_id": "cyberbattlesim-baseline-comparison-v1",
+        "description": "Lane summaries and predeclared bounded differences.",
+        "metrics": metrics,
+        "primary_metric": "cumulative_attacker_reward",
+        "statistical_method": {
+            "method": "descriptive lane summaries and difference in means",
+            "estimand": "RAES-mediated lane mean minus source-native lane mean",
+            "unit_of_analysis": "episode",
+            "comparison_family": "four predeclared task metrics",
+            "assumptions": [
+                "Attempts are the fixed scheduled episodes and are not replaced after failure."
+            ],
+        },
+        "uncertainty_method": {
+            "method": "deterministic percentile bootstrap",
+            "interval_level": 0.95,
+            "procedure": (
+                "10,000 counter-addressed SHA-256 resamples bound to the declaration digest."
+            ),
+        },
+        "multiple_comparison_policy": {
+            "family": "four descriptive metric comparisons",
+            "correction": "none",
+            "rationale": "No hypothesis-test or general population claim is made.",
+        },
+        "missing_data_policy": {
+            "missingness_assumption": "Missingness is apparatus- or failure-induced, not random.",
+            "handling": (
+                "Retain all terminal attempts in denominators; do not impute or silently drop."
+            ),
+            "sensitivity_analysis": "Unavailable declared metrics weaken the applicable tier.",
+        },
+    }
+
+
 def _study(task: ExperimentTaskModel) -> dict[str, object]:
+    """Build and validate the published RAES study projection."""
+
     metrics = list(task.evaluation_protocol.metric_definitions)
     payload = {
         "schema_version": "experiment-study/v1",
@@ -338,33 +474,7 @@ def _study(task: ExperimentTaskModel) -> dict[str, object]:
             "Which authored, contract, control, observation, outcome, and disclosure facts "
             "survive the selected RAES-mediated execution?"
         ],
-        "behavioral_claims": [
-            {
-                "taxonomy_id": "raes-behavioral-relations",
-                "taxonomy_revision": "rev12",
-                "relation_id": "empirical-adequacy",
-                "subject": "The fixed CyberBattleSim credential-cache baseline selection",
-                "left_carrier_ref": "condition:source-native",
-                "right_carrier_ref": "condition:raes-mediated",
-                "observation_projection_ref": "experiment-study-v1",
-                "observation_projection_revision": "rev1",
-                "quantifier_scope": "finite-cases",
-                "evidence_scope": "finite",
-                "assurance_axis": "bounded-test",
-                "evidence_boundary": (
-                    "Exactly ten preallocated terminal attempts per lane under the frozen "
-                    "issue-30 comparison and missingness rules."
-                ),
-                "assurance_status": "tested",
-                "limitations": [
-                    "The lanes have different stochastic bindings and evaluator paths."
-                ],
-                "explicit_non_claims": [
-                    "No trace, state, observation, deterministic-replay, or outcome-equivalence "
-                    "claim is made."
-                ],
-            }
-        ],
+        "behavioral_claims": [_behavioral_claim()],
         "membership": {
             "primary-task": {
                 "target_ref": {"ref_kind": "task", "ref_id": task.task_id},
@@ -401,42 +511,7 @@ def _study(task: ExperimentTaskModel) -> dict[str, object]:
             "replication_policy": "Ten fixed scheduled episodes per lane; retry budget zero.",
             "stopping_rule": "Terminalize every scheduled attempt; do not replace failures.",
         },
-        "analysis_plan": {
-            "analysis_id": "cyberbattlesim-baseline-comparison-v1",
-            "description": "Lane summaries and predeclared bounded differences.",
-            "metrics": metrics,
-            "primary_metric": "cumulative_attacker_reward",
-            "statistical_method": {
-                "method": "descriptive lane summaries and difference in means",
-                "estimand": "RAES-mediated lane mean minus source-native lane mean",
-                "unit_of_analysis": "episode",
-                "comparison_family": "four predeclared task metrics",
-                "assumptions": [
-                    "Attempts are the fixed scheduled episodes and are not replaced after failure."
-                ],
-            },
-            "uncertainty_method": {
-                "method": "deterministic percentile bootstrap",
-                "interval_level": 0.95,
-                "procedure": (
-                    "10,000 counter-addressed SHA-256 resamples bound to the declaration digest."
-                ),
-            },
-            "multiple_comparison_policy": {
-                "family": "four descriptive metric comparisons",
-                "correction": "none",
-                "rationale": "No hypothesis-test or general population claim is made.",
-            },
-            "missing_data_policy": {
-                "missingness_assumption": (
-                    "Missingness is apparatus- or failure-induced, not random."
-                ),
-                "handling": (
-                    "Retain all terminal attempts in denominators; do not impute or silently drop."
-                ),
-                "sensitivity_analysis": "Unavailable declared metrics weaken the applicable tier.",
-            },
-        },
+        "analysis_plan": _analysis_plan(metrics),
         "validity_notes": [
             {
                 "category": "reproducibility",
@@ -454,6 +529,8 @@ def _study(task: ExperimentTaskModel) -> dict[str, object]:
 
 
 def _schedule(series: str) -> list[dict[str, object]]:
+    """Return the frozen two-lane attempt schedule for one identity series."""
+
     rows: list[dict[str, object]] = []
     for lane in _LANES:
         short = "native" if lane == "source-native" else "mediated"
@@ -471,6 +548,8 @@ def _schedule(series: str) -> list[dict[str, object]]:
 
 
 def _prior_attempt_disclosure() -> dict[str, object]:
+    """Return the retained disclosure for the rejected first collection."""
+
     prior_schedule = _schedule("cbs")
     return {
         "declaration_sha256": _REJECTED_DECLARATION_SHA256,
@@ -487,102 +566,53 @@ def _prior_attempt_disclosure() -> dict[str, object]:
     }
 
 
-def build_declaration(repo_root: Path) -> tuple[dict[str, object], dict[str, object]]:
-    """Build and validate the frozen declaration and its source index."""
+def _declared_artifacts(
+    repo_root: Path, task_path: Path, spec_path: Path
+) -> list[dict[str, object]]:
+    """Describe every repository artifact bound into a new declaration."""
 
-    task_path = repo_root / (
-        "environments/cyberbattlesim-chain/experiment/cyberbattlesim-chain.task.exp.json"
-    )
-    spec_path = repo_root / (
-        "environments/cyberbattlesim-chain/experiment/cyberbattlesim-chain.spec.exp.json"
-    )
-    task = ExperimentTaskModel.model_validate(load_strict_json(task_path))
-    spec = ExperimentSpecModel.model_validate(load_strict_json(spec_path))
-    if spec.task_ref.ref_id != task.task_id:
-        raise ValueError("published task and spec do not join")
-    qualification = cast(dict[str, object], load_qualification())
-    source = cast(dict[str, object], qualification["source"])
-    runtime_tree = cast(dict[str, object], qualification["runtime_source_tree"])
-    benchmark = cast(dict[str, object], qualification["benchmark_snapshot"])
-    artifacts = [
-        _artifact(
-            repo_root,
-            "qualification",
-            "src/raes_adapters/cyberbattlesim/qualification.json",
-        ),
-        _artifact(
-            repo_root,
-            "public-protocol",
-            "src/raes_adapters/cyberbattlesim/public-protocol.md",
-        ),
-        _artifact(
-            repo_root,
-            "source-ledger",
-            "src/raes_adapters/cyberbattlesim/mapping/source-ledger.jsonl",
-        ),
-        _artifact(
-            repo_root,
-            "loss-disclosures",
-            "src/raes_adapters/cyberbattlesim/mapping/loss-disclosures.md",
-        ),
-        _artifact(
-            repo_root,
-            "reproduction-runner",
-            "src/raes_adapters/cyberbattlesim/reproduction.py",
-        ),
-        _artifact(
-            repo_root,
-            "mediated-researcher",
-            "src/raes_adapters/cyberbattlesim/researcher.py",
-        ),
-        _artifact(
-            repo_root,
-            "mediated-driver",
-            "src/raes_adapters/cyberbattlesim/backend/driver.py",
-        ),
-        _artifact(
-            repo_root,
-            "selected-source-helper",
-            "src/raes_adapters/cyberbattlesim/backend/source.py",
-        ),
-        _artifact(
-            repo_root,
-            "task",
-            task_path.relative_to(repo_root).as_posix(),
-        ),
-        _artifact(
-            repo_root,
-            "spec",
-            spec_path.relative_to(repo_root).as_posix(),
-        ),
-        _artifact(
-            repo_root,
-            "pack-manifest",
-            "environments/cyberbattlesim-chain/pack.content-manifest.json",
-        ),
-        _artifact(
-            repo_root,
+    relative_artifacts = (
+        ("qualification", "src/raes_adapters/cyberbattlesim/qualification.json"),
+        ("public-protocol", "src/raes_adapters/cyberbattlesim/public-protocol.md"),
+        ("source-ledger", "src/raes_adapters/cyberbattlesim/mapping/source-ledger.jsonl"),
+        ("loss-disclosures", "src/raes_adapters/cyberbattlesim/mapping/loss-disclosures.md"),
+        ("reproduction-runner", "src/raes_adapters/cyberbattlesim/reproduction.py"),
+        ("mediated-researcher", "src/raes_adapters/cyberbattlesim/researcher.py"),
+        ("mediated-driver", "src/raes_adapters/cyberbattlesim/backend/driver.py"),
+        ("selected-source-helper", "src/raes_adapters/cyberbattlesim/backend/source.py"),
+        ("task", task_path.relative_to(repo_root).as_posix()),
+        ("spec", spec_path.relative_to(repo_root).as_posix()),
+        ("pack-manifest", "environments/cyberbattlesim-chain/pack.content-manifest.json"),
+        (
             "participant-manifest",
             "environments/cyberbattlesim-chain/participant/"
             "cyberbattlesim-red-credential-cache.manifest.json",
         ),
-        _artifact(
-            repo_root,
+        (
             "participant-selection",
             "environments/cyberbattlesim-chain/participant/"
             "cyberbattlesim-red-credential-cache.selection.json",
         ),
-        _artifact(
-            repo_root,
+        (
             "participant-configuration",
             "environments/cyberbattlesim-chain/participant/"
             "cyberbattlesim-red-credential-cache.configuration.json",
         ),
-    ]
-    declaration: dict[str, object] = {
-        "study": _study(task),
-        "artifacts": artifacts,
-        "source_selection": {
+    )
+    return [_artifact(repo_root, artifact_id, path) for artifact_id, path in relative_artifacts]
+
+
+def _source_ledger_payload(
+    artifacts: Sequence[Mapping[str, object]],
+    source: Mapping[str, object],
+    runtime_tree: Mapping[str, object],
+    benchmark: Mapping[str, object],
+) -> dict[str, object]:
+    """Build the closed source and loss index joined to a declaration."""
+
+    return {
+        "schema_version": _SOURCE_LEDGER_SCHEMA,
+        "source": {
             "repository": source["repository"],
             "commit": source["commit"],
             "tree": source["tree"],
@@ -590,8 +620,48 @@ def build_declaration(repo_root: Path) -> tuple[dict[str, object], dict[str, obj
             "runtime_tree_sha256": runtime_tree["sha256"],
             "notebook_path": "notebooks/notebook_withdefender.py",
             "notebook_sha256": benchmark["source_notebook_sha256"],
-            "evaluator": qualification["protocol"]["selection"]["evaluator"],  # type: ignore[index]
         },
+        "artifact_refs": list(artifacts),
+        "adapter": {
+            "distribution": "raes-adapters",
+            "version": _installed_version("raes-adapters"),
+            "runner_artifact_ids": [
+                "reproduction-runner",
+                "mediated-researcher",
+                "mediated-driver",
+                "selected-source-helper",
+            ],
+        },
+        "loss_refs": [
+            "loss-abstracted-topology",
+            "loss-benchmark-defects",
+            "loss-no-source-artifact",
+            "loss-observation-abstraction",
+            "loss-unbound-random-streams",
+        ],
+        "exclusions": [
+            "historical benchmark output from a different commit",
+            (
+                "native observations, action coordinates, credentials, hidden state, "
+                "and reward vectors"
+            ),
+            "provider logs, credentials, environment dumps, and tracebacks",
+        ],
+        "compatibility_patches": [],
+    }
+
+
+def _declaration_payload(
+    task: ExperimentTaskModel,
+    artifacts: Sequence[Mapping[str, object]],
+    source_selection: Mapping[str, object],
+) -> dict[str, object]:
+    """Build the complete frozen scientific declaration payload."""
+
+    return {
+        "study": _study(task),
+        "artifacts": list(artifacts),
+        "source_selection": dict(source_selection),
         "condition": {
             "gym_id": "CyberBattleChain-v0",
             "size": 10,
@@ -662,54 +732,87 @@ def build_declaration(repo_root: Path) -> tuple[dict[str, object], dict[str, obj
             "general scientific reproducibility",
         ],
     }
+
+
+def build_declaration(repo_root: Path) -> tuple[dict[str, object], dict[str, object]]:
+    """Build and validate the frozen declaration and its source index."""
+
+    task_path = repo_root / (
+        "environments/cyberbattlesim-chain/experiment/cyberbattlesim-chain.task.exp.json"
+    )
+    spec_path = repo_root / (
+        "environments/cyberbattlesim-chain/experiment/cyberbattlesim-chain.spec.exp.json"
+    )
+    task = ExperimentTaskModel.model_validate(load_strict_json(task_path))
+    spec = ExperimentSpecModel.model_validate(load_strict_json(spec_path))
+    if spec.task_ref.ref_id != task.task_id:
+        raise ValueError("published task and spec do not join")
+    qualification = cast(dict[str, object], load_qualification())
+    source = cast(dict[str, object], qualification["source"])
+    runtime_tree = cast(dict[str, object], qualification["runtime_source_tree"])
+    benchmark = cast(dict[str, object], qualification["benchmark_snapshot"])
+    artifacts = _declared_artifacts(repo_root, task_path, spec_path)
+    source_selection = {
+        "repository": source["repository"],
+        "commit": source["commit"],
+        "tree": source["tree"],
+        "version": source["version"],
+        "runtime_tree_sha256": runtime_tree["sha256"],
+        "notebook_path": "notebooks/notebook_withdefender.py",
+        "notebook_sha256": benchmark["source_notebook_sha256"],
+        "evaluator": qualification["protocol"]["selection"]["evaluator"],  # type: ignore[index]
+    }
+    declaration = _declaration_payload(task, artifacts, source_selection)
     protocol: dict[str, object] = {
         "schema_version": _SCHEMA,
         "declaration_sha256": sha256_payload(declaration),
         "declaration": declaration,
         "oracle": None,
     }
-    source_ledger: dict[str, object] = {
-        "schema_version": _SOURCE_LEDGER_SCHEMA,
-        "source": {
-            "repository": source["repository"],
-            "commit": source["commit"],
-            "tree": source["tree"],
-            "version": source["version"],
-            "runtime_tree_sha256": runtime_tree["sha256"],
-            "notebook_path": "notebooks/notebook_withdefender.py",
-            "notebook_sha256": benchmark["source_notebook_sha256"],
-        },
-        "artifact_refs": artifacts,
-        "adapter": {
-            "distribution": "raes-adapters",
-            "version": _installed_version("raes-adapters"),
-            "runner_artifact_ids": [
-                "reproduction-runner",
-                "mediated-researcher",
-                "mediated-driver",
-                "selected-source-helper",
-            ],
-        },
-        "loss_refs": [
-            "loss-abstracted-topology",
-            "loss-benchmark-defects",
-            "loss-no-source-artifact",
-            "loss-observation-abstraction",
-            "loss-unbound-random-streams",
-        ],
-        "exclusions": [
-            "historical benchmark output from a different commit",
-            (
-                "native observations, action coordinates, credentials, hidden state, "
-                "and reward vectors"
-            ),
-            "provider logs, credentials, environment dumps, and tracebacks",
-        ],
-        "compatibility_patches": [],
-    }
+    source_ledger = _source_ledger_payload(artifacts, source, runtime_tree, benchmark)
     validate_protocol(protocol, require_oracle=False)
     validate_source_ledger(source_ledger, protocol)
     return protocol, source_ledger
+
+
+def _validate_ledger_source(value: object) -> None:
+    """Validate the source identity projection in a source ledger."""
+
+    if not isinstance(value, dict):
+        raise ValueError("source ledger source is invalid")
+    _require_keys(
+        value,
+        frozenset(
+            {
+                "repository",
+                "commit",
+                "tree",
+                "version",
+                "runtime_tree_sha256",
+                "notebook_path",
+                "notebook_sha256",
+            }
+        ),
+        "source ledger source",
+    )
+    if any(not _is_sha256(value[key]) for key in ("runtime_tree_sha256", "notebook_sha256")):
+        raise ValueError("source ledger digest is invalid")
+    _safe_relative_path(value["notebook_path"])
+
+
+def _validate_ledger_adapter(value: object) -> None:
+    """Validate the adapter identity projection in a source ledger."""
+
+    if not isinstance(value, dict):
+        raise ValueError("source ledger adapter is invalid")
+    _require_keys(
+        value,
+        frozenset({"distribution", "version", "runner_artifact_ids"}),
+        "source ledger adapter",
+    )
+    runner_ids = value["runner_artifact_ids"]
+    if not isinstance(runner_ids, list) or len(set(runner_ids)) != len(runner_ids):
+        raise ValueError("source ledger adapter is invalid")
 
 
 def validate_source_ledger(payload: Mapping[str, object], protocol: Mapping[str, object]) -> None:
@@ -732,62 +835,21 @@ def validate_source_ledger(payload: Mapping[str, object], protocol: Mapping[str,
     )
     if payload["schema_version"] != _SOURCE_LEDGER_SCHEMA:
         raise ValueError("source ledger schema is invalid")
-    source = payload["source"]
-    if not isinstance(source, dict):
-        raise ValueError("source ledger source is invalid")
-    _require_keys(
-        source,
-        frozenset(
-            {
-                "repository",
-                "commit",
-                "tree",
-                "version",
-                "runtime_tree_sha256",
-                "notebook_path",
-                "notebook_sha256",
-            }
-        ),
-        "source ledger source",
-    )
-    for digest_key in ("runtime_tree_sha256", "notebook_sha256"):
-        if not _is_sha256(source[digest_key]):
-            raise ValueError("source ledger digest is invalid")
-    _safe_relative_path(source["notebook_path"])
+    _validate_ledger_source(payload["source"])
     declaration = cast(dict[str, object], protocol["declaration"])
     if payload["artifact_refs"] != declaration["artifacts"]:
         raise ValueError("source ledger artifact join is invalid")
-    adapter = payload["adapter"]
-    if not isinstance(adapter, dict):
-        raise ValueError("source ledger adapter is invalid")
-    _require_keys(
-        adapter,
-        frozenset({"distribution", "version", "runner_artifact_ids"}),
-        "source ledger adapter",
-    )
-    runner_ids = adapter["runner_artifact_ids"]
-    if not isinstance(runner_ids, list) or len(set(runner_ids)) != len(runner_ids):
-        raise ValueError("source ledger adapter is invalid")
+    _validate_ledger_adapter(payload["adapter"])
     for field in ("loss_refs", "exclusions", "compatibility_patches"):
         value = payload[field]
         if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
             raise ValueError("source ledger disclosure is invalid")
 
 
-def validate_protocol(payload: Mapping[str, object], *, require_oracle: bool) -> None:
-    """Validate the closed issue-local protocol around published contracts."""
+def _validate_declaration_fields(declaration: Mapping[str, object]) -> Mapping[str, object]:
+    """Validate frozen scalar and contract projections of a declaration."""
 
-    _require_keys(
-        payload,
-        frozenset({"schema_version", "declaration_sha256", "declaration", "oracle"}),
-        "protocol",
-    )
-    if payload["schema_version"] != _SCHEMA:
-        raise ValueError("protocol schema is invalid")
-    declaration = payload["declaration"]
-    if not isinstance(declaration, dict):
-        raise ValueError("protocol declaration is invalid")
-    expected_declaration_keys = frozenset(
+    expected_keys = frozenset(
         {
             "study",
             "artifacts",
@@ -807,105 +869,148 @@ def validate_protocol(payload: Mapping[str, object], *, require_oracle: bool) ->
             "explicit_non_claims",
         }
     )
-    _require_keys(declaration, expected_declaration_keys, "protocol declaration")
-    if payload["declaration_sha256"] != sha256_payload(declaration):
-        raise ValueError("protocol declaration digest is invalid")
+    _require_keys(declaration, expected_keys, "protocol declaration")
     ExperimentStudyModel.model_validate(declaration["study"])
-    if declaration["retry_budget"] != 0:
-        raise ValueError("retry policy is invalid")
-    if declaration["attempt_series"] != _ATTEMPT_SERIES:
-        raise ValueError("attempt series is invalid")
-    prior_attempts = declaration["prior_attempts"]
-    if prior_attempts != _prior_attempt_disclosure():
-        raise ValueError("prior attempt disclosure is invalid")
-    if declaration["bench_notes"] != _bench_note_policy():
-        raise ValueError("bench note policy is invalid")
-    if declaration["metrics"] != list(_METRICS):
-        raise ValueError("metric declaration is invalid")
-    if declaration["tier_policy"] != list(_TIERS):
-        raise ValueError("tier policy is invalid")
+    expected_values = (
+        ("retry_budget", 0, "retry policy is invalid"),
+        ("attempt_series", _ATTEMPT_SERIES, "attempt series is invalid"),
+        ("prior_attempts", _prior_attempt_disclosure(), "prior attempt disclosure is invalid"),
+        ("bench_notes", _bench_note_policy(), "bench note policy is invalid"),
+        ("metrics", list(_METRICS), "metric declaration is invalid"),
+        ("tier_policy", list(_TIERS), "tier policy is invalid"),
+    )
+    for field, expected, message in expected_values:
+        if declaration[field] != expected:
+            raise ValueError(message)
     if set(cast(list[object], declaration["terminal_dispositions"])) != _DISPOSITIONS:
         raise ValueError("terminal dispositions are invalid")
-    artifacts = declaration["artifacts"]
-    if not isinstance(artifacts, list) or not artifacts:
-        raise ValueError("artifact references are invalid")
+    return cast(Mapping[str, object], declaration["prior_attempts"])
+
+
+def _validate_declared_artifacts(value: object) -> None:
+    """Validate unique content-addressed declaration artifact references."""
+
+    if not isinstance(value, list) or not value:
+        raise ValueError(_INVALID_ARTIFACT_REFS)
     artifact_ids: set[str] = set()
-    for item in artifacts:
+    for item in value:
         if not isinstance(item, dict):
-            raise ValueError("artifact references are invalid")
+            raise ValueError(_INVALID_ARTIFACT_REFS)
         _require_keys(item, frozenset({"artifact_id", "path", "sha256"}), "artifact reference")
         artifact_id = item["artifact_id"]
         if not isinstance(artifact_id, str) or artifact_id in artifact_ids:
-            raise ValueError("artifact references are invalid")
+            raise ValueError(_INVALID_ARTIFACT_REFS)
         artifact_ids.add(artifact_id)
         _safe_relative_path(item["path"])
         if not _is_sha256(item["sha256"]):
             raise ValueError("artifact digest is invalid")
-    schedule = declaration["schedule"]
-    if not isinstance(schedule, list) or len(schedule) != 20:
-        raise ValueError("attempt schedule is invalid")
+
+
+def _validated_schedule_entry(value: object) -> tuple[str, str, str]:
+    """Validate one schedule entry and return its lane and identities."""
+
+    if not isinstance(value, dict):
+        raise ValueError(_INVALID_ATTEMPT_SCHEDULE)
+    _require_keys(
+        value,
+        frozenset({"lane", "replicate", "run_id", "attempt_id", "seed_label"}),
+        "schedule entry",
+    )
+    lane, run_id, attempt_id = value["lane"], value["run_id"], value["attempt_id"]
+    if lane not in _LANES or type(value["replicate"]) is not int:
+        raise ValueError(_INVALID_ATTEMPT_SCHEDULE)
+    if not isinstance(run_id, str) or not isinstance(attempt_id, str):
+        raise ValueError(_INVALID_ATTEMPT_SCHEDULE)
+    return cast(str, lane), run_id, attempt_id
+
+
+def _validate_attempt_schedule(
+    value: object, prior_attempts: Mapping[str, object]
+) -> list[dict[str, object]]:
+    """Validate the complete disjoint two-lane schedule."""
+
+    if not isinstance(value, list) or len(value) != 2 * _ATTEMPTS_PER_LANE:
+        raise ValueError(_INVALID_ATTEMPT_SCHEDULE)
+    schedule = cast(list[dict[str, object]], value)
     run_ids: set[str] = set()
     attempt_ids: set[str] = set()
     counts = dict.fromkeys(_LANES, 0)
     for entry in schedule:
-        if not isinstance(entry, dict):
-            raise ValueError("attempt schedule is invalid")
-        _require_keys(
-            entry,
-            frozenset({"lane", "replicate", "run_id", "attempt_id", "seed_label"}),
-            "schedule entry",
-        )
-        lane = entry["lane"]
-        if lane not in _LANES or type(entry["replicate"]) is not int:
-            raise ValueError("attempt schedule is invalid")
-        run_id = entry["run_id"]
-        attempt_id = entry["attempt_id"]
-        if not isinstance(run_id, str) or not isinstance(attempt_id, str):
-            raise ValueError("attempt schedule is invalid")
+        lane, run_id, attempt_id = _validated_schedule_entry(entry)
         if run_id in run_ids or attempt_id in attempt_ids:
             raise ValueError("attempt identities are not unique")
         run_ids.add(run_id)
         attempt_ids.add(attempt_id)
-        counts[cast(str, lane)] += 1
-    if set(counts.values()) != {_ATTEMPTS_PER_LANE}:
-        raise ValueError("attempt schedule is invalid")
+        counts[lane] += 1
     prior_run_ids = set(cast(list[str], prior_attempts["run_ids"]))
     prior_attempt_ids = set(cast(list[str], prior_attempts["attempt_ids"]))
+    if set(counts.values()) != {_ATTEMPTS_PER_LANE}:
+        raise ValueError(_INVALID_ATTEMPT_SCHEDULE)
     if run_ids & prior_run_ids or attempt_ids & prior_attempt_ids:
         raise ValueError("attempt identities overlap the rejected series")
-    if any(not run_id.startswith(f"{_ATTEMPT_SERIES}-") for run_id in run_ids):
+    if any(not value.startswith(f"{_ATTEMPT_SERIES}-") for value in run_ids | attempt_ids):
         raise ValueError("attempt schedule series is invalid")
-    if any(not attempt_id.startswith(f"{_ATTEMPT_SERIES}-") for attempt_id in attempt_ids):
-        raise ValueError("attempt schedule series is invalid")
-    oracle = payload["oracle"]
+    return schedule
+
+
+def _validate_oracle(
+    oracle: object,
+    declaration_sha256: object,
+    schedule: Sequence[Mapping[str, object]],
+    require_oracle: bool,
+) -> None:
+    """Validate the optional frozen source-native result projection."""
+
     if oracle is None:
         if require_oracle:
             raise ValueError("source-native oracle is required")
         return
     if not isinstance(oracle, dict):
-        raise ValueError("source-native oracle is invalid")
+        raise ValueError(_INVALID_ORACLE)
     _require_keys(
         oracle,
         frozenset({"lane", "declaration_sha256", "native_result_set_sha256", "ordered_results"}),
         "source-native oracle",
     )
-    if (
-        oracle["lane"] != "source-native"
-        or oracle["declaration_sha256"] != payload["declaration_sha256"]
-    ):
-        raise ValueError("source-native oracle is invalid")
+    if oracle["lane"] != "source-native" or oracle["declaration_sha256"] != declaration_sha256:
+        raise ValueError(_INVALID_ORACLE)
     if not _is_sha256(oracle["native_result_set_sha256"]):
-        raise ValueError("source-native oracle is invalid")
+        raise ValueError(_INVALID_ORACLE)
     results = oracle["ordered_results"]
     native_ids = [entry["run_id"] for entry in schedule if entry["lane"] == "source-native"]
-    if (
-        not isinstance(results, list)
-        or [item.get("run_id") for item in results if isinstance(item, dict)] != native_ids
-    ):
-        raise ValueError("source-native oracle is invalid")
+    observed_ids = (
+        [item.get("run_id") for item in results if isinstance(item, dict)]
+        if isinstance(results, list)
+        else []
+    )
+    if not isinstance(results, list) or observed_ids != native_ids:
+        raise ValueError(_INVALID_ORACLE)
+
+
+def validate_protocol(payload: Mapping[str, object], *, require_oracle: bool) -> None:
+    """Validate the closed issue-local protocol around published contracts."""
+
+    _require_keys(
+        payload,
+        frozenset({"schema_version", "declaration_sha256", "declaration", "oracle"}),
+        "protocol",
+    )
+    if payload["schema_version"] != _SCHEMA:
+        raise ValueError("protocol schema is invalid")
+    declaration = payload["declaration"]
+    if not isinstance(declaration, dict):
+        raise ValueError("protocol declaration is invalid")
+    if payload["declaration_sha256"] != sha256_payload(declaration):
+        raise ValueError("protocol declaration digest is invalid")
+    prior_attempts = _validate_declaration_fields(declaration)
+    _validate_declared_artifacts(declaration["artifacts"])
+    schedule = _validate_attempt_schedule(declaration["schedule"], prior_attempts)
+    _validate_oracle(payload["oracle"], payload["declaration_sha256"], schedule, require_oracle)
 
 
 def _is_sha256(value: object) -> bool:
+    """Return whether a value is one lowercase SHA-256 digest."""
+
     return (
         isinstance(value, str)
         and len(value) == 64
@@ -914,16 +1019,22 @@ def _is_sha256(value: object) -> bool:
 
 
 def _reserve_directory(path: Path) -> Path:
+    """Atomically reserve one private output directory."""
+
     resolved = path.resolve()
     os.mkdir(resolved, 0o700)
     return resolved
 
 
 def _media_type(path: Path) -> str:
+    """Return the closed media type used by artifact inventories."""
+
     return "application/json" if path.suffix == ".json" else "text/markdown"
 
 
 def _seal_inventory(root: Path) -> dict[str, object]:
+    """Write the content-addressed inventory for one immutable stage."""
+
     artifacts = []
     for path in sorted(item for item in root.rglob("*") if item.is_file()):
         if path.name == _INVENTORY_NAME:
@@ -947,12 +1058,11 @@ def write_declaration(repo_root: Path, output: Path) -> Path:
 
     root = _reserve_directory(output)
     protocol, source_ledger = build_declaration(repo_root.resolve())
-    atomic_write_json_artifact(root / "protocol.json", protocol)
-    atomic_write_json_artifact(root / "source-ledger.json", source_ledger)
+    atomic_write_json_artifact(root / _PROTOCOL_FILE, protocol)
+    atomic_write_json_artifact(root / _SOURCE_LEDGER_FILE, source_ledger)
     bench_notes = _new_bench_notes(protocol)
     _append_bench_note(
         bench_notes,
-        protocol,
         phase="declaration",
         severity="info",
         event_code="protocol-declared",
@@ -961,7 +1071,7 @@ def write_declaration(repo_root: Path, output: Path) -> Path:
             "experiment effects."
         ),
         disposition="passed",
-        evidence_paths=("protocol.json", "source-ledger.json"),
+        evidence_paths=(_PROTOCOL_FILE, _SOURCE_LEDGER_FILE),
     )
     _write_bench_notes(root, bench_notes)
     _seal_inventory(root)
@@ -969,6 +1079,8 @@ def write_declaration(repo_root: Path, output: Path) -> Path:
 
 
 def _control_disposition(protocol: Mapping[str, object], lane: str) -> dict[str, object]:
+    """Project the predeclared stochastic-control disposition for one lane."""
+
     declaration = cast(dict[str, object], protocol["declaration"])
     controls = cast(dict[str, object], declaration["stochastic_controls"])
     return cast(dict[str, object], controls[lane])
@@ -983,6 +1095,8 @@ def _terminal_row(
     protocol_sha256: str | None,
     diagnostic_code: str | None = None,
 ) -> dict[str, object]:
+    """Build one closed terminal row from a scheduled attempt."""
+
     if disposition not in _DISPOSITIONS:
         raise ValueError("run disposition is invalid")
     metrics: dict[str, object] = dict.fromkeys(_METRICS)
@@ -1079,6 +1193,8 @@ def terminal_rows_from_results(
 
 
 def _write_rows(root: Path, rows: Sequence[Mapping[str, object]]) -> None:
+    """Write terminal rows into stable per-run directories."""
+
     runs_root = root / "runs"
     os.mkdir(runs_root, 0o700)
     for row in rows:
@@ -1096,40 +1212,46 @@ def load_terminal_rows(root: Path) -> list[dict[str, object]]:
     return rows
 
 
+def _is_finite_number(value: object) -> bool:
+    """Return whether a value is a non-boolean finite number."""
+
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _validate_availability_series(value: object) -> None:
+    """Validate one non-empty bounded network-availability series."""
+
+    if not isinstance(value, list) or not value:
+        raise ValueError(_INVALID_RUN_METRIC)
+    if any(not _is_finite_number(item) or not 0.0 <= cast(float, item) <= 1.0 for item in value):
+        raise ValueError(_INVALID_RUN_METRIC)
+
+
 def _validate_metric_value(metric: str, value: object) -> None:
+    """Validate one available or unavailable declared run metric."""
+
     if value is None:
         return
     if metric == "steps_to_termination":
         if type(value) is not int or not 0 <= value <= 600:
-            raise ValueError("run metric is invalid")
+            raise ValueError(_INVALID_RUN_METRIC)
     elif metric == "cumulative_attacker_reward":
-        if (
-            not isinstance(value, (int, float))
-            or isinstance(value, bool)
-            or not math.isfinite(value)
-        ):
-            raise ValueError("run metric is invalid")
+        if not _is_finite_number(value):
+            raise ValueError(_INVALID_RUN_METRIC)
     elif metric == "network_availability":
-        if not isinstance(value, list) or not value:
-            raise ValueError("run metric is invalid")
-        if any(
-            not isinstance(item, (int, float))
-            or isinstance(item, bool)
-            or not math.isfinite(item)
-            or not 0.0 <= item <= 1.0
-            for item in value
-        ):
-            raise ValueError("run metric is invalid")
+        _validate_availability_series(value)
     elif metric == "terminal_cause" and value not in {
         "attacker-ownership",
         "defender-sla",
         "defender-eviction",
         "evaluator-cutoff",
     }:
-        raise ValueError("run metric is invalid")
+        raise ValueError(_INVALID_RUN_METRIC)
 
 
 def _validate_terminal_row(row: Mapping[str, object]) -> None:
+    """Validate one closed terminal run projection."""
+
     expected = frozenset(
         {
             "schema_version",
@@ -1166,6 +1288,8 @@ def _validate_terminal_row(row: Mapping[str, object]) -> None:
 
 
 def _failed_rows(protocol: Mapping[str, object], lane: str, code: str) -> list[dict[str, object]]:
+    """Terminalize every scheduled row in one lane as failed."""
+
     schedule = cast(dict[str, object], protocol["declaration"])["schedule"]
     return [
         _terminal_row(
@@ -1181,99 +1305,88 @@ def _failed_rows(protocol: Mapping[str, object], lane: str, code: str) -> list[d
     ]
 
 
-def collect_native(
-    declaration_root: Path,
-    output: Path,
-    *,
-    executor: Callable[[], list[dict[str, object]]] | None = None,
-) -> Path:
-    """Collect the one exact upstream ten-episode batch and freeze its oracle."""
+def _valid_native_rows(
+    protocol: Mapping[str, object], results: Sequence[Mapping[str, object]]
+) -> list[dict[str, object]]:
+    """Join a complete native result vector to its frozen schedule."""
 
-    protocol = load_strict_json(declaration_root / "protocol.json")
-    validate_protocol(protocol, require_oracle=False)
-    _verify_inventory(declaration_root)
-    root = _reserve_directory(output)
-    source_ledger = load_strict_json(declaration_root / "source-ledger.json")
-    validate_source_ledger(source_ledger, protocol)
-    atomic_write_json_artifact(root / "source-ledger.json", source_ledger)
-    atomic_write_json_artifact(root / "environment.json", _environment_payload("source-native"))
-    bench_notes = _load_bench_notes(declaration_root, protocol)
-    _append_bench_note(
-        bench_notes,
-        protocol,
-        phase="native",
-        severity="info",
-        event_code="native-collection-started",
-        summary="The exact admitted upstream ten-episode evaluator batch was started.",
-        disposition="observed",
-        evidence_paths=("protocol.json", "source-ledger.json", "environment.json"),
+    if len(results) != _ATTEMPTS_PER_LANE:
+        raise ValueError("native evaluator returned the wrong episode count")
+    schedule = cast(
+        list[dict[str, object]], cast(dict[str, object], protocol["declaration"])["schedule"]
     )
-    _write_bench_notes(root, bench_notes)
-    execute = executor if executor is not None else _execute_native_batch
-    try:
-        results = execute()
-        if len(results) != _ATTEMPTS_PER_LANE:
-            raise ValueError("native evaluator returned the wrong episode count")
-        native_schedule = [
-            entry
-            for entry in cast(list[dict[str, object]], protocol["declaration"]["schedule"])  # type: ignore[index]
-            if entry["lane"] == "source-native"
-        ]
-        rows = [
-            _terminal_row(
-                protocol,
-                scheduled,
-                result=result,
-                disposition="valid",
-                protocol_sha256=None,
-            )
-            for scheduled, result in zip(native_schedule, results, strict=True)
-        ]
-        for row in rows:
-            _validate_terminal_row(row)
-    except Exception:
-        rows = _failed_rows(protocol, "source-native", "reproduction.native.execution-failed")
-        _write_rows(root, rows)
-        atomic_write_json_artifact(root / "protocol.json", protocol)
-        atomic_write_json_artifact(
-            root / "collection.json",
-            {"lane": "source-native", "terminal_count": len(rows), "valid_count": 0},
+    native_schedule = [entry for entry in schedule if entry["lane"] == "source-native"]
+    rows = [
+        _terminal_row(
+            protocol,
+            scheduled,
+            result=result,
+            disposition="valid",
+            protocol_sha256=None,
         )
-        for row in rows:
-            run_id = cast(str, row["run_id"])
-            _append_bench_note(
-                bench_notes,
-                protocol,
-                phase="native",
-                severity="error",
-                event_code="native-attempt-terminalized",
-                summary=f"Scheduled source-native attempt {run_id} was terminalized as failed.",
-                disposition="failed",
-                evidence_paths=(f"runs/{run_id}/record.json",),
-            )
+        for scheduled, result in zip(native_schedule, results, strict=True)
+    ]
+    for row in rows:
+        _validate_terminal_row(row)
+    return rows
+
+
+def _record_native_failure(
+    protocol: Mapping[str, object],
+    root: Path,
+    bench_notes: dict[str, object],
+) -> Never:
+    """Seal all native attempts as failed and raise a bounded error."""
+
+    rows = _failed_rows(protocol, "source-native", "reproduction.native.execution-failed")
+    _write_rows(root, rows)
+    atomic_write_json_artifact(root / _PROTOCOL_FILE, dict(protocol))
+    atomic_write_json_artifact(
+        root / _COLLECTION_FILE,
+        {"lane": "source-native", "terminal_count": len(rows), "valid_count": 0},
+    )
+    for row in rows:
+        run_id = cast(str, row["run_id"])
         _append_bench_note(
             bench_notes,
-            protocol,
             phase="native",
             severity="error",
-            event_code="native-collection-failed",
-            summary=(
-                "The source-native batch failed; all ten scheduled attempts remain retained "
-                "as failed."
-            ),
+            event_code="native-attempt-terminalized",
+            summary=f"Scheduled source-native attempt {run_id} was terminalized as failed.",
             disposition="failed",
-            evidence_paths=("protocol.json",),
+            evidence_paths=(f"runs/{run_id}/record.json",),
         )
-        _write_bench_notes(root, bench_notes)
-        _seal_inventory(root)
-        raise RuntimeError("native collection failed") from None
+    _append_bench_note(
+        bench_notes,
+        phase="native",
+        severity="error",
+        event_code="native-collection-failed",
+        summary=(
+            "The source-native batch failed; all ten scheduled attempts remain retained as failed."
+        ),
+        disposition="failed",
+        evidence_paths=(_PROTOCOL_FILE,),
+    )
+    _write_bench_notes(root, bench_notes)
+    _seal_inventory(root)
+    raise RuntimeError("native collection failed") from None
+
+
+def _complete_native_collection(
+    protocol: Mapping[str, object],
+    root: Path,
+    rows: Sequence[Mapping[str, object]],
+    bench_notes: dict[str, object],
+) -> None:
+    """Bind a valid native vector into the oracle and seal its stage."""
+
     ordered = [
         {"run_id": row["run_id"], "metrics": row["metrics"]}
         for row in sorted(rows, key=lambda item: cast(int, item["replicate"]))
     ]
     result_set_sha256 = sha256_payload(ordered)
-    completed = copy_protocol = json.loads(json.dumps(protocol))
-    copy_protocol["oracle"] = {
+    completed = cast(dict[str, object], json.loads(json.dumps(protocol)))
+    completed["oracle"] = {
         "lane": "source-native",
         "declaration_sha256": protocol["declaration_sha256"],
         "native_result_set_sha256": result_set_sha256,
@@ -1281,9 +1394,9 @@ def collect_native(
     }
     validate_protocol(completed, require_oracle=True)
     _write_rows(root, rows)
-    atomic_write_json_artifact(root / "protocol.json", completed)
+    atomic_write_json_artifact(root / _PROTOCOL_FILE, completed)
     atomic_write_json_artifact(
-        root / "collection.json",
+        root / _COLLECTION_FILE,
         {
             "lane": "source-native",
             "terminal_count": len(rows),
@@ -1295,7 +1408,6 @@ def collect_native(
         run_id = cast(str, row["run_id"])
         _append_bench_note(
             bench_notes,
-            completed,
             phase="native",
             severity="info",
             event_code="native-attempt-terminalized",
@@ -1305,17 +1417,112 @@ def collect_native(
         )
     _append_bench_note(
         bench_notes,
-        completed,
         phase="native",
         severity="info",
         event_code="native-collection-passed",
         summary="The exact upstream evaluator returned all ten scheduled terminal results.",
         disposition="passed",
-        evidence_paths=("protocol.json",),
+        evidence_paths=(_PROTOCOL_FILE,),
     )
     _write_bench_notes(root, bench_notes)
     _seal_inventory(root)
+
+
+def collect_native(
+    declaration_root: Path,
+    output: Path,
+    *,
+    executor: Callable[[], list[dict[str, object]]] | None = None,
+) -> Path:
+    """Collect the one exact upstream ten-episode batch and freeze its oracle."""
+
+    protocol = load_strict_json(declaration_root / _PROTOCOL_FILE)
+    validate_protocol(protocol, require_oracle=False)
+    _verify_inventory(declaration_root)
+    root = _reserve_directory(output)
+    source_ledger = load_strict_json(declaration_root / _SOURCE_LEDGER_FILE)
+    validate_source_ledger(source_ledger, protocol)
+    atomic_write_json_artifact(root / _SOURCE_LEDGER_FILE, source_ledger)
+    atomic_write_json_artifact(root / _ENVIRONMENT_FILE, _environment_payload("source-native"))
+    bench_notes = _load_bench_notes(declaration_root, protocol)
+    _append_bench_note(
+        bench_notes,
+        phase="native",
+        severity="info",
+        event_code="native-collection-started",
+        summary="The exact admitted upstream ten-episode evaluator batch was started.",
+        disposition="observed",
+        evidence_paths=(_PROTOCOL_FILE, _SOURCE_LEDGER_FILE, _ENVIRONMENT_FILE),
+    )
+    _write_bench_notes(root, bench_notes)
+    execute = executor if executor is not None else _execute_native_batch
+    try:
+        rows = _valid_native_rows(protocol, execute())
+    except Exception:
+        _record_native_failure(protocol, root, bench_notes)
+    _complete_native_collection(protocol, root, rows, bench_notes)
     return root
+
+
+def _mediated_schedule(protocol: Mapping[str, object]) -> list[dict[str, object]]:
+    """Return the mediated slice of the frozen schedule."""
+
+    declaration = cast(dict[str, object], protocol["declaration"])
+    schedule = cast(list[dict[str, object]], declaration["schedule"])
+    return [entry for entry in schedule if entry["lane"] == "raes-mediated"]
+
+
+def _execute_mediated_row(
+    protocol: Mapping[str, object],
+    scheduled: Mapping[str, object],
+    pack_root: Path,
+    run_root: Path,
+    protocol_digest: str,
+    execute: Callable[[dict[str, object], Path], dict[str, object]],
+) -> dict[str, object]:
+    """Execute and terminalize one mediated schedule row."""
+
+    try:
+        result = execute({**scheduled, "pack_root": pack_root.as_posix()}, run_root)
+        row = _terminal_row(
+            protocol,
+            scheduled,
+            result=result,
+            disposition="valid",
+            protocol_sha256=protocol_digest,
+        )
+        _validate_terminal_row(row)
+        return row
+    except Exception:
+        return _terminal_row(
+            protocol,
+            scheduled,
+            result=None,
+            disposition="failed",
+            protocol_sha256=protocol_digest,
+            diagnostic_code="reproduction.mediated.execution-failed",
+        )
+
+
+def _record_mediated_row(
+    bench_notes: dict[str, object], run_root: Path, row: Mapping[str, object]
+) -> None:
+    """Persist one mediated terminal row and its timestamped disposition."""
+
+    run_id = cast(str, row["run_id"])
+    atomic_write_json_artifact(run_root / "record.json", dict(row))
+    valid = row["disposition"] == "valid"
+    _append_bench_note(
+        bench_notes,
+        phase="mediated",
+        severity="info" if valid else "error",
+        event_code="mediated-attempt-terminalized",
+        summary=(
+            f"Scheduled RAES-mediated attempt {run_id} was terminalized as {row['disposition']}."
+        ),
+        disposition="passed" if valid else "failed",
+        evidence_paths=(f"runs/{run_id}/record.json",),
+    )
 
 
 def collect_mediated(
@@ -1327,34 +1534,29 @@ def collect_mediated(
 ) -> Path:
     """Collect ten independent RAES-mediated attempts without silent drops."""
 
-    protocol_path = oracle_root / "protocol.json"
+    protocol_path = oracle_root / _PROTOCOL_FILE
     protocol = load_strict_json(protocol_path)
     validate_protocol(protocol, require_oracle=True)
     _verify_inventory(oracle_root)
     protocol_digest = _sha256_file(protocol_path)
     root = _reserve_directory(output)
-    atomic_write_json_artifact(root / "protocol.json", protocol)
-    atomic_write_json_artifact(root / "environment.json", _environment_payload("raes-mediated"))
+    atomic_write_json_artifact(root / _PROTOCOL_FILE, protocol)
+    atomic_write_json_artifact(root / _ENVIRONMENT_FILE, _environment_payload("raes-mediated"))
     bench_notes = _new_bench_notes(protocol)
     _append_bench_note(
         bench_notes,
-        protocol,
         phase="mediated",
         severity="info",
         event_code="mediated-collection-started",
         summary="The ten preallocated RAES-mediated attempts were started with zero retries.",
         disposition="observed",
-        evidence_paths=("protocol.json", "environment.json"),
+        evidence_paths=(_PROTOCOL_FILE, _ENVIRONMENT_FILE),
     )
     _write_bench_notes(root, bench_notes)
     runs_root = root / "runs"
     os.mkdir(runs_root, 0o700)
     execute = runner if runner is not None else _execute_mediated_attempt
-    schedule = [
-        entry
-        for entry in cast(list[dict[str, object]], protocol["declaration"]["schedule"])  # type: ignore[index]
-        if entry["lane"] == "raes-mediated"
-    ]
+    schedule = _mediated_schedule(protocol)
     rows: list[dict[str, object]] = []
     for scheduled in schedule:
         run_id = cast(str, scheduled["run_id"])
@@ -1362,53 +1564,22 @@ def collect_mediated(
         os.mkdir(run_root, 0o700)
         _append_bench_note(
             bench_notes,
-            protocol,
             phase="mediated",
             severity="info",
             event_code="mediated-attempt-started",
             summary=f"Scheduled RAES-mediated attempt {run_id} was started.",
             disposition="observed",
-            evidence_paths=("protocol.json",),
+            evidence_paths=(_PROTOCOL_FILE,),
         )
         _write_bench_notes(root, bench_notes)
-        try:
-            result = execute({**scheduled, "pack_root": pack_root.as_posix()}, run_root)
-            row = _terminal_row(
-                protocol,
-                scheduled,
-                result=result,
-                disposition="valid",
-                protocol_sha256=protocol_digest,
-            )
-            _validate_terminal_row(row)
-        except Exception:
-            row = _terminal_row(
-                protocol,
-                scheduled,
-                result=None,
-                disposition="failed",
-                protocol_sha256=protocol_digest,
-                diagnostic_code="reproduction.mediated.execution-failed",
-            )
-        atomic_write_json_artifact(run_root / "record.json", row)
-        rows.append(row)
-        valid = row["disposition"] == "valid"
-        _append_bench_note(
-            bench_notes,
-            protocol,
-            phase="mediated",
-            severity="info" if valid else "error",
-            event_code="mediated-attempt-terminalized",
-            summary=(
-                f"Scheduled RAES-mediated attempt {run_id} was terminalized as "
-                f"{row['disposition']}."
-            ),
-            disposition="passed" if valid else "failed",
-            evidence_paths=(f"runs/{run_id}/record.json",),
+        row = _execute_mediated_row(
+            protocol, scheduled, pack_root, run_root, protocol_digest, execute
         )
+        _record_mediated_row(bench_notes, run_root, row)
+        rows.append(row)
         _write_bench_notes(root, bench_notes)
     atomic_write_json_artifact(
-        root / "collection.json",
+        root / _COLLECTION_FILE,
         {
             "lane": "raes-mediated",
             "terminal_count": len(rows),
@@ -1419,7 +1590,6 @@ def collect_mediated(
     valid_count = sum(row["disposition"] == "valid" for row in rows)
     _append_bench_note(
         bench_notes,
-        protocol,
         phase="mediated",
         severity="info" if valid_count == len(rows) else "warning",
         event_code="mediated-collection-completed",
@@ -1436,6 +1606,8 @@ def collect_mediated(
 
 
 def _numeric_value(row: Mapping[str, object], metric: str) -> float | None:
+    """Project one validated numeric metric from a terminal row."""
+
     metrics = cast(dict[str, object], row["metrics"])
     value = metrics[metric]
     if value is None:
@@ -1446,6 +1618,8 @@ def _numeric_value(row: Mapping[str, object], metric: str) -> float | None:
 
 
 def _percentile(values: Sequence[float], probability: float) -> float:
+    """Compute one linearly interpolated percentile."""
+
     ordered = sorted(values)
     if len(ordered) == 1:
         return ordered[0]
@@ -1461,6 +1635,8 @@ def _percentile(values: Sequence[float], probability: float) -> float:
 def _draw_index(
     declaration_sha256: str, metric: str, lane: str, sample: int, position: int, count: int
 ) -> int:
+    """Derive one deterministic counter-addressed bootstrap index."""
+
     address = f"{declaration_sha256}:{metric}:{lane}:{sample}:{position}".encode()
     return int.from_bytes(hashlib.sha256(address).digest()[:8], "big") % count
 
@@ -1468,6 +1644,8 @@ def _draw_index(
 def _bootstrap_means(
     values: Sequence[float], declaration_sha256: str, metric: str, lane: str, count: int
 ) -> list[float]:
+    """Return deterministic bootstrap means for one lane and metric."""
+
     return [
         statistics.fmean(
             values[_draw_index(declaration_sha256, metric, lane, sample, position, len(values))]
@@ -1480,6 +1658,8 @@ def _bootstrap_means(
 def _numeric_summary(
     values: Sequence[float], declaration_sha256: str, metric: str, lane: str, resamples: int
 ) -> dict[str, object]:
+    """Summarize one complete numeric lane projection."""
+
     bootstraps = _bootstrap_means(values, declaration_sha256, metric, lane, resamples)
     return {
         "available_count": len(values),
@@ -1492,6 +1672,125 @@ def _numeric_summary(
             "lower": _percentile(bootstraps, 0.025),
             "upper": _percentile(bootstraps, 0.975),
         },
+    }
+
+
+def _lane_aggregate(
+    lane: str,
+    ordered_rows: Sequence[Mapping[str, object]],
+    declaration_digest: str,
+    resamples: int,
+    numeric_metrics: Sequence[str],
+) -> tuple[dict[str, object], dict[str, list[float]], list[str]]:
+    """Aggregate dispositions and declared metrics for one lane."""
+
+    selected = [row for row in ordered_rows if row["lane"] == lane]
+    disposition_counts = {
+        disposition: sum(row["disposition"] == disposition for row in selected)
+        for disposition in sorted(_DISPOSITIONS)
+    }
+    numeric_values: dict[str, list[float]] = {}
+    metric_payloads: dict[str, object] = {}
+    for metric in numeric_metrics:
+        values = [
+            value
+            for row in selected
+            if row["disposition"] == "valid" and (value := _numeric_value(row, metric)) is not None
+        ]
+        numeric_values[metric] = values
+        if values:
+            summary = _numeric_summary(values, declaration_digest, metric, lane, resamples)
+        else:
+            summary = {"available_count": 0}
+        summary["missing_count"] = len(selected) - len(values)
+        metric_payloads[metric] = summary
+    causes = [
+        cast(str, cast(dict[str, object], row["metrics"])["terminal_cause"])
+        for row in selected
+        if row["disposition"] == "valid"
+        and cast(dict[str, object], row["metrics"])["terminal_cause"] is not None
+    ]
+    categories = sorted(set(causes))
+    metric_payloads["terminal_cause"] = {
+        "available_count": len(causes),
+        "missing_count": len(selected) - len(causes),
+        "proportions": {category: causes.count(category) / len(causes) for category in categories},
+    }
+    payload = {
+        "scheduled_count": len(selected),
+        "dispositions": disposition_counts,
+        "metrics": metric_payloads,
+    }
+    return payload, numeric_values, causes
+
+
+def _comparison_result(*, exact: bool, bounded: bool) -> str:
+    """Choose one ordered comparison disposition without nested conditionals."""
+
+    if exact:
+        return "exact"
+    if bounded:
+        return "bounded"
+    return "outside-tolerance"
+
+
+def _numeric_comparison(
+    metric: str,
+    native: Sequence[float],
+    mediated: Sequence[float],
+    declaration_digest: str,
+    resamples: int,
+    tolerance_value: object,
+) -> dict[str, object]:
+    """Compare one complete numeric lane pair under its frozen tolerance."""
+
+    if len(native) != _ATTEMPTS_PER_LANE or len(mediated) != _ATTEMPTS_PER_LANE:
+        return {"result": "unavailable", "mean_difference": None, "interval_95": None}
+    if not isinstance(tolerance_value, (int, float)) or isinstance(tolerance_value, bool):
+        raise ValueError("comparison tolerance is invalid")
+    native_boot = _bootstrap_means(native, declaration_digest, metric, "source-native", resamples)
+    mediated_boot = _bootstrap_means(
+        mediated, declaration_digest, metric, "raes-mediated", resamples
+    )
+    differences = [right - left for left, right in zip(native_boot, mediated_boot, strict=True)]
+    interval = {
+        "lower": _percentile(differences, 0.025),
+        "upper": _percentile(differences, 0.975),
+    }
+    tolerance = float(tolerance_value)
+    return {
+        "result": _comparison_result(
+            exact=native == mediated,
+            bounded=interval["lower"] >= -tolerance and interval["upper"] <= tolerance,
+        ),
+        "mean_difference": statistics.fmean(mediated) - statistics.fmean(native),
+        "interval_95": interval,
+        "tolerance": tolerance,
+    }
+
+
+def _terminal_cause_comparison(
+    native: Sequence[str], mediated: Sequence[str], tolerance_value: object
+) -> dict[str, object]:
+    """Compare categorical terminal-cause proportions."""
+
+    if len(native) != _ATTEMPTS_PER_LANE or len(mediated) != _ATTEMPTS_PER_LANE:
+        return {"result": "unavailable", "proportion_differences": None}
+    if not isinstance(tolerance_value, (int, float)) or isinstance(tolerance_value, bool):
+        raise ValueError("comparison tolerance is invalid")
+    categories = sorted(set(native) | set(mediated))
+    differences = {
+        category: mediated.count(category) / len(mediated) - native.count(category) / len(native)
+        for category in categories
+    }
+    tolerance = float(tolerance_value)
+    return {
+        "result": _comparison_result(
+            exact=native == mediated,
+            bounded=all(abs(value) <= tolerance for value in differences.values()),
+        ),
+        "proportion_differences": differences,
+        "tolerance": tolerance,
     }
 
 
@@ -1511,119 +1810,32 @@ def compute_aggregates(
     if type(resamples) is not int or resamples < 1:
         raise ValueError("bootstrap declaration is invalid")
     declaration_digest = cast(str, protocol["declaration_sha256"])
-    lanes: dict[str, object] = {}
     numeric_metrics = _METRICS[:-1]
-    lane_values: dict[str, dict[str, list[float]]] = {
-        lane: {metric: [] for metric in numeric_metrics} for lane in _LANES
-    }
-    terminal_values: dict[str, list[str]] = {lane: [] for lane in _LANES}
+    lanes: dict[str, object] = {}
+    lane_values: dict[str, dict[str, list[float]]] = {}
+    terminal_values: dict[str, list[str]] = {}
     for lane in _LANES:
-        selected = [row for row in ordered_rows if row["lane"] == lane]
-        disposition_counts = {
-            disposition: sum(row["disposition"] == disposition for row in selected)
-            for disposition in sorted(_DISPOSITIONS)
-        }
-        metric_payloads: dict[str, object] = {}
-        for metric in numeric_metrics:
-            values = [
-                value
-                for row in selected
-                if row["disposition"] == "valid"
-                and (value := _numeric_value(row, metric)) is not None
-            ]
-            lane_values[lane][metric] = values
-            summary = (
-                _numeric_summary(values, declaration_digest, metric, lane, resamples)
-                if values
-                else {"available_count": 0}
-            )
-            summary["missing_count"] = len(selected) - len(values)
-            metric_payloads[metric] = summary
-        causes = [
-            cast(str, cast(dict[str, object], row["metrics"])["terminal_cause"])
-            for row in selected
-            if row["disposition"] == "valid"
-            and cast(dict[str, object], row["metrics"])["terminal_cause"] is not None
-        ]
-        terminal_values[lane] = causes
-        categories = sorted(set(causes))
-        metric_payloads["terminal_cause"] = {
-            "available_count": len(causes),
-            "missing_count": len(selected) - len(causes),
-            "proportions": {
-                category: causes.count(category) / len(causes) for category in categories
-            },
-        }
-        lanes[lane] = {
-            "scheduled_count": len(selected),
-            "dispositions": disposition_counts,
-            "metrics": metric_payloads,
-        }
+        lanes[lane], lane_values[lane], terminal_values[lane] = _lane_aggregate(
+            lane, ordered_rows, declaration_digest, resamples, numeric_metrics
+        )
     tolerances = cast(
         dict[str, object], cast(dict[str, object], declaration["comparison"])["bounded"]
     )
     comparisons: dict[str, object] = {}
     for metric in numeric_metrics:
-        native = lane_values["source-native"][metric]
-        mediated = lane_values["raes-mediated"][metric]
-        if len(native) != _ATTEMPTS_PER_LANE or len(mediated) != _ATTEMPTS_PER_LANE:
-            comparisons[metric] = {
-                "result": "unavailable",
-                "mean_difference": None,
-                "interval_95": None,
-            }
-            continue
-        native_boot = _bootstrap_means(
-            native, declaration_digest, metric, "source-native", resamples
+        comparisons[metric] = _numeric_comparison(
+            metric,
+            lane_values["source-native"][metric],
+            lane_values["raes-mediated"][metric],
+            declaration_digest,
+            resamples,
+            tolerances[metric],
         )
-        mediated_boot = _bootstrap_means(
-            mediated, declaration_digest, metric, "raes-mediated", resamples
-        )
-        numeric_differences = [
-            right - left for left, right in zip(native_boot, mediated_boot, strict=True)
-        ]
-        interval = {
-            "lower": _percentile(numeric_differences, 0.025),
-            "upper": _percentile(numeric_differences, 0.975),
-        }
-        tolerance_value = tolerances[metric]
-        if not isinstance(tolerance_value, (int, float)) or isinstance(tolerance_value, bool):
-            raise ValueError("comparison tolerance is invalid")
-        tolerance = float(tolerance_value)
-        exact = native == mediated
-        bounded = interval["lower"] >= -tolerance and interval["upper"] <= tolerance
-        comparisons[metric] = {
-            "result": "exact" if exact else "bounded" if bounded else "outside-tolerance",
-            "mean_difference": statistics.fmean(mediated) - statistics.fmean(native),
-            "interval_95": interval,
-            "tolerance": tolerance,
-        }
-    native_causes = terminal_values["source-native"]
-    mediated_causes = terminal_values["raes-mediated"]
-    if len(native_causes) != _ATTEMPTS_PER_LANE or len(mediated_causes) != _ATTEMPTS_PER_LANE:
-        comparisons["terminal_cause"] = {"result": "unavailable", "proportion_differences": None}
-    else:
-        categories = sorted(set(native_causes) | set(mediated_causes))
-        cause_differences = {
-            category: mediated_causes.count(category) / len(mediated_causes)
-            - native_causes.count(category) / len(native_causes)
-            for category in categories
-        }
-        tolerance_value = tolerances["terminal_cause"]
-        if not isinstance(tolerance_value, (int, float)) or isinstance(tolerance_value, bool):
-            raise ValueError("comparison tolerance is invalid")
-        tolerance = float(tolerance_value)
-        comparisons["terminal_cause"] = {
-            "result": (
-                "exact"
-                if native_causes == mediated_causes
-                else "bounded"
-                if all(abs(value) <= tolerance for value in cause_differences.values())
-                else "outside-tolerance"
-            ),
-            "proportion_differences": cause_differences,
-            "tolerance": tolerance,
-        }
+    comparisons["terminal_cause"] = _terminal_cause_comparison(
+        terminal_values["source-native"],
+        terminal_values["raes-mediated"],
+        tolerances["terminal_cause"],
+    )
     return {
         "schema_version": _AGGREGATE_SCHEMA,
         "declaration_sha256": declaration_digest,
@@ -1639,6 +1851,8 @@ def compute_aggregates(
 
 
 def _installed_version(name: str) -> str:
+    """Return an installed distribution version or a stable absence marker."""
+
     try:
         return importlib.metadata.version(name)
     except importlib.metadata.PackageNotFoundError:
@@ -1648,23 +1862,19 @@ def _installed_version(name: str) -> str:
 def _installed_source_artifact_sha256() -> str:
     """Return only the installed wheel digest, never its local URL."""
 
+    result = "unavailable"
     try:
         distribution = importlib.metadata.distribution("cyberbattlesim")
         direct_text = distribution.read_text("direct_url.json")
-        if direct_text is None:
-            return "unavailable"
-        direct = json.loads(direct_text)
-        if not isinstance(direct, dict):
-            return "unavailable"
-        archive = direct.get("archive_info")
-        if not isinstance(archive, dict):
-            return "unavailable"
-        digest = archive.get("hash")
-        if isinstance(digest, str) and digest.startswith("sha256=") and _is_sha256(digest[7:]):
-            return digest[7:]
-        hashes = archive.get("hashes")
-        if isinstance(hashes, dict) and _is_sha256(hashes.get("sha256")):
-            return cast(str, hashes["sha256"])
+        direct = json.loads(direct_text) if direct_text is not None else None
+        archive = direct.get("archive_info") if isinstance(direct, dict) else None
+        if isinstance(archive, dict):
+            digest = archive.get("hash")
+            hashes = archive.get("hashes")
+            if isinstance(digest, str) and digest.startswith("sha256=") and _is_sha256(digest[7:]):
+                result = digest[7:]
+            elif isinstance(hashes, dict) and _is_sha256(hashes.get("sha256")):
+                result = cast(str, hashes["sha256"])
     except (
         importlib.metadata.PackageNotFoundError,
         OSError,
@@ -1672,10 +1882,12 @@ def _installed_source_artifact_sha256() -> str:
         json.JSONDecodeError,
     ):
         pass
-    return "unavailable"
+    return result
 
 
 def _physical_memory_bytes() -> int | None:
+    """Return installed physical memory without exposing host identity."""
+
     try:
         return int(os.sysconf("SC_PAGE_SIZE")) * int(os.sysconf("SC_PHYS_PAGES"))
     except (OSError, ValueError):
@@ -1683,6 +1895,8 @@ def _physical_memory_bytes() -> int | None:
 
 
 def _environment_payload(lane: str) -> dict[str, object]:
+    """Describe one privacy-bounded lane execution environment."""
+
     qualification = cast(dict[str, object], load_qualification())
     source = cast(dict[str, object], qualification["source"])
     return {
@@ -1742,6 +1956,8 @@ def _environment_payload(lane: str) -> dict[str, object]:
 
 
 def _validate_lane_environment(payload: Mapping[str, object], lane: str) -> None:
+    """Validate one lane's privacy-bounded environment record."""
+
     _require_keys(
         payload,
         frozenset(
@@ -1801,6 +2017,8 @@ def _validate_lane_environment(payload: Mapping[str, object], lane: str) -> None
 
 
 def _validate_combined_environment(payload: Mapping[str, object]) -> None:
+    """Validate the joined native and mediated environment record."""
+
     _require_keys(
         payload,
         frozenset(
@@ -1828,6 +2046,8 @@ def _validate_combined_environment(payload: Mapping[str, object]) -> None:
 
 
 def _worker_environment(work_root: Path) -> dict[str, str]:
+    """Build the isolated subprocess environment for a native worker."""
+
     home = work_root / "home"
     cache = work_root / "cache"
     temporary = work_root / "tmp"
@@ -1896,13 +2116,13 @@ def _native_worker(output: Path) -> None:
         except Exception:
             cleanup_verified = False
     if not isinstance(result, dict):
-        raise RuntimeError("native evaluator returned an unsupported result")
+        raise RuntimeError(_INVALID_NATIVE_RESULT)
     rewards = result.get("all_episodes_rewards")
     availability = result.get("all_episodes_availability")
     if not isinstance(rewards, list) or not isinstance(availability, list):
-        raise RuntimeError("native evaluator returned an unsupported result")
+        raise RuntimeError(_INVALID_NATIVE_RESULT)
     if len(rewards) != _ATTEMPTS_PER_LANE or len(availability) != _ATTEMPTS_PER_LANE:
-        raise RuntimeError("native evaluator returned an unsupported result")
+        raise RuntimeError(_INVALID_NATIVE_RESULT)
     atomic_write_json_artifact(
         output,
         {
@@ -1918,20 +2138,50 @@ def _native_worker(output: Path) -> None:
 def _terminal_cause(
     rewards: Sequence[float], availability: Sequence[float], maximum_steps: int
 ) -> str | None:
-    if not rewards or len(rewards) != len(availability):
-        return None
-    last_reward = rewards[-1]
-    last_availability = availability[-1]
-    if last_reward == 5000.0:
-        return "defender-sla" if last_availability < 0.8 else "attacker-ownership"
-    if len(rewards) < maximum_steps and last_reward == 0.0:
-        return "defender-eviction"
-    if len(rewards) == maximum_steps and last_reward != 5000.0:
-        return "evaluator-cutoff"
-    return None
+    """Classify a native terminal cause from the frozen evaluator signals."""
+
+    cause = None
+    if rewards and len(rewards) == len(availability):
+        last_reward = rewards[-1]
+        if math.isclose(last_reward, 5000.0):
+            cause = "defender-sla" if availability[-1] < 0.8 else "attacker-ownership"
+        elif len(rewards) < maximum_steps and math.isclose(last_reward, 0.0):
+            cause = "defender-eviction"
+        elif len(rewards) == maximum_steps:
+            cause = "evaluator-cutoff"
+    return cause
+
+
+def _native_episode_result(value: object, cleanup_verified: object) -> dict[str, object]:
+    """Validate and project one native worker episode."""
+
+    if not isinstance(value, dict) or set(value) != {"rewards", "availability"}:
+        raise RuntimeError(_INVALID_NATIVE_RESULT)
+    rewards = value["rewards"]
+    availability = value["availability"]
+    if not isinstance(rewards, list) or not isinstance(availability, list):
+        raise RuntimeError(_INVALID_NATIVE_RESULT)
+    if len(rewards) != len(availability) or not 1 <= len(rewards) <= 600:
+        raise RuntimeError(_INVALID_NATIVE_RESULT)
+    numeric_rewards = [float(item) for item in rewards]
+    numeric_availability = [float(item) for item in availability]
+    if any(not math.isfinite(item) for item in numeric_rewards):
+        raise RuntimeError(_INVALID_NATIVE_RESULT)
+    if any(not math.isfinite(item) or not 0.0 <= item <= 1.0 for item in numeric_availability):
+        raise RuntimeError(_INVALID_NATIVE_RESULT)
+    return {
+        "steps_to_termination": len(numeric_rewards),
+        "cumulative_attacker_reward": math.fsum(numeric_rewards),
+        "network_availability": numeric_availability,
+        "terminal_cause": _terminal_cause(numeric_rewards, numeric_availability, 600),
+        "cleanup_verified": cleanup_verified is True,
+        "evidence_refs": [],
+    }
 
 
 def _execute_native_batch() -> list[dict[str, object]]:
+    """Execute the native worker in isolated scratch and validate its batch."""
+
     with tempfile.TemporaryDirectory(prefix="cyberbattlesim-native-") as scratch:
         work_root = Path(scratch)
         output = work_root / "native-worker.json"
@@ -1962,40 +2212,33 @@ def _execute_native_batch() -> list[dict[str, object]]:
         _require_keys(payload, frozenset({"episodes", "cleanup_verified"}), "native worker")
         episodes = payload["episodes"]
         if not isinstance(episodes, list) or len(episodes) != _ATTEMPTS_PER_LANE:
-            raise RuntimeError("native evaluator returned an unsupported result")
-        results: list[dict[str, object]] = []
-        for episode in episodes:
-            if not isinstance(episode, dict) or set(episode) != {"rewards", "availability"}:
-                raise RuntimeError("native evaluator returned an unsupported result")
-            rewards = episode["rewards"]
-            availability = episode["availability"]
-            if not isinstance(rewards, list) or not isinstance(availability, list):
-                raise RuntimeError("native evaluator returned an unsupported result")
-            if len(rewards) != len(availability) or not 1 <= len(rewards) <= 600:
-                raise RuntimeError("native evaluator returned an unsupported result")
-            numeric_rewards = [float(value) for value in rewards]
-            numeric_availability = [float(value) for value in availability]
-            if any(not math.isfinite(value) for value in numeric_rewards):
-                raise RuntimeError("native evaluator returned an unsupported result")
-            if any(
-                not math.isfinite(value) or not 0.0 <= value <= 1.0
-                for value in numeric_availability
-            ):
-                raise RuntimeError("native evaluator returned an unsupported result")
-            results.append(
-                {
-                    "steps_to_termination": len(numeric_rewards),
-                    "cumulative_attacker_reward": math.fsum(numeric_rewards),
-                    "network_availability": numeric_availability,
-                    "terminal_cause": _terminal_cause(numeric_rewards, numeric_availability, 600),
-                    "cleanup_verified": payload["cleanup_verified"] is True,
-                    "evidence_refs": [],
-                }
-            )
-        return results
+            raise RuntimeError(_INVALID_NATIVE_RESULT)
+        return [
+            _native_episode_result(episode, payload["cleanup_verified"]) for episode in episodes
+        ]
+
+
+def _mediated_measure(path: Path) -> float:
+    """Load the one finite mediated cumulative-reward measure."""
+
+    value = _load_strict_value(path)
+    if not isinstance(value, list) or len(value) != 1:
+        raise RuntimeError(_INVALID_MEDIATED_EVIDENCE)
+    measure = value[0]
+    if not isinstance(measure, dict):
+        raise RuntimeError(_INVALID_MEDIATED_EVIDENCE)
+    reward = measure.get("value")
+    if not isinstance(reward, (int, float)) or isinstance(reward, bool):
+        raise RuntimeError(_INVALID_MEDIATED_EVIDENCE)
+    numeric_reward = float(reward)
+    if not math.isfinite(numeric_reward):
+        raise RuntimeError(_INVALID_MEDIATED_EVIDENCE)
+    return numeric_reward
 
 
 def _execute_mediated_attempt(schedule: dict[str, object], run_root: Path) -> dict[str, object]:
+    """Execute one isolated RAES-mediated attempt and project portable evidence."""
+
     pack_root = Path(cast(str, schedule["pack_root"])).resolve()
     run_id = cast(str, schedule["run_id"])
     command = [
@@ -2056,15 +2299,12 @@ def _execute_mediated_attempt(schedule: dict[str, object], run_root: Path) -> di
     summary = load_strict_json(portable / "summary.json")
     run_summary = load_strict_json(portable / "runs" / f"{run_id}-1" / "summary.json")
     derived_path = portable / "runs" / f"{run_id}-1" / "derived-measures.json"
-    derived = _load_strict_value(derived_path)
-    if not isinstance(derived, list) or len(derived) != 1 or not isinstance(derived[0], dict):
-        raise RuntimeError("mediated evidence is invalid")
-    reward = derived[0].get("value")
+    reward = _mediated_measure(derived_path)
     steps = run_summary.get("completed_steps")
-    if type(steps) is not int or not isinstance(reward, (int, float)) or isinstance(reward, bool):
-        raise RuntimeError("mediated evidence is invalid")
-    if not math.isfinite(float(reward)) or summary.get("disposition") != "succeeded":
-        raise RuntimeError("mediated evidence is invalid")
+    if type(steps) is not int:
+        raise RuntimeError(_INVALID_MEDIATED_EVIDENCE)
+    if summary.get("disposition") != "succeeded":
+        raise RuntimeError(_INVALID_MEDIATED_EVIDENCE)
     evidence_paths = (
         portable / "runs" / f"{run_id}-1" / "run.json",
         portable / "runs" / f"{run_id}-1" / "evidence-records.json",
@@ -2073,7 +2313,7 @@ def _execute_mediated_attempt(schedule: dict[str, object], run_root: Path) -> di
     )
     return {
         "steps_to_termination": steps,
-        "cumulative_attacker_reward": float(reward),
+        "cumulative_attacker_reward": reward,
         "network_availability": None,
         "terminal_cause": None,
         "cleanup_verified": run_summary.get("cleanup_verified") is True,
@@ -2088,6 +2328,8 @@ def _execute_mediated_attempt(schedule: dict[str, object], run_root: Path) -> di
 
 
 def _inventory_payload(root: Path) -> dict[str, object]:
+    """Recompute the closed artifact inventory for one stage."""
+
     artifacts = []
     for path in sorted(item for item in root.rglob("*") if item.is_file()):
         if path.name == _INVENTORY_NAME:
@@ -2105,14 +2347,18 @@ def _inventory_payload(root: Path) -> dict[str, object]:
 
 
 def _verify_inventory(root: Path) -> None:
+    """Verify a stage inventory exactly against its retained files."""
+
     recorded = load_strict_json(root / _INVENTORY_NAME)
     if recorded != _inventory_payload(root):
         raise ValueError("artifact inventory is invalid")
 
 
 def _combined_environment(native_root: Path, mediated_root: Path) -> dict[str, object]:
-    native = load_strict_json(native_root / "environment.json")
-    mediated = load_strict_json(mediated_root / "environment.json")
+    """Join both privacy-bounded lane environment records."""
+
+    native = load_strict_json(native_root / _ENVIRONMENT_FILE)
+    mediated = load_strict_json(mediated_root / _ENVIRONMENT_FILE)
     _validate_lane_environment(native, "source-native")
     _validate_lane_environment(mediated, "raes-mediated")
     limitations = sorted(
@@ -2136,7 +2382,19 @@ def _combined_environment(native_root: Path, mediated_root: Path) -> dict[str, o
 
 
 def _citation(path: str, pointer: str, digests: Mapping[str, str]) -> dict[str, object]:
+    """Build one digest-bound JSON Pointer citation."""
+
     return {"path": path, "sha256": digests[path], "json_pointer": pointer}
+
+
+def _outcome_tier_result(comparison_results: set[str]) -> str:
+    """Choose the outcome tier from ordered comparison severity."""
+
+    if "outside-tolerance" in comparison_results:
+        return "failed"
+    if "unavailable" in comparison_results:
+        return "weakened"
+    return "passed"
 
 
 def compute_tiers(
@@ -2177,13 +2435,7 @@ def compute_tiers(
     comparison_results = {
         cast(str, cast(dict[str, object], value)["result"]) for value in comparisons.values()
     }
-    outcome_result = (
-        "failed"
-        if "outside-tolerance" in comparison_results
-        else "weakened"
-        if "unavailable" in comparison_results
-        else "passed"
-    )
+    outcome_result = _outcome_tier_result(comparison_results)
     limitations = environment.get("limitations")
     disclosure_result = "passed" if isinstance(limitations, list) and limitations else "failed"
     tier_rows = [
@@ -2191,7 +2443,7 @@ def compute_tiers(
             "tier": "authored-source",
             "result": authored_result,
             "rationale": "Pinned source, tree, notebook, and runtime-tree identities join.",
-            "evidence": [_citation("source-ledger.json", "/source", digests)],
+            "evidence": [_citation(_SOURCE_LEDGER_FILE, "/source", digests)],
         },
         {
             "tier": "contract",
@@ -2199,13 +2451,13 @@ def compute_tiers(
             "rationale": (
                 "The declaration embeds a validated RAES study over the published task/spec refs."
             ),
-            "evidence": [_citation("protocol.json", "/declaration/study", digests)],
+            "evidence": [_citation(_PROTOCOL_FILE, "/declaration/study", digests)],
         },
         {
             "tier": "execution-control",
             "result": execution_result,
             "rationale": "Actual random-stream binding dispositions differ between lanes.",
-            "evidence": [_citation("protocol.json", "/declaration/stochastic_controls", digests)],
+            "evidence": [_citation(_PROTOCOL_FILE, "/declaration/stochastic_controls", digests)],
         },
         {
             "tier": "state-observation",
@@ -2214,13 +2466,13 @@ def compute_tiers(
                 "The authored RAES topology is representative and native observations "
                 "remain private."
             ),
-            "evidence": [_citation("source-ledger.json", "/loss_refs", digests)],
+            "evidence": [_citation(_SOURCE_LEDGER_FILE, "/loss_refs", digests)],
         },
         {
             "tier": "outcome-evaluation",
             "result": outcome_result,
             "rationale": "Only complete predeclared metric comparisons can pass this tier.",
-            "evidence": [_citation("aggregates.json", "/comparisons", digests)],
+            "evidence": [_citation(_AGGREGATES_FILE, "/comparisons", digests)],
         },
         {
             "tier": "disclosure",
@@ -2229,9 +2481,9 @@ def compute_tiers(
                 "Known apparatus, source, stochastic, topology, and metric losses are retained."
             ),
             "evidence": [
-                _citation("source-ledger.json", "/exclusions", digests),
-                _citation("environment.json", "/limitations", digests),
-                _citation("bench-notes.json", "/notes", digests),
+                _citation(_SOURCE_LEDGER_FILE, "/exclusions", digests),
+                _citation(_ENVIRONMENT_FILE, "/limitations", digests),
+                _citation(_BENCH_NOTES_FILE, "/notes", digests),
             ],
         },
     ]
@@ -2246,6 +2498,8 @@ def compute_tiers(
 
 
 def _validation_report(revision: str) -> str:
+    """Render the stable offline-verification report for one revision."""
+
     return (
         "# CyberBattleSim baseline reproduction validation\n\n"
         f"Frozen revision: `{revision}`\n\n"
@@ -2269,6 +2523,8 @@ def _validation_report(revision: str) -> str:
 def _assert_stage_rows(
     protocol: Mapping[str, object], rows: Sequence[Mapping[str, object]]
 ) -> None:
+    """Require every frozen attempt to have one terminal stage row."""
+
     schedule = cast(
         list[dict[str, object]], cast(dict[str, object], protocol["declaration"])["schedule"]
     )
@@ -2287,16 +2543,51 @@ def _write_tier_projection(
     environment: Mapping[str, object],
     aggregates: Mapping[str, object],
 ) -> None:
+    """Recompute and write the digest-bound six-tier projection."""
+
     digest_paths = (
-        "protocol.json",
-        "source-ledger.json",
-        "environment.json",
-        "aggregates.json",
-        "bench-notes.json",
+        _PROTOCOL_FILE,
+        _SOURCE_LEDGER_FILE,
+        _ENVIRONMENT_FILE,
+        _AGGREGATES_FILE,
+        _BENCH_NOTES_FILE,
     )
     digests = {name: _sha256_file(root / name) for name in digest_paths}
     tiers = compute_tiers(protocol, source_ledger, environment, aggregates, digests)
-    atomic_write_json_artifact(root / "tiers.json", tiers)
+    atomic_write_json_artifact(root / _TIERS_FILE, tiers)
+
+
+def _verify_finalized_stage(
+    root: Path,
+    bench_notes: dict[str, object],
+    protocol: Mapping[str, object],
+    source_ledger: Mapping[str, object],
+    environment: Mapping[str, object],
+    aggregates: Mapping[str, object],
+    failure_summary: str,
+) -> None:
+    """Seal and offline-verify one note-bound finalization state."""
+
+    _write_bench_notes(root, bench_notes)
+    _write_tier_projection(root, protocol, source_ledger, environment, aggregates)
+    _scan_portable(root)
+    _seal_inventory(root)
+    try:
+        verify_bundle(root)
+    except Exception:
+        _append_bench_note(
+            bench_notes,
+            phase="verify",
+            severity="error",
+            event_code="offline-verification-failed",
+            summary=failure_summary,
+            disposition="failed",
+            evidence_paths=(_INVENTORY_NAME,),
+        )
+        _write_bench_notes(root, bench_notes)
+        _write_tier_projection(root, protocol, source_ledger, environment, aggregates)
+        _seal_inventory(root)
+        raise RuntimeError("final bundle offline verification failed") from None
 
 
 def finalize_bundle(oracle_root: Path, mediated_root: Path, output: Path) -> Path:
@@ -2304,8 +2595,8 @@ def finalize_bundle(oracle_root: Path, mediated_root: Path, output: Path) -> Pat
 
     _verify_inventory(oracle_root)
     _verify_inventory(mediated_root)
-    oracle_protocol_path = oracle_root / "protocol.json"
-    mediated_protocol_path = mediated_root / "protocol.json"
+    oracle_protocol_path = oracle_root / _PROTOCOL_FILE
+    mediated_protocol_path = mediated_root / _PROTOCOL_FILE
     if oracle_protocol_path.read_bytes() != mediated_protocol_path.read_bytes():
         raise ValueError("mediated collection is not bound to the frozen protocol")
     protocol = load_strict_json(oracle_protocol_path)
@@ -2333,21 +2624,20 @@ def finalize_bundle(oracle_root: Path, mediated_root: Path, output: Path) -> Pat
     bench_notes = _new_bench_notes(protocol, combined_notes)
     _validate_bench_notes(bench_notes, protocol)
     root = _reserve_directory(output)
-    atomic_write_json_artifact(root / "protocol.json", protocol)
-    source_ledger = load_strict_json(oracle_root / "source-ledger.json")
+    atomic_write_json_artifact(root / _PROTOCOL_FILE, protocol)
+    source_ledger = load_strict_json(oracle_root / _SOURCE_LEDGER_FILE)
     validate_source_ledger(source_ledger, protocol)
-    atomic_write_json_artifact(root / "source-ledger.json", source_ledger)
+    atomic_write_json_artifact(root / _SOURCE_LEDGER_FILE, source_ledger)
     environment = _combined_environment(oracle_root, mediated_root)
-    atomic_write_json_artifact(root / "environment.json", environment)
+    atomic_write_json_artifact(root / _ENVIRONMENT_FILE, environment)
     _append_bench_note(
         bench_notes,
-        protocol,
         phase="finalize",
         severity="info",
         event_code="bundle-finalization-started",
         summary="Assembly of the content-addressed public bundle was started.",
         disposition="observed",
-        evidence_paths=("protocol.json", "source-ledger.json", "environment.json"),
+        evidence_paths=(_PROTOCOL_FILE, _SOURCE_LEDGER_FILE, _ENVIRONMENT_FILE),
     )
     _write_bench_notes(root, bench_notes)
     runs_root = root / "runs"
@@ -2356,7 +2646,7 @@ def finalize_bundle(oracle_root: Path, mediated_root: Path, output: Path) -> Pat
         for run in sorted((stage / "runs").iterdir()):
             shutil.copytree(run, runs_root / run.name)
     aggregates = compute_aggregates(protocol, rows)
-    atomic_write_json_artifact(root / "aggregates.json", aggregates)
+    atomic_write_json_artifact(root / _AGGREGATES_FILE, aggregates)
     revision_value = protocol["declaration_sha256"]
     if not isinstance(revision_value, str):
         raise ValueError("protocol declaration digest is invalid")
@@ -2366,80 +2656,55 @@ def finalize_bundle(oracle_root: Path, mediated_root: Path, output: Path) -> Pat
     )
     _append_bench_note(
         bench_notes,
-        protocol,
         phase="finalize",
         severity="info",
         event_code="bundle-finalized",
         summary="All declared runs and derived public artifacts were assembled without drops.",
         disposition="passed",
-        evidence_paths=("aggregates.json", "validation-report.md"),
+        evidence_paths=(_AGGREGATES_FILE, "validation-report.md"),
     )
     _append_bench_note(
         bench_notes,
-        protocol,
         phase="verify",
         severity="info",
         event_code="offline-verification-started",
         summary="Pure offline recomputation and integrity verification were started.",
         disposition="observed",
-        evidence_paths=("protocol.json", "aggregates.json"),
+        evidence_paths=(_PROTOCOL_FILE, _AGGREGATES_FILE),
     )
-    _write_bench_notes(root, bench_notes)
-    _write_tier_projection(root, protocol, source_ledger, environment, aggregates)
-    _scan_portable(root)
-    _seal_inventory(root)
-    try:
-        verify_bundle(root)
-    except Exception:
-        _append_bench_note(
-            bench_notes,
-            protocol,
-            phase="verify",
-            severity="error",
-            event_code="offline-verification-failed",
-            summary="Pure offline recomputation or integrity verification failed.",
-            disposition="failed",
-            evidence_paths=("inventory.json",),
-        )
-        _write_bench_notes(root, bench_notes)
-        _write_tier_projection(root, protocol, source_ledger, environment, aggregates)
-        _seal_inventory(root)
-        raise RuntimeError("final bundle offline verification failed") from None
-    _append_bench_note(
+    _verify_finalized_stage(
+        root,
         bench_notes,
         protocol,
+        source_ledger,
+        environment,
+        aggregates,
+        "Pure offline recomputation or integrity verification failed.",
+    )
+    _append_bench_note(
+        bench_notes,
         phase="verify",
         severity="info",
         event_code="offline-verification-passed",
         summary="Pure offline recomputation and integrity verification passed.",
         disposition="passed",
-        evidence_paths=("inventory.json", "aggregates.json", "tiers.json"),
+        evidence_paths=(_INVENTORY_NAME, _AGGREGATES_FILE, _TIERS_FILE),
     )
-    _write_bench_notes(root, bench_notes)
-    _write_tier_projection(root, protocol, source_ledger, environment, aggregates)
-    _scan_portable(root)
-    _seal_inventory(root)
-    try:
-        verify_bundle(root)
-    except Exception:
-        _append_bench_note(
-            bench_notes,
-            protocol,
-            phase="verify",
-            severity="error",
-            event_code="offline-verification-failed",
-            summary="The final note-bound bundle failed its second integrity verification.",
-            disposition="failed",
-            evidence_paths=("inventory.json",),
-        )
-        _write_bench_notes(root, bench_notes)
-        _write_tier_projection(root, protocol, source_ledger, environment, aggregates)
-        _seal_inventory(root)
-        raise RuntimeError("final bundle offline verification failed") from None
+    _verify_finalized_stage(
+        root,
+        bench_notes,
+        protocol,
+        source_ledger,
+        environment,
+        aggregates,
+        "The final note-bound bundle failed its second integrity verification.",
+    )
     return root
 
 
 def _resolve_pointer(document: object, pointer: str) -> object:
+    """Resolve one strict JSON Pointer within a cited document."""
+
     if pointer == "":
         return document
     if not pointer.startswith("/"):
@@ -2456,39 +2721,64 @@ def _resolve_pointer(document: object, pointer: str) -> object:
     return current
 
 
-def _scan_portable(root: Path) -> None:
-    def contains_native_field_name(value: str) -> bool:
-        folded = value.casefold()
-        return any(name.casefold() in folded for name in _FORBIDDEN_NATIVE_FIELD_NAMES)
+def _contains_native_field_name(value: str) -> bool:
+    """Detect a forbidden native field name in portable text."""
 
-    def scan_json_value(value: object, *, withheld_ref: bool = False) -> None:
-        if isinstance(value, dict):
-            for key, child in value.items():
-                if contains_native_field_name(key):
-                    raise ValueError("portable artifact contains a forbidden native value")
-                scan_json_value(child, withheld_ref=key == "withheld_refs")
-        elif isinstance(value, list):
-            for child in value:
-                scan_json_value(child, withheld_ref=withheld_ref)
-        elif isinstance(value, str) and not withheld_ref and contains_native_field_name(value):
-            raise ValueError("portable artifact contains a forbidden native value")
+    folded = value.casefold()
+    return any(name.casefold() in folded for name in _FORBIDDEN_NATIVE_FIELD_NAMES)
+
+
+def _scan_json_value(value: object, *, withheld_ref: bool = False) -> None:
+    """Structurally scan JSON while permitting disclosed withheld references."""
+
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if _contains_native_field_name(key):
+                raise ValueError(_FORBIDDEN_PORTABLE_VALUE)
+            _scan_json_value(child, withheld_ref=key == "withheld_refs")
+    elif isinstance(value, list):
+        for child in value:
+            _scan_json_value(child, withheld_ref=withheld_ref)
+    elif isinstance(value, str) and not withheld_ref and _contains_native_field_name(value):
+        raise ValueError(_FORBIDDEN_PORTABLE_VALUE)
+
+
+def _host_path_prefixes() -> tuple[str, ...]:
+    """Return host-path markers that portable artifacts must not contain."""
+
+    temporary_prefix = PurePosixPath("/", "tmp").as_posix() + "/"
+    local_prefixes = ("/home/", temporary_prefix)
+    return local_prefixes + tuple(f"file://{prefix}" for prefix in local_prefixes)
+
+
+def _scan_portable_file(path: Path) -> None:
+    """Apply size, native-value, secret, and host-path gates to one file."""
+
+    content = path.read_bytes()
+    if len(content) > 500 * 1024:
+        raise ValueError("portable artifact exceeds the repository size limit")
+    text = content.decode("utf-8", errors="ignore")
+    folded = text.casefold()
+    if any(token.casefold() in folded for token in _FORBIDDEN_PORTABLE_TOKENS):
+        raise ValueError(_FORBIDDEN_PORTABLE_VALUE)
+    if path.suffix == ".json":
+        _scan_json_value(_load_strict_value(path))
+    elif _contains_native_field_name(text):
+        raise ValueError(_FORBIDDEN_PORTABLE_VALUE)
+    if any(prefix in text for prefix in _host_path_prefixes()):
+        raise ValueError("portable artifact contains a host path")
+
+
+def _scan_portable(root: Path) -> None:
+    """Scan every retained portable artifact without native imports."""
 
     for path in sorted(item for item in root.rglob("*") if item.is_file()):
-        content = path.read_bytes()
-        if len(content) > 500 * 1024:
-            raise ValueError("portable artifact exceeds the repository size limit")
-        text = content.decode("utf-8", errors="ignore")
-        if any(token.casefold() in text.casefold() for token in _FORBIDDEN_PORTABLE_TOKENS):
-            raise ValueError("portable artifact contains a forbidden native value")
-        if path.suffix == ".json":
-            scan_json_value(_load_strict_value(path))
-        elif contains_native_field_name(text):
-            raise ValueError("portable artifact contains a forbidden native value")
-        if any(prefix in text for prefix in ("/home/", "/tmp/", "file:///home/", "file:///tmp/")):
-            raise ValueError("portable artifact contains a host path")
+        _scan_portable_file(path)
 
 
 def _validate_model_list(path: Path, model: type[object]) -> None:
+    """Validate a portable list against one published RAES model."""
+
     payload = _load_strict_value(path)
     if not isinstance(payload, list):
         raise ValueError("portable RAES model collection is invalid")
@@ -2500,6 +2790,8 @@ def _validate_model_list(path: Path, model: type[object]) -> None:
 
 
 def _validate_mediated_portable(run_root: Path, run_id: str) -> None:
+    """Validate the complete portable RAES projection for one mediated run."""
+
     portable = run_root / "portable"
     archival = portable / "runs" / f"{run_id}-1"
     ExperimentRunModel.model_validate(load_strict_json(archival / "run.json"))
@@ -2512,46 +2804,50 @@ def _validate_mediated_portable(run_root: Path, run_id: str) -> None:
     _verify_inventory(portable)
 
 
-def verify_bundle(root: Path) -> dict[str, object]:
-    """Verify and recompute a sealed bundle without importing native source."""
+def _verify_bench_evidence(root: Path, notes: Sequence[Mapping[str, object]]) -> None:
+    """Verify every bench-note evidence path stays inside the bundle."""
 
-    root = root.resolve()
-    protocol = load_strict_json(root / "protocol.json")
-    validate_protocol(protocol, require_oracle=True)
-    source_ledger = load_strict_json(root / "source-ledger.json")
-    validate_source_ledger(source_ledger, protocol)
-    environment = load_strict_json(root / "environment.json")
-    _validate_combined_environment(environment)
-    bench_notes = _load_bench_notes(root, protocol)
-    notes = cast(list[dict[str, object]], bench_notes["notes"])
     for note in notes:
         for ref in cast(list[dict[str, object]], note["evidence_refs"]):
             target = (root / _safe_relative_path(ref["path"])).resolve()
             if not target.is_relative_to(root) or not target.is_file():
                 raise ValueError("bench note evidence reference is unresolved")
-    rows = load_terminal_rows(root)
-    _assert_stage_rows(protocol, rows)
-    protocol_digest = _sha256_file(root / "protocol.json")
-    for row in rows:
-        if row["declaration_sha256"] != protocol["declaration_sha256"]:
-            raise ValueError("terminal row declaration binding is invalid")
-        if row["lane"] == "raes-mediated" and row["protocol_sha256"] != protocol_digest:
-            raise ValueError("mediated terminal row protocol binding is invalid")
-        run_root = root / "runs" / cast(str, row["run_id"])
-        if row["lane"] == "raes-mediated" and row["disposition"] == "valid":
-            _validate_mediated_portable(run_root, cast(str, row["run_id"]))
-        refs = row["evidence_refs"]
-        if not isinstance(refs, list):
+
+
+def _verify_terminal_evidence(
+    root: Path,
+    protocol: Mapping[str, object],
+    protocol_digest: str,
+    row: Mapping[str, object],
+) -> None:
+    """Verify bindings and evidence references for one terminal row."""
+
+    if row["declaration_sha256"] != protocol["declaration_sha256"]:
+        raise ValueError("terminal row declaration binding is invalid")
+    mediated = row["lane"] == "raes-mediated"
+    if mediated and row["protocol_sha256"] != protocol_digest:
+        raise ValueError("mediated terminal row protocol binding is invalid")
+    run_root = root / "runs" / cast(str, row["run_id"])
+    if mediated and row["disposition"] == "valid":
+        _validate_mediated_portable(run_root, cast(str, row["run_id"]))
+    refs = row["evidence_refs"]
+    if not isinstance(refs, list):
+        raise ValueError("terminal row evidence references are invalid")
+    for ref in refs:
+        if not isinstance(ref, dict) or set(ref) != {"path", "sha256"}:
             raise ValueError("terminal row evidence references are invalid")
-        for ref in refs:
-            if not isinstance(ref, dict) or set(ref) != {"path", "sha256"}:
-                raise ValueError("terminal row evidence references are invalid")
-            relative = _safe_relative_path(ref["path"])
-            target = (run_root / relative).resolve()
-            if not target.is_relative_to(run_root.resolve()) or not target.is_file():
-                raise ValueError("terminal row evidence reference is unresolved")
-            if _sha256_file(target) != ref["sha256"]:
-                raise ValueError("terminal row evidence digest is invalid")
+        target = (run_root / _safe_relative_path(ref["path"])).resolve()
+        if not target.is_relative_to(run_root.resolve()) or not target.is_file():
+            raise ValueError("terminal row evidence reference is unresolved")
+        if _sha256_file(target) != ref["sha256"]:
+            raise ValueError("terminal row evidence digest is invalid")
+
+
+def _verify_native_oracle(
+    protocol: Mapping[str, object], rows: Sequence[Mapping[str, object]]
+) -> None:
+    """Recompute the ordered source-native oracle digest."""
+
     native_rows = sorted(
         (row for row in rows if row["lane"] == "source-native"),
         key=lambda item: cast(int, item["replicate"]),
@@ -2560,49 +2856,89 @@ def verify_bundle(root: Path) -> dict[str, object]:
     oracle = cast(dict[str, object], protocol["oracle"])
     if sha256_payload(oracle_rows) != oracle["native_result_set_sha256"]:
         raise ValueError("source-native oracle digest is invalid")
-    recorded_aggregates = load_strict_json(root / "aggregates.json")
+
+
+def _verify_tier_citation(root: Path, citation: object) -> None:
+    """Verify one digest-bound tier citation and JSON Pointer."""
+
+    if not isinstance(citation, dict) or set(citation) != {"path", "sha256", "json_pointer"}:
+        raise ValueError("tier evidence is invalid")
+    relative = _safe_relative_path(citation["path"])
+    target = root / relative
+    if not target.is_file() or _sha256_file(target) != citation["sha256"]:
+        raise ValueError("tier evidence digest is invalid")
+    _resolve_pointer(load_strict_json(target), cast(str, citation["json_pointer"]))
+
+
+def _verify_tier(root: Path, tier: object) -> None:
+    """Verify one ordered tier row and all of its citations."""
+
+    if not isinstance(tier, dict) or tier.get("result") not in {"passed", "failed", "weakened"}:
+        raise ValueError("tier inventory is invalid")
+    evidence = tier.get("evidence")
+    if not isinstance(evidence, list) or not evidence:
+        raise ValueError("tier evidence is invalid")
+    for citation in evidence:
+        _verify_tier_citation(root, citation)
+
+
+def _verified_tiers(
+    root: Path,
+    protocol: Mapping[str, object],
+    source_ledger: Mapping[str, object],
+    environment: Mapping[str, object],
+    aggregates: Mapping[str, object],
+) -> list[dict[str, object]]:
+    """Recompute and validate the complete ordered tier projection."""
+
+    digest_names = (
+        _PROTOCOL_FILE,
+        _SOURCE_LEDGER_FILE,
+        _ENVIRONMENT_FILE,
+        _AGGREGATES_FILE,
+        _BENCH_NOTES_FILE,
+    )
+    digests = {name: _sha256_file(root / name) for name in digest_names}
+    recorded = load_strict_json(root / _TIERS_FILE)
+    expected = compute_tiers(protocol, source_ledger, environment, aggregates, digests)
+    if canonical_json_bytes(recorded) != canonical_json_bytes(expected):
+        raise ValueError("tier recomputation failed")
+    tiers = recorded.get("tiers")
+    expected_names = list(_TIERS)
+    if (
+        not isinstance(tiers, list)
+        or [item.get("tier") for item in tiers if isinstance(item, dict)] != expected_names
+    ):
+        raise ValueError("tier inventory is invalid")
+    for tier in tiers:
+        _verify_tier(root, tier)
+    return cast(list[dict[str, object]], tiers)
+
+
+def verify_bundle(root: Path) -> dict[str, object]:
+    """Verify and recompute a sealed bundle without importing native source."""
+
+    root = root.resolve()
+    protocol = load_strict_json(root / _PROTOCOL_FILE)
+    validate_protocol(protocol, require_oracle=True)
+    source_ledger = load_strict_json(root / _SOURCE_LEDGER_FILE)
+    validate_source_ledger(source_ledger, protocol)
+    environment = load_strict_json(root / _ENVIRONMENT_FILE)
+    _validate_combined_environment(environment)
+    bench_notes = _load_bench_notes(root, protocol)
+    notes = cast(list[dict[str, object]], bench_notes["notes"])
+    _verify_bench_evidence(root, notes)
+    rows = load_terminal_rows(root)
+    _assert_stage_rows(protocol, rows)
+    protocol_digest = _sha256_file(root / _PROTOCOL_FILE)
+    for row in rows:
+        _verify_terminal_evidence(root, protocol, protocol_digest, row)
+    _verify_native_oracle(protocol, rows)
+    recorded_aggregates = load_strict_json(root / _AGGREGATES_FILE)
     expected_aggregates = compute_aggregates(protocol, rows)
     if canonical_json_bytes(recorded_aggregates) != canonical_json_bytes(expected_aggregates):
         raise ValueError("aggregate recomputation failed")
-    digests = {
-        name: _sha256_file(root / name)
-        for name in (
-            "protocol.json",
-            "source-ledger.json",
-            "environment.json",
-            "aggregates.json",
-            "bench-notes.json",
-        )
-    }
-    recorded_tiers = load_strict_json(root / "tiers.json")
-    expected_tiers = compute_tiers(
-        protocol, source_ledger, environment, recorded_aggregates, digests
-    )
-    if canonical_json_bytes(recorded_tiers) != canonical_json_bytes(expected_tiers):
-        raise ValueError("tier recomputation failed")
-    tiers = recorded_tiers.get("tiers")
-    if not isinstance(tiers, list) or [
-        item.get("tier") for item in tiers if isinstance(item, dict)
-    ] != list(_TIERS):
-        raise ValueError("tier inventory is invalid")
-    for tier in tiers:
-        if not isinstance(tier, dict) or tier.get("result") not in {"passed", "failed", "weakened"}:
-            raise ValueError("tier inventory is invalid")
-        evidence = tier.get("evidence")
-        if not isinstance(evidence, list) or not evidence:
-            raise ValueError("tier evidence is invalid")
-        for citation in evidence:
-            if not isinstance(citation, dict) or set(citation) != {
-                "path",
-                "sha256",
-                "json_pointer",
-            }:
-                raise ValueError("tier evidence is invalid")
-            relative = _safe_relative_path(citation["path"])
-            target = root / relative
-            if not target.is_file() or _sha256_file(target) != citation["sha256"]:
-                raise ValueError("tier evidence digest is invalid")
-            _resolve_pointer(load_strict_json(target), cast(str, citation["json_pointer"]))
+    tiers = _verified_tiers(root, protocol, source_ledger, environment, recorded_aggregates)
     _scan_portable(root)
     _verify_inventory(root)
     return {
@@ -2615,6 +2951,8 @@ def verify_bundle(root: Path) -> dict[str, object]:
 
 
 def _parser() -> argparse.ArgumentParser:
+    """Build the closed researcher command-line parser."""
+
     parser = argparse.ArgumentParser(prog="python -m raes_adapters.cyberbattlesim.reproduction")
     subcommands = parser.add_subparsers(dest="command", required=True)
     declare = subcommands.add_parser("declare")
@@ -2638,6 +2976,8 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _invocation_output(value: Path) -> Path:
+    """Resolve an output strictly beneath the invocation directory."""
+
     root = Path.cwd().resolve()
     resolved = (root / value).resolve()
     if resolved == root or not resolved.is_relative_to(root):
