@@ -3,14 +3,86 @@
     {
       "media_type": "application/json",
       "path": "bench-notes.json",
-      "sha256": "12fc28311d8d2019545b426572aba60b09248277844cc9c4c9fe819b01bada58",
-      "size_bytes": 662
+      "sha256": "e104739e7420a9bfbfee5b17978cb12ae1dd0850179fe36bd4d03106056f2cd7",
+      "size_bytes": 5876
+    },
+    {
+      "media_type": "application/json",
+      "path": "collection.json",
+      "sha256": "496c1e268aedf665b915fc4f9bf30b435421c0d59b192394a9ce6e0da897e800",
+      "size_bytes": 173
+    },
+    {
+      "media_type": "application/json",
+      "path": "environment.json",
+      "sha256": "4724ec57c1162c22553d6c9ed4ab032b820a9112a65293d628a039b9fa7535aa",
+      "size_bytes": 1648
     },
     {
       "media_type": "application/json",
       "path": "protocol.json",
-      "sha256": "1a07be06f4026045f5834eb4e355ccfa90feba158732b86ba18902fd55202550",
-      "size_bytes": 20763
+      "sha256": "d2054250dd9feac9eb76ba0baa049029d731ecf08018be1a7c1447ab86aea2c0",
+      "size_bytes": 81222
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r3-native-01/record.json",
+      "sha256": "28a47d04982c74687f18506c0a37dbb60d0cc78e9762ba6b3e80f7d63016a0de",
+      "size_bytes": 5451
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r3-native-02/record.json",
+      "sha256": "bab3fce553c42d8f194bd5fd1568e1cf4a5d5f51939e71c2905d92b7515e80e4",
+      "size_bytes": 4626
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r3-native-03/record.json",
+      "sha256": "44e5e95d06a40533cf4ecd290103fec2c2d2c5ba3b72bdfd3744db1653052d45",
+      "size_bytes": 5346
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r3-native-04/record.json",
+      "sha256": "ec3de02e9fda8761ff1de651d29642078b731a513e70eab0d7a3fb202a91f3a7",
+      "size_bytes": 5961
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r3-native-05/record.json",
+      "sha256": "bb00479bcab3ba54c2ba86bf37460fda637e9cef73b9c0e860c332791961a638",
+      "size_bytes": 8231
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r3-native-06/record.json",
+      "sha256": "7b446ba690f545fa48a8644a4c4ce06cd1b571402af417355ae8be19d2aaab9d",
+      "size_bytes": 3531
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r3-native-07/record.json",
+      "sha256": "8541d725276cc5631844f2a0dc8f9a811faf1f96963d1865c3ae277c3fde0306",
+      "size_bytes": 6126
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r3-native-08/record.json",
+      "sha256": "bfbbeb44832707d72234550175532371bedc88dd48a5b9115d6094da9937c44d",
+      "size_bytes": 3386
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r3-native-09/record.json",
+      "sha256": "96065bf10de04a7ed7cff9780577d69363cb9dc61d2c5a64cd0fabb1eaa24dde",
+      "size_bytes": 7161
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r3-native-10/record.json",
+      "sha256": "8eb4ff207077e4afb805a9910248b69b43f9d48283aa1f0754bd26ed9ad9eebe",
+      "size_bytes": 3697
     },
     {
       "media_type": "application/json",
