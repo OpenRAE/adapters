@@ -46,6 +46,11 @@ from raes_adapters.cyberbattlesim.backend.driver import (
     construct_selected_cyberbattlesim_environment,
     verify_selected_cyberbattlesim_source,
 )
+from raes_adapters.cyberbattlesim.termination import (
+    LOSING_REWARD,
+    WINNING_REWARD,
+    classify_terminal_cause,
+)
 
 _SCHEMA = "cyberbattlesim-baseline-reproduction/v2"
 _SOURCE_LEDGER_SCHEMA = "cyberbattlesim-baseline-source-ledger/v1"
@@ -88,8 +93,10 @@ _TIERS = (
 )
 _ATTEMPTS_PER_LANE = 10
 _SEED_LABEL = 20260729
-_ATTEMPT_SERIES = "cbs-r2"
+_ATTEMPT_SERIES = "cbs-r3"
 _REJECTED_DECLARATION_SHA256 = "825dde3b4cd66f228e0f93157a2add35e3c9a822a7adac1d8ffd322b32116232"
+_FAILED_DECLARATION_SHA256 = "f09ec5759021cf1d5de9b260e0299934bf6f6cc4161b822e8f5f0b76bdb96b53"
+_FAILED_INVENTORY_SHA256 = "4653bc5afbf501f005f997df782f73f282cccbe28f9cbe176d5a9c3f5970a292"
 _BENCH_PHASES = frozenset({"declaration", "native", "mediated", "finalize", "verify"})
 _BENCH_SEVERITIES = frozenset({"info", "warning", "error"})
 _BENCH_DISPOSITIONS = frozenset({"observed", "passed", "failed", "weakened"})
@@ -579,6 +586,11 @@ def _declared_artifacts(
         ("reproduction-runner", "src/raes_adapters/cyberbattlesim/reproduction.py"),
         ("mediated-researcher", "src/raes_adapters/cyberbattlesim/researcher.py"),
         ("mediated-driver", "src/raes_adapters/cyberbattlesim/backend/driver.py"),
+        ("mediated-evaluator", "src/raes_adapters/cyberbattlesim/backend/evaluator.py"),
+        ("terminal-classifier", "src/raes_adapters/cyberbattlesim/termination.py"),
+        ("researcher-cli", "src/raes_adapters/cli.py"),
+        ("researcher-support", "src/raes_adapters/_researcher_support.py"),
+        ("experiment-evidence", "src/raes_adapters/_experiment_evidence.py"),
         ("selected-source-helper", "src/raes_adapters/cyberbattlesim/backend/source.py"),
         ("task", task_path.relative_to(repo_root).as_posix()),
         ("spec", spec_path.relative_to(repo_root).as_posix()),
@@ -629,6 +641,11 @@ def _source_ledger_payload(
                 "reproduction-runner",
                 "mediated-researcher",
                 "mediated-driver",
+                "mediated-evaluator",
+                "terminal-classifier",
+                "researcher-cli",
+                "researcher-support",
+                "experiment-evidence",
                 "selected-source-helper",
             ],
         },
@@ -672,6 +689,11 @@ def _declaration_payload(
             "epsilon": 0.9,
             "epsilon_exponential_decay": 10000,
             "epsilon_minimum": 0.1,
+            "epsilon_schedule_scope": "lane-batch-cumulative",
+            "predecessor_failed_bundle": {
+                "declaration_sha256": _FAILED_DECLARATION_SHA256,
+                "inventory_sha256": _FAILED_INVENTORY_SHA256,
+            },
         },
         "attempt_series": _ATTEMPT_SERIES,
         "prior_attempts": _prior_attempt_disclosure(),
@@ -873,7 +895,6 @@ def _validate_declaration_fields(declaration: Mapping[str, object]) -> Mapping[s
     ExperimentStudyModel.model_validate(declaration["study"])
     expected_values = (
         ("retry_budget", 0, "retry policy is invalid"),
-        ("attempt_series", _ATTEMPT_SERIES, "attempt series is invalid"),
         ("prior_attempts", _prior_attempt_disclosure(), "prior attempt disclosure is invalid"),
         ("bench_notes", _bench_note_policy(), "bench note policy is invalid"),
         ("metrics", list(_METRICS), "metric declaration is invalid"),
@@ -882,6 +903,8 @@ def _validate_declaration_fields(declaration: Mapping[str, object]) -> Mapping[s
     for field, expected, message in expected_values:
         if declaration[field] != expected:
             raise ValueError(message)
+    if declaration["attempt_series"] not in {"cbs-r2", "cbs-r3"}:
+        raise ValueError("attempt series is invalid")
     if set(cast(list[object], declaration["terminal_dispositions"])) != _DISPOSITIONS:
         raise ValueError("terminal dispositions are invalid")
     return cast(Mapping[str, object], declaration["prior_attempts"])
@@ -925,7 +948,9 @@ def _validated_schedule_entry(value: object) -> tuple[str, str, str]:
 
 
 def _validate_attempt_schedule(
-    value: object, prior_attempts: Mapping[str, object]
+    value: object,
+    prior_attempts: Mapping[str, object],
+    attempt_series: str = _ATTEMPT_SERIES,
 ) -> list[dict[str, object]]:
     """Validate the complete disjoint two-lane schedule."""
 
@@ -948,7 +973,7 @@ def _validate_attempt_schedule(
         raise ValueError(_INVALID_ATTEMPT_SCHEDULE)
     if run_ids & prior_run_ids or attempt_ids & prior_attempt_ids:
         raise ValueError("attempt identities overlap the rejected series")
-    if any(not value.startswith(f"{_ATTEMPT_SERIES}-") for value in run_ids | attempt_ids):
+    if any(not value.startswith(f"{attempt_series}-") for value in run_ids | attempt_ids):
         raise ValueError("attempt schedule series is invalid")
     return schedule
 
@@ -1017,7 +1042,11 @@ def validate_protocol(payload: Mapping[str, object], *, require_oracle: bool) ->
         raise ValueError("protocol declaration digest is invalid")
     prior_attempts = _validate_declaration_fields(declaration)
     _validate_declared_artifacts(declaration["artifacts"])
-    schedule = _validate_attempt_schedule(declaration["schedule"], prior_attempts)
+    schedule = _validate_attempt_schedule(
+        declaration["schedule"],
+        prior_attempts,
+        cast(str, declaration["attempt_series"]),
+    )
     _validate_oracle(payload["oracle"], payload["declaration_sha256"], schedule, require_oracle)
 
 
@@ -1039,6 +1068,16 @@ def _reserve_directory(path: Path) -> Path:
     return resolved
 
 
+def _require_regular_tree(root: Path) -> None:
+    """Reject symlinks and non-regular members before reading archival data."""
+
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError("artifact tree must contain regular non-symlink members")
+    for path in root.rglob("*"):
+        if path.is_symlink() or not (path.is_file() or path.is_dir()):
+            raise ValueError("artifact tree must contain regular non-symlink members")
+
+
 def _media_type(path: Path) -> str:
     """Return the closed media type used by artifact inventories."""
 
@@ -1048,6 +1087,7 @@ def _media_type(path: Path) -> str:
 def _seal_inventory(root: Path) -> dict[str, object]:
     """Write the content-addressed inventory for one immutable stage."""
 
+    _require_regular_tree(root)
     artifacts = []
     for path in sorted(item for item in root.rglob("*") if item.is_file()):
         if path.name == _INVENTORY_NAME:
@@ -1491,12 +1531,20 @@ def _execute_mediated_row(
     pack_root: Path,
     run_root: Path,
     protocol_digest: str,
+    epsilon_step_offset: int,
     execute: Callable[[dict[str, object], Path], dict[str, object]],
 ) -> dict[str, object]:
     """Execute and terminalize one mediated schedule row."""
 
     try:
-        result = execute({**scheduled, "pack_root": pack_root.as_posix()}, run_root)
+        result = execute(
+            {
+                **scheduled,
+                "pack_root": pack_root.as_posix(),
+                "epsilon_step_offset": epsilon_step_offset,
+            },
+            run_root,
+        )
         row = _terminal_row(
             protocol,
             scheduled,
@@ -1545,7 +1593,7 @@ def collect_mediated(
     *,
     runner: Callable[[dict[str, object], Path], dict[str, object]] | None = None,
 ) -> Path:
-    """Collect ten independent RAES-mediated attempts without silent drops."""
+    """Collect ten ordered RAES-mediated attempts without silent drops."""
 
     protocol_path = oracle_root / _PROTOCOL_FILE
     protocol = load_strict_json(protocol_path)
@@ -1571,6 +1619,7 @@ def collect_mediated(
     execute = runner if runner is not None else _execute_mediated_attempt
     schedule = _mediated_schedule(protocol)
     rows: list[dict[str, object]] = []
+    epsilon_step_offset = 0
     for scheduled in schedule:
         run_id = cast(str, scheduled["run_id"])
         run_root = runs_root / cast(str, scheduled["run_id"])
@@ -1586,10 +1635,22 @@ def collect_mediated(
         )
         _write_bench_notes(root, bench_notes)
         row = _execute_mediated_row(
-            protocol, scheduled, pack_root, run_root, protocol_digest, execute
+            protocol,
+            scheduled,
+            pack_root,
+            run_root,
+            protocol_digest,
+            epsilon_step_offset,
+            execute,
         )
         _record_mediated_row(bench_notes, run_root, row)
         rows.append(row)
+        if row["disposition"] == "valid":
+            metrics = cast(dict[str, object], row["metrics"])
+            completed_steps = metrics["steps_to_termination"]
+            if type(completed_steps) is not int:
+                raise RuntimeError("mediated epsilon schedule is incomplete")
+            epsilon_step_offset += completed_steps
         _write_bench_notes(root, bench_notes)
     atomic_write_json_artifact(
         root / _COLLECTION_FILE,
@@ -1961,8 +2022,8 @@ def _environment_payload(lane: str) -> dict[str, object]:
             "All four observed random streams are unbound in the source-native lane.",
             "The authored RAES topology is representative rather than state-identical.",
             (
-                "The mediated evaluator does not retain availability series or a specific "
-                "terminal cause."
+                "The mediated evaluator retains only per-step network availability and a "
+                "source-backed reconstructed terminal cause from source info."
             ),
         ],
     }
@@ -2153,16 +2214,21 @@ def _terminal_cause(
 ) -> str | None:
     """Classify a native terminal cause from the frozen evaluator signals."""
 
-    cause = None
-    if rewards and len(rewards) == len(availability):
-        last_reward = rewards[-1]
-        if math.isclose(last_reward, 5000.0):
-            cause = "defender-sla" if availability[-1] < 0.8 else "attacker-ownership"
-        elif len(rewards) < maximum_steps and math.isclose(last_reward, 0.0):
-            cause = "defender-eviction"
-        elif len(rewards) == maximum_steps:
-            cause = "evaluator-cutoff"
-    return cause
+    if not rewards or len(rewards) != len(availability):
+        return None
+    last_reward = rewards[-1]
+    terminated = math.isclose(last_reward, WINNING_REWARD) or (
+        len(rewards) < maximum_steps and math.isclose(last_reward, LOSING_REWARD)
+    )
+    cause = classify_terminal_cause(
+        last_reward=last_reward,
+        network_availability=availability[-1],
+        step_count=len(rewards),
+        maximum_steps=maximum_steps,
+        terminated=terminated,
+        truncated=False,
+    )
+    return None if cause in {"source-terminated", "source-truncated"} else cause
 
 
 def _native_episode_result(value: object, cleanup_verified: object) -> dict[str, object]:
@@ -2232,14 +2298,22 @@ def _execute_native_batch() -> list[dict[str, object]]:
 
 
 def _mediated_measure(path: Path) -> float:
-    """Load the one finite mediated cumulative-reward measure."""
+    """Load the exact finite mediated cumulative-reward measure."""
 
     value = _load_strict_value(path)
-    if not isinstance(value, list) or len(value) != 1:
+    if not isinstance(value, list):
         raise RuntimeError(_INVALID_MEDIATED_EVIDENCE)
-    measure = value[0]
-    if not isinstance(measure, dict):
+    matches = [
+        measure
+        for measure in value
+        if isinstance(measure, dict)
+        and isinstance(measure.get("metric_ref"), dict)
+        and cast(dict[str, object], measure["metric_ref"]).get("ref_id")
+        == "cumulative_attacker_reward"
+    ]
+    if len(matches) != 1:
         raise RuntimeError(_INVALID_MEDIATED_EVIDENCE)
+    measure = matches[0]
     reward = measure.get("value")
     if not isinstance(reward, (int, float)) or isinstance(reward, bool):
         raise RuntimeError(_INVALID_MEDIATED_EVIDENCE)
@@ -2247,6 +2321,30 @@ def _mediated_measure(path: Path) -> float:
     if not math.isfinite(numeric_reward):
         raise RuntimeError(_INVALID_MEDIATED_EVIDENCE)
     return numeric_reward
+
+
+def _mediated_outcome(path: Path) -> tuple[list[float], str]:
+    """Load the allowlisted availability series and reconstructed source cause."""
+
+    payload = load_strict_json(path)
+    _require_keys(
+        payload,
+        frozenset({"schema_version", "network_availability", "terminal_cause"}),
+        "mediated outcome",
+    )
+    if payload["schema_version"] != "cyberbattlesim-sanitized-episode-outcome/v1":
+        raise RuntimeError(_INVALID_MEDIATED_EVIDENCE)
+    availability = payload["network_availability"]
+    cause = payload["terminal_cause"]
+    try:
+        _validate_availability_series(availability)
+        _validate_metric_value("terminal_cause", cause)
+    except ValueError as error:
+        raise RuntimeError(_INVALID_MEDIATED_EVIDENCE) from error
+    if cause is None:
+        raise RuntimeError(_INVALID_MEDIATED_EVIDENCE)
+    values = [float(cast(float | int, item)) for item in cast(list[object], availability)]
+    return values, cast(str, cause)
 
 
 def _execute_mediated_attempt(schedule: dict[str, object], run_root: Path) -> dict[str, object]:
@@ -2285,6 +2383,8 @@ def _execute_mediated_attempt(schedule: dict[str, object], run_root: Path) -> di
         "participant/cyberbattlesim-red-credential-cache.configuration.json",
         "--trial-length",
         "600",
+        "--epsilon-step-offset",
+        str(schedule["epsilon_step_offset"]),
         "--seed",
         str(_SEED_LABEL),
         "--run-id",
@@ -2312,9 +2412,13 @@ def _execute_mediated_attempt(schedule: dict[str, object], run_root: Path) -> di
     summary = load_strict_json(portable / "summary.json")
     run_summary = load_strict_json(portable / "runs" / f"{run_id}-1" / "summary.json")
     derived_path = portable / "runs" / f"{run_id}-1" / "derived-measures.json"
+    outcome_path = portable / "runs" / f"{run_id}-1" / "episode-outcome.json"
     reward = _mediated_measure(derived_path)
+    availability, terminal_cause = _mediated_outcome(outcome_path)
     steps = run_summary.get("completed_steps")
     if type(steps) is not int:
+        raise RuntimeError(_INVALID_MEDIATED_EVIDENCE)
+    if steps != len(availability):
         raise RuntimeError(_INVALID_MEDIATED_EVIDENCE)
     if summary.get("disposition") != "succeeded":
         raise RuntimeError(_INVALID_MEDIATED_EVIDENCE)
@@ -2322,13 +2426,14 @@ def _execute_mediated_attempt(schedule: dict[str, object], run_root: Path) -> di
         portable / "runs" / f"{run_id}-1" / "run.json",
         portable / "runs" / f"{run_id}-1" / "evidence-records.json",
         derived_path,
+        outcome_path,
         portable / _INVENTORY_NAME,
     )
     return {
         "steps_to_termination": steps,
         "cumulative_attacker_reward": reward,
-        "network_availability": None,
-        "terminal_cause": None,
+        "network_availability": availability,
+        "terminal_cause": terminal_cause,
         "cleanup_verified": run_summary.get("cleanup_verified") is True,
         "evidence_refs": [
             {
@@ -2343,6 +2448,7 @@ def _execute_mediated_attempt(schedule: dict[str, object], run_root: Path) -> di
 def _inventory_payload(root: Path) -> dict[str, object]:
     """Recompute the closed artifact inventory for one stage."""
 
+    _require_regular_tree(root)
     artifacts = []
     for path in sorted(item for item in root.rglob("*") if item.is_file()):
         if path.name == _INVENTORY_NAME:
@@ -2362,6 +2468,7 @@ def _inventory_payload(root: Path) -> dict[str, object]:
 def _verify_inventory(root: Path) -> None:
     """Verify a stage inventory exactly against its retained files."""
 
+    _require_regular_tree(root)
     recorded = load_strict_json(root / _INVENTORY_NAME)
     if recorded != _inventory_payload(root):
         raise ValueError("artifact inventory is invalid")
@@ -2802,6 +2909,7 @@ def _scan_portable_file(path: Path) -> None:
 def _scan_portable(root: Path) -> None:
     """Scan every retained portable artifact without native imports."""
 
+    _require_regular_tree(root)
     for path in sorted(item for item in root.rglob("*") if item.is_file()):
         _scan_portable_file(path)
 
@@ -2819,7 +2927,9 @@ def _validate_model_list(path: Path, model: type[object]) -> None:
         validator(item)
 
 
-def _validate_mediated_portable(run_root: Path, run_id: str) -> None:
+def _validate_mediated_portable(
+    run_root: Path, run_id: str, *, require_outcome: bool = True
+) -> None:
     """Validate the complete portable RAES projection for one mediated run."""
 
     portable = run_root / "portable"
@@ -2831,6 +2941,27 @@ def _validate_mediated_portable(run_root: Path, run_id: str) -> None:
     _validate_model_list(archival / "evidence-records.json", ExperimentEvidenceRecordModel)
     _validate_model_list(archival / "derived-measures.json", ExperimentDerivedMeasureModel)
     _validate_model_list(archival / "diagnostics.json", DiagnosticModel)
+    outcome_path = archival / "episode-outcome.json"
+    if not require_outcome:
+        _verify_inventory(portable)
+        return
+    _mediated_outcome(outcome_path)
+    evidence_payload = _load_strict_value(archival / "evidence-records.json")
+    if not isinstance(evidence_payload, list):
+        raise ValueError("portable outcome evidence is invalid")
+    records = [ExperimentEvidenceRecordModel.model_validate(item) for item in evidence_payload]
+    matching = [
+        record.raw_content
+        for record in records
+        if record.raw_content.content_uri == "episode-outcome.json"
+    ]
+    if (
+        len(matching) != 1
+        or matching[0].content_checksum is None
+        or matching[0].content_checksum.algorithm != "sha256"
+        or matching[0].content_checksum.value != _sha256_file(outcome_path)
+    ):
+        raise ValueError("portable outcome evidence binding is invalid")
     _verify_inventory(portable)
 
 
@@ -2875,7 +3006,12 @@ def _verify_terminal_evidence(
         raise ValueError("mediated terminal row protocol binding is invalid")
     run_root = root / "runs" / cast(str, row["run_id"])
     if mediated and row["disposition"] == "valid":
-        _validate_mediated_portable(run_root, cast(str, row["run_id"]))
+        declaration = cast(Mapping[str, object], protocol["declaration"])
+        _validate_mediated_portable(
+            run_root,
+            cast(str, row["run_id"]),
+            require_outcome=declaration["attempt_series"] == _ATTEMPT_SERIES,
+        )
     _verify_terminal_refs(run_root, row["evidence_refs"])
 
 
@@ -2954,6 +3090,7 @@ def _verified_tiers(
 def verify_bundle(root: Path) -> dict[str, object]:
     """Verify and recompute a sealed bundle without importing native source."""
 
+    _require_regular_tree(root)
     root = root.resolve()
     protocol = load_strict_json(root / _PROTOCOL_FILE)
     validate_protocol(protocol, require_oracle=True)

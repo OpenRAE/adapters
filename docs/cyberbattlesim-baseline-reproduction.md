@@ -45,7 +45,10 @@ aggregation, missingness, bootstrap, tolerance, and six-tier policies. The
 native command invokes the exact upstream evaluator once for its ten-episode
 schedule. Native reward vectors exist only in private scratch; portable rows
 retain cumulative reward, steps, availability, and a source-backed terminal
-cause.
+cause. The upstream evaluator carries its `steps_done` epsilon-decay counter
+across episode boundaries. The mediated collector therefore passes the sum of
+prior completed mediated steps into each next episode; a failed attempt consumes
+only the steps it actually completed and is never retried.
 
 The first terminalized 20-attempt series under declaration
 `825dde3b4cd66f228e0f93157a2add35e3c9a822a7adac1d8ffd322b32116232`
@@ -57,6 +60,18 @@ The replacement declaration discloses the rejection and allocates disjoint
 metrics, aggregation, tolerances, and tier policy unchanged. The structural
 gate permits those names only as withheld-reference strings; the same names as
 JSON keys, embedded payload strings, or non-JSON content still fail closed.
+
+Revision 2, declaration
+`f09ec5759021cf1d5de9b260e0299934bf6f6cc4161b822e8f5f0b76bdb96b53`,
+is retained as an immutable negative result. It exposed two adapter apparatus
+defects: the mediated driver discarded source-provided network availability and
+collapsed all source termination to a generic cause, while its ten independent
+processes restarted epsilon decay at zero instead of matching the native
+ten-episode batch. Its reward comparison was bounded, its step interval crossed
+the frozen tolerance, and its availability/cause comparisons were unavailable.
+The corrected `cbs-r3-*` selection binds the predecessor declaration and
+inventory identities, but does not edit that bundle, widen a tolerance, change
+random-stream bindings, or reinterpret the old result.
 
 Every stage also writes `bench-notes.json`. Each closed note has an RFC 3339
 UTC timestamp with millisecond precision, phase, severity, stable event code,
@@ -84,9 +99,12 @@ Each mediated attempt invokes the installed researcher command independently,
 passes the exact pack/scenario/task/spec/participant joins, admits every policy
 proposal through RAES, evaluates through the adapter, verifies cleanup, seals
 its portable evidence, and continues to terminalize later IDs after a failed
-attempt. The mediated evaluator currently retains cumulative reward and step
-count but not the availability series or a specific source terminal cause;
-those metrics remain unavailable and weaken the outcome/evaluation tier.
+attempt. In addition to cumulative reward and step count, the evaluator retains
+only the source's finite `[0,1]` `network_availability` value for every committed
+step and a source-backed reconstructed terminal cause. Those values are written
+to `episode-outcome.json`, whose SHA-256 digest is bound by exactly one RAES
+evidence record. Missing, malformed, non-finite, out-of-range, length-mismatched,
+or unbound outcome evidence fails closed; no raw source `info` is published.
 
 Finally use the full `declaration_sha256` from the completed protocol as the
 output directory name:

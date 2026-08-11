@@ -148,6 +148,7 @@ class FakeDriver:
             terminated=True,
             truncated=False,
             terminal_cause="attacker-ownership",
+            network_availability=(0.93,),
         )
 
     def close(self) -> DriverCleanupReport:
@@ -223,9 +224,32 @@ def test_episode_uses_source_policy_proposal_then_raes_admission() -> None:
     assert result.completed_steps == 1
     assert result.cleanup_verified
     assert result.evidence_records
+    assert result.supplemental_artifacts[0].payload["network_availability"] == [0.93]
     assert driver.proposal_epsilons == [0.9]
     assert driver.step_calls == ["connect"]
     assert driver.closed
+
+
+def test_episode_applies_declared_cumulative_epsilon_step_offset() -> None:
+    manifest, selection, configuration = _participant_artifacts()
+    scenario = raes.parse_sdl_file(PACK_ROOT / "sdl" / "cyberbattlesim-chain.sdl.yaml")
+    driver = FakeDriver()
+
+    researcher.execute_episode(
+        scenario,
+        researcher.RunControls(
+            run_id="policy-offset",
+            seed=SEED,
+            max_steps=600,
+            red_manifest=manifest,
+            red_selection=selection,
+            red_configuration=configuration,
+            epsilon_step_offset=141,
+        ),
+        driver=driver,
+    )
+
+    assert driver.proposal_epsilons == [researcher._epsilon_for_step(141)]
 
 
 def test_run_suppresses_native_output_and_seals_portable_evidence(
@@ -265,6 +289,7 @@ def test_run_suppresses_native_output_and_seals_portable_evidence(
     paths = {item["path"] for item in inventory["artifacts"]}
     assert "provenance.json" in paths
     assert "runs/cyberbattlesim-smoke-1/run.json" in paths
+    assert "runs/cyberbattlesim-smoke-1/episode-outcome.json" in paths
     serialized = "\n".join(path.read_text() for path in (tmp_path / "evidence").rglob("*.json"))
     assert str(PACK_ROOT) not in serialized
     assert "must-not-cross" not in serialized

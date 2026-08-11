@@ -98,7 +98,14 @@ raes-adapters run --backend cyberbattlesim-chain --mode smoke \
 The exact upstream `CredentialCacheExploiter` proposes each native action. A
 proposal does not mutate the simulator: its semantic action must first cross the
 RAES participant admission boundary. The existing adapter evaluator projects
-the result, and cleanup is always attempted and verified.
+the result, including a checksum-bound sanitized availability/cause artifact,
+and cleanup is always attempted and verified.
+
+An individual run starts epsilon decay at step offset zero. The baseline
+reproduction collector supplies `--epsilon-step-offset` internally so ten
+process-isolated episodes follow the upstream evaluator's cumulative batch
+schedule. The value is non-negative, recorded in participant provenance, and is
+rejected for other backends; it is not a seed or replay control.
 
 Study mode requires ten `--seed 20260729` occurrences, matching the selected
 source episode count. Repeated seed labels do not establish deterministic

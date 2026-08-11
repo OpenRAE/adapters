@@ -166,9 +166,9 @@ uncited prose assertion.
 | Source-native shape checks | Verify the qualified artifact before import, then validate only the pinned reset/step/evaluator return shapes and bounded scalar/category/series projections. Native records are not made portable by recursive sanitization. An unexpected shape or unsupported terminal/availability fact is a bounded failed/weakened result, not guessed data. |
 | RAES/runtime validation | The mediated path passes RAES SDL/experiment/participant closed models, pack validation, `RuntimeTarget` manifest/signature gates, `RuntimeManager` planning, `ApplyResult` and snapshot-transition validation, participant/action/history joins, evaluator/evidence models, and cleanup receipt validation. Native mutation followed by invalid projection is failure requiring cleanup. |
 | Error envelopes | Expected source, parser, identity, control, execution, timeout, cleanup, projection, persistence, recomputation, and tier failures become validated RAES diagnostics with fixed codes/messages. Never serialize exception text/types from hostile native code, causes, locals, rejected Pydantic input, raw stdout/stderr, or traceback. The terminal bundle row references diagnostics and does not invent an error envelope. |
-| OS/process exposure | Run from explicit isolated temporary working/home/cache directories with cleared `PYTHONPATH`, `PYTHONSAFEPATH=1`, no network after acquisition, no shell interpolation, explicit argument vectors, a small environment allowlist, timeouts, bounded control output, and native stdout/stderr redirected and discarded. Reuse the pattern in `sanitized_subprocess_env()` / `_run()` from the qualification tooling when process isolation is needed; never put secrets or native payloads in argv/environment. |
+| OS/process exposure | Run from explicit isolated temporary working/home/cache directories with cleared `PYTHONPATH`, `PYTHONSAFEPATH=1`, no network after acquisition, no shell interpolation, explicit argument vectors, a small environment allowlist, timeouts, bounded control output, and native stdout/stderr redirected and discarded. Reuse the pattern in `sanitized_subprocess_env()` / `_run()` from the qualification tooling when process isolation is needed; never put secrets or native payloads in argv/environment. A sanitized environment is not proof of OS-level network isolation: collector code performs no network calls, and any claim of enforced egress denial must cite an external sandbox or network-namespace control. |
 | Logging and observability | Portable observability is contract-validated evidence, terminal rows, bounded diagnostics, cleanup/operation references, aggregates, tiers, limitations, closed timestamped bench notes, and the final inventory. Each bench note uses an RFC 3339 UTC timestamp, phase, severity, stable event code, observation, disposition, and relative evidence references; start, failure, and terminalization events are written as they occur. Logs/terminal output are allowlisted to safe ids, counts, relative names, modes, and dispositions. Do not log plans, pack contents, actions, observations, rewards, paths, random state, exception text, or native process output. |
-| Persistence and publication | Reserve a new confined root exclusively, reject files/directories/symlinks already present, publish validated JSON atomically, use fixed/safe child names and relative URIs, and write the content inventory last. Never overwrite, append, resume, auto-delete material failures, retain host paths, or treat a mutable cache/database as evidence. The repository's 500 KiB file gate and private-key/leak scans still apply to every checked-in member. |
+| Persistence and publication | Reserve a new confined root exclusively, reject files/directories/symlinks already present, publish validated JSON atomically, use fixed/safe child names and relative URIs, and write the content inventory last. Every collected stage, final bundle root, and member must be a regular non-symlink object; finalization and offline verification reject symlinked inputs even when their targets resolve inside the bundle. Never overwrite, append, resume, auto-delete material failures, retain host paths, or treat a mutable cache/database as evidence. The repository's 500 KiB file gate and private-key/leak scans still apply to every checked-in member. |
 | Repository workflow | Keep code/tests in the existing package/test/nox graph and preserve lazy base/extra isolation. The real source-native plus real mediated run updates the manual CyberBattleSim readiness protocol and passing record only after both identities and leak checks pass. If a new CI job ever becomes unavoidable, it must join `PR Gate`; issue #30 does not justify one by default. |
 
 ## Extension seam
@@ -195,20 +195,22 @@ invitation to make source-native execution generic across simulators.
   actual dispositions; do not silently seed the native oracle, remove seeding
   from the mediated path, or call the lanes equivalent merely to improve a tier.
 - The current task declares steps, cumulative reward, availability, and
-  terminal-cause metrics, but the current adapter evaluator retains only a
-  cumulative-reward derived measure and the driver reports generic
-  `source-terminated`. Do not fabricate missing series or terminal causes,
-  infer them from reward alone, or claim metric completeness. Project them
-  through the existing evaluator/evidence boundary with source-backed meaning,
-  or record the predeclared failed/weakened/unsupported result.
+  terminal-cause metrics. The corrected adapter retains the source-provided
+  availability scalar for each committed step and uses availability together
+  with the source terminal reward/flags to distinguish the pinned protocol's
+  causes. Do not retain any other source `info`, infer a specific cause when
+  those signals are incomplete, or bypass the checksum-bound evaluator evidence
+  member. Missing or malformed facts fail closed.
 - The authored RAES topology is explicitly representative while the native
   apparatus generates the size-10 chain. Shared condition identity does not
   make the scenario snapshots or state spaces equal. Preserve
   `loss-abstracted-topology` in state/observation and outcome interpretation.
 - The adapter reproduces the selected policy through proposal plus RAES
   admission and an adapter-owned loop; the native oracle uses upstream
-  `epsilon_greedy_search`. Compare their frozen schedules and reset semantics;
-  a shared policy class name alone is not evaluator equivalence.
+  `epsilon_greedy_search`. The mediated collector must carry completed prior
+  lane steps into the next episode's epsilon schedule, while keeping the actual
+  unequal random-stream dispositions visible. A shared policy class name or
+  matching epsilon sequence alone is not evaluator or stochastic equivalence.
 - Keep source termination, reconstructed cause, Gym termination/truncation,
   evaluator cutoff, participant terminal reason, objective truth, run status,
   attempt disposition, cleanup status, derived measure, aggregate acceptance,

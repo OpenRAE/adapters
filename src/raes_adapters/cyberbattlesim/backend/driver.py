@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import importlib
+import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from importlib.metadata import Distribution
+from numbers import Real
 from threading import RLock
 from typing import Protocol, TypedDict, cast
 
@@ -15,6 +17,10 @@ from raes_adapters.cyberbattlesim.backend.source import (
     construct_selected_environment,
     resolve_and_verify_selected_source,
     verify_selected_source_identity,
+)
+from raes_adapters.cyberbattlesim.termination import (
+    DEFENDER_SLA_FLOOR,
+    classify_terminal_cause,
 )
 
 _SUPPORTED_ACTION_KINDS = frozenset(
@@ -216,6 +222,7 @@ class DriverEvaluation(object):
     terminated: bool
     truncated: bool
     terminal_cause: str | None
+    network_availability: tuple[float, ...] = ()
     execution_ref: str = "driver.reset.injected"
     projection_ref: str = "driver.reset.injected.evaluation.1"
 
@@ -293,6 +300,8 @@ class CyberBattleSimDriver(object):
         self._terminated = False
         self._truncated = False
         self._terminal_cause: str | None = None
+        self._network_availability: list[float] = []
+        self._defender_sla_floor = DEFENDER_SLA_FLOOR
         self._closed = True
         self._artifacts_verified = False
         self._selected_distribution: Distribution | None = None
@@ -315,6 +324,7 @@ class CyberBattleSimDriver(object):
             self._environment = cast(_NativeEnvironment, runtime.environment)
             self._numpy = cast(_NumpyModule, runtime.numpy)
             self._max_steps = selection["termination"]["evaluator_cutoff_steps"]
+            self._defender_sla_floor = float(selection["termination"]["defender_maintain_sla"])
             self._closed = False
 
     def reset(self, seed: int | None) -> DriverResetReport:
@@ -346,6 +356,7 @@ class CyberBattleSimDriver(object):
             self._terminated = False
             self._truncated = False
             self._terminal_cause = None
+            self._network_availability = []
             self._autonomous_policy = None
             self._autonomous_wrapper = None
             self._clear_pending_action()
@@ -430,6 +441,14 @@ class CyberBattleSimDriver(object):
                 self._clear_pending_action()
                 raise RuntimeError("selected simulator step returned an unsupported shape")
             observation, reward, terminated, truncated, source_info = step_result
+            try:
+                availability = self._source_availability(source_info)
+                numeric_reward = float(reward)
+                if not math.isfinite(numeric_reward):
+                    raise RuntimeError("selected simulator reward is unavailable")
+            except Exception:
+                self._clear_pending_action()
+                raise
             if autonomous:
                 policy, wrapper = self._require_autonomous_policy()
                 policy.on_step(
@@ -444,17 +463,19 @@ class CyberBattleSimDriver(object):
             self._clear_pending_action()
             self._last_observation = observation
             self._step_count += 1
-            self._cumulative_reward += float(reward)
+            self._cumulative_reward += numeric_reward
+            self._network_availability.append(availability)
             self._terminated = bool(terminated)
             self._truncated = bool(truncated)
-            if self._terminated:
-                self._terminal_cause = "source-terminated"
-            elif self._truncated:
-                self._terminal_cause = "source-truncated"
-            elif self._step_count >= self._require_max_steps():
-                self._terminal_cause = "evaluator-cutoff"
-            else:
-                self._terminal_cause = None
+            self._terminal_cause = classify_terminal_cause(
+                last_reward=numeric_reward,
+                network_availability=availability,
+                step_count=self._step_count,
+                maximum_steps=self._require_max_steps(),
+                terminated=self._terminated,
+                truncated=self._truncated,
+                defender_sla_floor=self._defender_sla_floor,
+            )
             return DriverStep(
                 operation_ref=operation_ref,
                 step_number=self._step_count,
@@ -488,6 +509,22 @@ class CyberBattleSimDriver(object):
             raise ValueError("autonomous proposal does not match admitted authorization")
         return self._pending_native_action, True
 
+    @staticmethod
+    def _source_availability(source_info: object) -> float:
+        """Return the sole allowlisted source-info scalar for public evidence."""
+
+        if not isinstance(source_info, Mapping):
+            raise RuntimeError("selected simulator network availability is unavailable")
+        value = source_info.get("network_availability")
+        if (
+            not isinstance(value, Real)
+            or isinstance(value, bool)
+            or not math.isfinite(float(value))
+            or not 0.0 <= float(value) <= 1.0
+        ):
+            raise RuntimeError("selected simulator network availability is unavailable")
+        return float(value)
+
     def evaluate(self) -> DriverEvaluation:
         """Return evaluator-only facts without advancing the simulator."""
 
@@ -505,6 +542,7 @@ class CyberBattleSimDriver(object):
                 terminated=self._terminated,
                 truncated=self._truncated,
                 terminal_cause=self._terminal_cause,
+                network_availability=tuple(self._network_availability),
             )
 
     def close(self) -> DriverCleanupReport:
@@ -517,6 +555,7 @@ class CyberBattleSimDriver(object):
             self._environment = None
             self._last_observation = None
             self._execution_ref = None
+            self._network_availability = []
             self._autonomous_policy = None
             self._autonomous_wrapper = None
             self._clear_pending_action()

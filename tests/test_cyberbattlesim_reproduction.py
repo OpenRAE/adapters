@@ -43,7 +43,10 @@ def test_declaration_uses_published_contracts_and_unique_attempts() -> None:
     assert len({item["run_id"] for item in schedule}) == 20
     assert len({item["attempt_id"] for item in schedule}) == 20
     assert {item["lane"] for item in schedule} == {"source-native", "raes-mediated"}
-    assert all(item["run_id"].startswith("cbs-r2-") for item in schedule)
+    assert all(item["run_id"].startswith("cbs-r3-") for item in schedule)
+    assert protocol["declaration"]["condition"]["epsilon_schedule_scope"] == (
+        "lane-batch-cumulative"
+    )
     assert not {item["attempt_id"] for item in schedule} & set(
         protocol["declaration"]["prior_attempts"]["attempt_ids"]
     )
@@ -169,9 +172,11 @@ def test_mediated_collection_continues_after_one_attempt_failure(tmp_path: Path)
         executor=lambda: [_native_episode(index) for index in range(10)],
     )
     calls: list[str] = []
+    offsets: list[int] = []
 
     def runner(schedule: dict[str, object], _run_root: Path) -> dict[str, object]:
         calls.append(str(schedule["attempt_id"]))
+        offsets.append(int(schedule["epsilon_step_offset"]))
         if schedule["replicate"] == 3:
             raise RuntimeError("hostile traceback sentinel")
         return _mediated_episode(int(schedule["replicate"]))
@@ -181,6 +186,7 @@ def test_mediated_collection_continues_after_one_attempt_failure(tmp_path: Path)
 
     rows = reproduction.load_terminal_rows(output)
     assert len(calls) == 10
+    assert offsets[:4] == [0, 106, 213, 213]
     assert len(rows) == 10
     assert sum(row["disposition"] == "failed" for row in rows) == 1
     assert "hostile traceback sentinel" not in json.dumps(rows)
@@ -296,6 +302,17 @@ def test_offline_verifier_rejects_forbidden_native_material(tmp_path: Path) -> N
 
     with pytest.raises(ValueError, match="forbidden native value"):
         reproduction.verify_bundle(bundle)
+
+
+def test_inventory_and_offline_verification_reject_symlinked_members(tmp_path: Path) -> None:
+    root = tmp_path / "bundle"
+    root.mkdir()
+    target = root / "target.json"
+    target.write_text("{}", encoding="utf-8")
+    (root / "linked.json").symlink_to(target)
+
+    with pytest.raises(ValueError, match="regular non-symlink"):
+        reproduction._inventory_payload(root)
 
 
 def test_portable_scan_distinguishes_withheld_names_from_native_fields(tmp_path: Path) -> None:
@@ -491,9 +508,15 @@ def test_pointer_and_mediated_measure_helpers_are_closed(tmp_path: Path) -> None
         reproduction._resolve_pointer(document, "/missing")
 
     measure = tmp_path / "measure.json"
-    measure.write_text('[{"value": 4.5}]', encoding="utf-8")
+    measure.write_text(
+        '[{"metric_ref":{"ref_id":"cumulative_attacker_reward"},"value":4.5}]',
+        encoding="utf-8",
+    )
     assert reproduction._mediated_measure(measure) == 4.5
-    measure.write_text('[{"value": "bad"}]', encoding="utf-8")
+    measure.write_text(
+        '[{"metric_ref":{"ref_id":"cumulative_attacker_reward"},"value":"bad"}]',
+        encoding="utf-8",
+    )
     with pytest.raises(RuntimeError, match="mediated evidence"):
         reproduction._mediated_measure(measure)
 
@@ -599,24 +622,55 @@ def test_mediated_attempt_projects_only_portable_evidence(
     (archival / "summary.json").write_text(
         json.dumps({"completed_steps": 7, "cleanup_verified": True}), encoding="utf-8"
     )
-    (archival / "derived-measures.json").write_text(json.dumps([{"value": 42.5}]), encoding="utf-8")
+    (archival / "derived-measures.json").write_text(
+        json.dumps(
+            [
+                {
+                    "metric_ref": {"ref_id": "cumulative_attacker_reward"},
+                    "value": 42.5,
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (archival / "episode-outcome.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "cyberbattlesim-sanitized-episode-outcome/v1",
+                "network_availability": [1.0, 0.75, 1.0, 1.0, 0.95, 0.9, 0.75],
+                "terminal_cause": "defender-sla",
+            }
+        ),
+        encoding="utf-8",
+    )
     for name in ("run.json", "evidence-records.json"):
         (archival / name).write_text("{}", encoding="utf-8")
     (portable / "inventory.json").write_text("{}", encoding="utf-8")
-    monkeypatch.setattr(
-        reproduction.subprocess,
-        "run",
-        lambda *_args, **_kwargs: SimpleNamespace(returncode=0),
-    )
+    commands: list[list[str]] = []
+
+    def run(command: list[str], **_kwargs: object) -> SimpleNamespace:
+        commands.append(command)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(reproduction.subprocess, "run", run)
 
     result = reproduction._execute_mediated_attempt(
-        {"pack_root": (tmp_path / "pack").as_posix(), "run_id": run_id}, run_root
+        {
+            "pack_root": (tmp_path / "pack").as_posix(),
+            "run_id": run_id,
+            "epsilon_step_offset": 141,
+        },
+        run_root,
     )
 
     assert result["steps_to_termination"] == 7
     assert result["cumulative_attacker_reward"] == 42.5
+    assert result["network_availability"] == [1.0, 0.75, 1.0, 1.0, 0.95, 0.9, 0.75]
+    assert result["terminal_cause"] == "defender-sla"
     assert result["cleanup_verified"] is True
-    assert len(result["evidence_refs"]) == 4
+    assert len(result["evidence_refs"]) == 5
+    command = commands[0]
+    assert command[command.index("--epsilon-step-offset") + 1] == "141"
 
 
 def test_selected_source_helpers_verify_and_construct(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -13,6 +13,7 @@ identities, provenance, limitations, and disclosure text.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from raes_contracts.contracts import (  # type: ignore[import-untyped]
@@ -53,6 +54,14 @@ class EvaluatorSummary(object):
     terminated: bool = False
     truncated: bool = False
     terminal_cause: str | None = None
+
+
+@dataclass(frozen=True)
+class SupplementalJsonArtifact(object):
+    """One already-sanitized JSON member referenced by portable evidence."""
+
+    relative_path: str
+    payload: Mapping[str, object]
 
 
 @dataclass(frozen=True)
@@ -323,6 +332,7 @@ def _derived_measure(
 __all__ = [
     "EvaluatorEvidenceConfig",
     "EvaluatorSummary",
+    "SupplementalJsonArtifact",
     "build_capture_spec",
     "build_evidence_and_measure",
     "build_evidence_only",
