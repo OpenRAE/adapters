@@ -73,6 +73,31 @@ The corrected `cbs-r3-*` selection binds the predecessor declaration and
 inventory identities, but does not edit that bundle, widen a tolerance, change
 random-stream bindings, or reinterpret the old result.
 
+Revision 3, declaration
+`c588a174ab97ef1e4d863b743a02213e9527b7731cfbdc897d6602d72362bebf`,
+is the finalized corrective result. All 20 scheduled attempts terminalized
+valid with zero retries, and the 138-file bundle verifies offline with
+`inventory.json` SHA-256
+`20eec98ff44f09e3b3466e0c57af2a960cf9886cdfcd9d5add5f5392172fa8dd`.
+Availability and cause are now complete: mean availability differs by
+`-0.0008853231676272388` within the frozen +/-0.05 band, and cause proportions
+differ by at most `0.1` within the frozen +/-0.10 band. The outcome-evaluation
+tier nevertheless remains failed. Reward has mean difference `-488.6` but a
+95% interval of `[-1558.015, 90.6]`, outside +/-500; steps have mean difference
+`51.4` but a 95% interval of `[-48.5, 153.8025]`, outside +/-60.
+
+The interval failures are driven by one retained mediated attempt that reached
+the predeclared 600-step evaluator cutoff with cumulative reward `512`; the
+other nine mediated attempts average about `258.8` steps and `5699.2` reward.
+That sensitivity calculation is diagnostic only. The cutoff row was not
+excluded, the schedule was not rerun, and the criteria were not changed after
+observation. Its exact random path cannot be replayed or causally assigned:
+the source-native evaluator leaves all four observed random streams unbound,
+while the mediated path binds the Gym environment and action-space streams but
+leaves Python-global and NumPy-global streams unbound. A stronger claim needs a
+new, prospectively declared study with adequate power and a shared stochastic-
+control contract; it cannot be manufactured by editing this result.
+
 Every stage also writes `bench-notes.json`. Each closed note has an RFC 3339
 UTC timestamp with millisecond precision, phase, severity, stable event code,
 concise observation, disposition, and relative evidence references. Collection

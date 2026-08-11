@@ -81,7 +81,46 @@ distinguish RAES `withheld_refs` names from native values, so its criteria and
 scanner were not edited in place; the accepted revision used disjoint
 identities and unchanged scientific conditions.
 
-This evidence supplies the CyberBattleSim apparatus/readiness slice for
+## Corrective baseline reproduction — 2026-08-11
+
+Revision 3 ran from implementation commit
+`e5d6aff625047037f5a94a9635d92966413055b7` using the exact adapter wheel with
+SHA-256
+`150c3b69a91d766d7863feb01e443257ad646e7f9cddcb2727a58c8c6137793d`.
+Its declaration is
+`c588a174ab97ef1e4d863b743a02213e9527b7731cfbdc897d6602d72362bebf`.
+All ten source-native and ten mediated attempts terminalized valid with zero
+retries. The final 138-file bundle passes independent offline recomputation,
+evidence-reference and citation checks, the bounded leakage scan, regular-tree
+checks, and inventory verification. Its `inventory.json` SHA-256 is
+`20eec98ff44f09e3b3466e0c57af2a960cf9886cdfcd9d5add5f5392172fa8dd`.
+
+Revision 3 corrected the apparatus defects without changing the frozen
+tolerances or stochastic bindings: the mediated lane now retains one
+checksum-bound sanitized availability/cause artifact per episode and carries
+the upstream evaluator's cumulative epsilon-step schedule across its isolated
+processes. The observed result is:
+
+| Tier or metric | Result |
+| --- | --- |
+| Authored source / contract / disclosure | passed / passed / passed |
+| Execution control / state-observation | weakened / weakened |
+| Outcome-evaluation | failed |
+| Cumulative reward | outside tolerance; mean difference `-488.6`, 95% interval `[-1558.015, 90.6]` exceeds +/-500 |
+| Steps to termination | outside tolerance; mean difference `51.4`, 95% interval `[-48.5, 153.8025]` exceeds +/-60 |
+| Mean availability | bounded; mean difference `-0.0008853231676272388`, 95% interval `[-0.010524172216097161, 0.00887836373877486]` within +/-0.05 |
+| Terminal cause | bounded; source `defender-sla` proportion `1.0`, mediated `0.9` plus `0.1` evaluator cutoff, within +/-0.10 |
+
+One mediated attempt reached the declared 600-step cutoff with cumulative
+reward `512`; the other nine mediated attempts average about `258.8` steps and
+`5699.2` reward. This single retained row drives both interval failures. It was
+not excluded or retried. Because the compared paths have explicitly different
+and partly unbound random-stream dispositions, the exact path is not
+deterministically attributable. The result supports readiness and research
+diagnosis, but not outcome equivalence; a stronger claim requires a separately
+declared stochastic-control and sample-size design.
+
+Together, these records supply the CyberBattleSim apparatus/readiness slice for
 [OpenRAE/research#14](https://github.com/OpenRAE/research/issues/14) and the
 content-addressed, recomputable publication slice for
 [OpenRAE/research#20](https://github.com/OpenRAE/research/issues/20). It does

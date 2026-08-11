@@ -1,0 +1,64 @@
+{
+  "artifacts": [
+    {
+      "media_type": "application/json",
+      "path": "machine-inventory.json",
+      "sha256": "ad489e5c927c7356c8716b5276cc47cc764233e7cefb802ce8b85913a5b90eae",
+      "size_bytes": 370
+    },
+    {
+      "media_type": "application/json",
+      "path": "provenance.json",
+      "sha256": "537da170a66b20c3c582c9309292210ef4d7984cbd8c201cb4c9e6e76cd8a897",
+      "size_bytes": 14086
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r3-mediated-08-1/derived-measures.json",
+      "sha256": "3d4bb29a3c119c9350c7f23170475132849ed5a6516d26e8a8d82f1497dd961e",
+      "size_bytes": 1642
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r3-mediated-08-1/diagnostics.json",
+      "sha256": "5c8608e37ae160bd6e20c2b492c0ad45c2ca19797dd843f020c9e4e2f43b1258",
+      "size_bytes": 957
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r3-mediated-08-1/episode-outcome.json",
+      "sha256": "d9f6cb3e1194853c7279b8a0943b832ddb2601403ad5c4597c426317e11c7542",
+      "size_bytes": 5623
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r3-mediated-08-1/evidence-records.json",
+      "sha256": "b0c10fac35387772c8caccdad41e0049216581cb4f778ddaadfe177521d39841",
+      "size_bytes": 4669
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r3-mediated-08-1/participant-provenance.json",
+      "sha256": "d7ec55c3983741a9f05979540b526b2dc4ce3133bf1842d0d2f91aceb8815d2c",
+      "size_bytes": 1956
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r3-mediated-08-1/run.json",
+      "sha256": "ab4638af1e28556d26790e9ae37274e24ac07602222e3e598133e0176e7f4a3a",
+      "size_bytes": 12277
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r3-mediated-08-1/summary.json",
+      "sha256": "04181672d874e0ffba85fc51880b8ecfcb7b7e135f4f2647fae3351f7c8b78b0",
+      "size_bytes": 173
+    },
+    {
+      "media_type": "application/json",
+      "path": "summary.json",
+      "sha256": "e0f7dd90b70eff58459c0a643ec01cf48876ab2a381a313a02ae86ab37015f96",
+      "size_bytes": 292
+    }
+  ]
+}

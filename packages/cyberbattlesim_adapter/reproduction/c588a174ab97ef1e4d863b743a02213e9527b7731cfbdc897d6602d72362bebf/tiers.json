@@ -1,0 +1,97 @@
+{
+  "declaration_sha256": "c588a174ab97ef1e4d863b743a02213e9527b7731cfbdc897d6602d72362bebf",
+  "explicit_non_claims": [
+    "deterministic replay",
+    "exact state or observation equivalence",
+    "cross-simulator equality",
+    "agent ranking",
+    "benchmark comparability",
+    "outcome equivalence",
+    "general scientific reproducibility"
+  ],
+  "schema_version": "cyberbattlesim-baseline-tiers/v1",
+  "tiers": [
+    {
+      "evidence": [
+        {
+          "json_pointer": "/source",
+          "path": "source-ledger.json",
+          "sha256": "335880331bbd6202df14d052b788caa887db4b0a9718fed7ef094a4c76a59b72"
+        }
+      ],
+      "rationale": "Pinned source, tree, notebook, and runtime-tree identities join.",
+      "result": "passed",
+      "tier": "authored-source"
+    },
+    {
+      "evidence": [
+        {
+          "json_pointer": "/declaration/study",
+          "path": "protocol.json",
+          "sha256": "d2054250dd9feac9eb76ba0baa049029d731ecf08018be1a7c1447ab86aea2c0"
+        }
+      ],
+      "rationale": "The declaration embeds a validated RAES study over the published task/spec refs.",
+      "result": "passed",
+      "tier": "contract"
+    },
+    {
+      "evidence": [
+        {
+          "json_pointer": "/declaration/stochastic_controls",
+          "path": "protocol.json",
+          "sha256": "d2054250dd9feac9eb76ba0baa049029d731ecf08018be1a7c1447ab86aea2c0"
+        }
+      ],
+      "rationale": "Actual random-stream binding dispositions differ between lanes.",
+      "result": "weakened",
+      "tier": "execution-control"
+    },
+    {
+      "evidence": [
+        {
+          "json_pointer": "/loss_refs",
+          "path": "source-ledger.json",
+          "sha256": "335880331bbd6202df14d052b788caa887db4b0a9718fed7ef094a4c76a59b72"
+        }
+      ],
+      "rationale": "The authored RAES topology is representative and native observations remain private.",
+      "result": "weakened",
+      "tier": "state-observation"
+    },
+    {
+      "evidence": [
+        {
+          "json_pointer": "/comparisons",
+          "path": "aggregates.json",
+          "sha256": "b1282f5ae70d9ee156a24eaeb8ca3b956e1f86b75bddbc48a7aa8223bd10682e"
+        }
+      ],
+      "rationale": "Only complete predeclared metric comparisons can pass this tier.",
+      "result": "failed",
+      "tier": "outcome-evaluation"
+    },
+    {
+      "evidence": [
+        {
+          "json_pointer": "/exclusions",
+          "path": "source-ledger.json",
+          "sha256": "335880331bbd6202df14d052b788caa887db4b0a9718fed7ef094a4c76a59b72"
+        },
+        {
+          "json_pointer": "/limitations",
+          "path": "environment.json",
+          "sha256": "faefabf6c0a852c2bed75a6f63d224599cebd333182683ccb67c25bf7ff85f6f"
+        },
+        {
+          "json_pointer": "/notes",
+          "path": "bench-notes.json",
+          "sha256": "45567ad2a5f74ed8b87b9062c714a203ada7d7c40ff727bed144079d28e940e0"
+        }
+      ],
+      "rationale": "Known apparatus, source, stochastic, topology, and metric losses are retained.",
+      "result": "passed",
+      "tier": "disclosure"
+    }
+  ]
+}

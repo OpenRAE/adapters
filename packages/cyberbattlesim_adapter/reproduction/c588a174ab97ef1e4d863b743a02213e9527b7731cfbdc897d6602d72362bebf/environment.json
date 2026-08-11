@@ -1,42 +1,100 @@
 {
-  "lane": "source-native",
   "limitations": [
     "A prior 20-attempt series was terminalized but rejected from final publication after its byte-oriented leak gate produced a false positive; the fresh series uses disjoint identities and unchanged scientific conditions.",
-    "The upstream source has no selected public index or release artifact.",
-    "Python-global and NumPy-global random streams are unbound in the mediated lane.",
     "All four observed random streams are unbound in the source-native lane.",
+    "Python-global and NumPy-global random streams are unbound in the mediated lane.",
     "The authored RAES topology is representative rather than state-identical.",
-    "The mediated evaluator retains only per-step network availability and a source-backed reconstructed terminal cause from source info."
+    "The mediated evaluator retains only per-step network availability and a source-backed reconstructed terminal cause from source info.",
+    "The upstream source has no selected public index or release artifact."
   ],
-  "machine": {
-    "architecture": "x86_64",
-    "logical_cpu_count": 4,
-    "operating_system": "Linux",
-    "operating_system_release": "6.17.0-1019-aws",
-    "physical_memory_bytes": 16375955456
+  "publication_scope": "reviewed public, non-sensitive reproduction evidence",
+  "raes_mediated": {
+    "lane": "raes-mediated",
+    "limitations": [
+      "A prior 20-attempt series was terminalized but rejected from final publication after its byte-oriented leak gate produced a false positive; the fresh series uses disjoint identities and unchanged scientific conditions.",
+      "The upstream source has no selected public index or release artifact.",
+      "Python-global and NumPy-global random streams are unbound in the mediated lane.",
+      "All four observed random streams are unbound in the source-native lane.",
+      "The authored RAES topology is representative rather than state-identical.",
+      "The mediated evaluator retains only per-step network availability and a source-backed reconstructed terminal cause from source info."
+    ],
+    "machine": {
+      "architecture": "x86_64",
+      "logical_cpu_count": 4,
+      "operating_system": "Linux",
+      "operating_system_release": "6.17.0-1019-aws",
+      "physical_memory_bytes": 16375955456
+    },
+    "pack": {
+      "content_digest": "sha256:66493882579d5cba87248c5722782ff5ded5f0d7423f4e559f15bfb61712a905",
+      "identity": "cyberbattlesim-chain",
+      "version": "1.0.0"
+    },
+    "python": {
+      "implementation": "CPython",
+      "version": "3.12.3"
+    },
+    "schema_version": "cyberbattlesim-baseline-environment/v1",
+    "software": {
+      "cyberbattlesim": "0.1.0",
+      "gymnasium": "0.29.1",
+      "numpy": "1.26.4",
+      "raes": "3.3.0",
+      "raes-adapters": "0.0.0",
+      "raes-env-packs": "3.6.2"
+    },
+    "source": {
+      "commit": "854d6966607fb68645651f55b0f97221bd293e0d",
+      "installed_artifact_sha256": "unavailable",
+      "tree": "4271b137ab2de593be52d7afb0a51bee59045a45",
+      "version": "0.1.0"
+    }
   },
-  "pack": {
-    "content_digest": "sha256:66493882579d5cba87248c5722782ff5ded5f0d7423f4e559f15bfb61712a905",
-    "identity": "cyberbattlesim-chain",
-    "version": "1.0.0"
-  },
-  "python": {
-    "implementation": "CPython",
-    "version": "3.12.3"
-  },
-  "schema_version": "cyberbattlesim-baseline-environment/v1",
-  "software": {
-    "cyberbattlesim": "0.1.0",
-    "gymnasium": "0.29.1",
-    "numpy": "1.26.4",
-    "raes": "3.3.0",
-    "raes-adapters": "0.0.0",
-    "raes-env-packs": "3.6.2"
-  },
-  "source": {
-    "commit": "854d6966607fb68645651f55b0f97221bd293e0d",
-    "installed_artifact_sha256": "unavailable",
-    "tree": "4271b137ab2de593be52d7afb0a51bee59045a45",
-    "version": "0.1.0"
+  "research_consumers": [
+    "OpenRAE/research#14",
+    "OpenRAE/research#20"
+  ],
+  "schema_version": "cyberbattlesim-baseline-environment-pair/v1",
+  "source_native": {
+    "lane": "source-native",
+    "limitations": [
+      "A prior 20-attempt series was terminalized but rejected from final publication after its byte-oriented leak gate produced a false positive; the fresh series uses disjoint identities and unchanged scientific conditions.",
+      "The upstream source has no selected public index or release artifact.",
+      "Python-global and NumPy-global random streams are unbound in the mediated lane.",
+      "All four observed random streams are unbound in the source-native lane.",
+      "The authored RAES topology is representative rather than state-identical.",
+      "The mediated evaluator retains only per-step network availability and a source-backed reconstructed terminal cause from source info."
+    ],
+    "machine": {
+      "architecture": "x86_64",
+      "logical_cpu_count": 4,
+      "operating_system": "Linux",
+      "operating_system_release": "6.17.0-1019-aws",
+      "physical_memory_bytes": 16375955456
+    },
+    "pack": {
+      "content_digest": "sha256:66493882579d5cba87248c5722782ff5ded5f0d7423f4e559f15bfb61712a905",
+      "identity": "cyberbattlesim-chain",
+      "version": "1.0.0"
+    },
+    "python": {
+      "implementation": "CPython",
+      "version": "3.12.3"
+    },
+    "schema_version": "cyberbattlesim-baseline-environment/v1",
+    "software": {
+      "cyberbattlesim": "0.1.0",
+      "gymnasium": "0.29.1",
+      "numpy": "1.26.4",
+      "raes": "3.3.0",
+      "raes-adapters": "0.0.0",
+      "raes-env-packs": "3.6.2"
+    },
+    "source": {
+      "commit": "854d6966607fb68645651f55b0f97221bd293e0d",
+      "installed_artifact_sha256": "unavailable",
+      "tree": "4271b137ab2de593be52d7afb0a51bee59045a45",
+      "version": "0.1.0"
+    }
   }
 }
