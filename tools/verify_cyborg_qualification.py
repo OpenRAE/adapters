@@ -292,6 +292,13 @@ adapter_reward_projection_checks = {
         ),
         (
             "participant.behavior.blue",
+            "provision.node.user0",
+            "availability",
+            0.0,
+            "source-ledger:reward-components",
+        ),
+        (
+            "participant.behavior.blue",
             None,
             "action-cost",
             -1.0,
@@ -302,6 +309,13 @@ adapter_reward_projection_checks = {
             "provision.node.user0",
             "confidentiality",
             0.1,
+            "source-ledger:reward-components",
+        ),
+        (
+            "participant.behavior.red",
+            "provision.node.user0",
+            "availability",
+            0.0,
             "source-ledger:reward-components",
         ),
     ),

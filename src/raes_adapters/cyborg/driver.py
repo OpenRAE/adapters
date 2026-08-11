@@ -189,7 +189,9 @@ def _project_participant_components(
         )
         for component, value in values:
             total += value
-            if not math.isclose(value, 0.0, rel_tol=0.0, abs_tol=1e-9):
+            if component == "availability" or not math.isclose(
+                value, 0.0, rel_tol=0.0, abs_tol=1e-9
+            ):
                 components.append(
                     _NativeRewardComponent(
                         participant,

@@ -1,13 +1,13 @@
 {
   "schema_version": "experiment-task/v1",
   "task_id": "cage2-research-task",
-  "task_version": "1.0.0",
-  "title": "CAGE-2 bounded defence task",
-  "description": "Evaluate a selected blue policy against one declared CAGE-2 red variant on the packaged synthetic topology.",
+  "task_version": "2.0.0",
+  "title": "CAGE-2 Scenario2 defence task",
+  "description": "Evaluate a selected blue policy against one declared CAGE-2 red variant on the packaged full Scenario2 topology.",
   "scenario_ref": {
     "ref_kind": "scenario-snapshot",
     "ref_id": "cage2-research",
-    "ref_digest": "sha256:926f13857da070f1ebdc3afbb3193c7c13f4aa9fe324b3eb93e1c2595871abda",
+    "ref_digest": "sha256:58aa6b438c38bb53a5d6636e11835e44ebd6e57b48561e48aa80f0f14bfa6bf2",
     "ref_path": "sdl/cage2-research.sdl.yaml"
   },
   "evaluation_protocol": {
@@ -29,12 +29,12 @@
     },
     "observation_requirements": [{"ref_kind": "evidence", "ref_id": "source-ledger:reward-components"}]
   },
-  "intended_use": "Run an installed-adapter smoke episode or the declared two-seed study.",
-  "non_use": ["Do not treat this synthetic example as an outcome-equivalence benchmark."],
-  "population_or_construct": "A synthetic single-host private network under the qualified CAGE-2 source mapping.",
-  "split_and_leakage_controls": {"partitioning_strategy": "Fixed public synthetic topology; hidden native truth is never exported."},
+  "intended_use": "Exercise the installed full-Scenario2 apparatus in one episode or the declared two-seed study.",
+  "non_use": ["Do not treat this apparatus check as an outcome-equivalence benchmark or replication result."],
+  "population_or_construct": "The fixed three-subnet, thirteen-host Scenario2 case under the qualified CAGE-2 source mapping.",
+  "split_and_leakage_controls": {"partitioning_strategy": "Fixed public source-projected topology; hidden native truth is never exported."},
   "apparatus_constraints": {"notes": ["Requires the separately installed qualified CybORG source and the cyborg-cage2 backend."]},
-  "validity_notes": [{"category": "external", "note": "The packaged topology is intentionally small and supports workflow validation, not broad empirical claims."}],
+  "validity_notes": [{"category": "external", "note": "The fixed selected Scenario2 supports apparatus validation, not broad empirical claims."}],
   "artifact_refs": [{
     "artifact_id": "cage2-research-concepts",
     "role": "documentation",
@@ -42,8 +42,8 @@
     "uri": "pack:/docs/concepts.md",
     "checksum": {"algorithm": "sha256", "value": "0000000000000000000000000000000000000000000000000000000000000000"},
     "size_bytes": 1,
-    "created_at": "2026-08-02T00:00:00Z",
-    "source": "OpenRAE/adapters#20",
+    "created_at": "2026-08-10T00:00:00Z",
+    "source": "OpenRAE/adapters#77",
     "sensitivity": "public"
   }]
 }

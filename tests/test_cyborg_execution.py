@@ -1415,6 +1415,40 @@ def test_source_driver_projects_closed_reward_and_terminal_facts() -> None:
     )
 
 
+def test_source_driver_retains_zero_availability_objective_evidence() -> None:
+    class NativeHandle:
+        def get_rewards(self) -> dict[str, float]:
+            return {"Blue": 0.0, "Green": 0.0, "Red": 0.0}
+
+        def get_reward_breakdown(self, agent: str) -> dict[str, object]:
+            if agent == "Blue":
+                return {"Op_Server0": SimpleNamespace(confidentiality=0.0, availability=0.0)}
+            return {}
+
+    projected = SourceInstalledCyborgDriver._project_evaluation_turn(
+        NativeHandle(),
+        _NativeEvaluationContext(
+            external_address=_SLEEP,
+            host_addresses={"Op_Server0": "provision.node.op-server-0"},
+            run_id="run-healthy",
+            episode_id="episode-healthy",
+            action_instance_id="action-healthy",
+            logical_step=1,
+            terminal_cause="logical-step-limit",
+        ),
+    )
+
+    assert projected.components == (
+        _NativeRewardComponent(
+            _BLUE,
+            "provision.node.op-server-0",
+            "availability",
+            0.0,
+            "source-ledger:reward-components",
+        ),
+    )
+
+
 @pytest.mark.parametrize(
     ("rewards", "blue_breakdown", "red_breakdown", "external_address"),
     [

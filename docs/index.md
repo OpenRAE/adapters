@@ -26,6 +26,7 @@ semantic and protocol authority.
 - [Architecture decisions](decisions/adrs/README.md)
 - [CybORG/CAGE-2 backend qualification guardrails](decisions/cyborg-cage2-runtime-qualification-guardrails.md)
 - [CybORG/CAGE-2 source-ledger guardrails](decisions/cyborg-cage2-source-ledger-guardrails.md)
+- [CybORG/CAGE-2 Scenario2 SDL guardrails](decisions/cyborg-cage2-scenario2-sdl-guardrails.md)
 - [CybORG/CAGE-2 provisioner and backend-manifest guardrails](decisions/cyborg-cage2-provisioner-manifest-guardrails.md)
 - [CybORG conformance-composition guardrails](decisions/cyborg-conformance-guardrails.md)
 - [CybORG researcher run-and-evidence command guardrails](decisions/cyborg-researcher-command-guardrails.md)

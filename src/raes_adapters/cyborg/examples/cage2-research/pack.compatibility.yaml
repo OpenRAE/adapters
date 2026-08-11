@@ -2,13 +2,14 @@ schema_version: environment-pack-compatibility/v2
 pack:
   name: cage2-research
   title: CAGE-2 researcher example
-  version: 1.0.0
+  version: 2.0.0
   status: built
   provenance_ledger: docs/provenance-ledger.yaml
   source:
     requirement: null
     issues:
       - 21
+      - 77
     upstream_references:
       - https://github.com/cage-challenge/cage-challenge-2
       - https://github.com/OpenRAE/adapters/issues/77
@@ -16,13 +17,13 @@ artifact_boundaries:
   participant_visible:
     - path: sdl
       export: public
-      description: Portable RAES SDL smoke scenario and objective truth.
+      description: Full portable RAES Scenario2 module and objective truth.
     - path: experiment
       export: public
       description: Published experiment authoring input and evaluation task.
     - path: docs/attack-path.md
       export: public
-      description: Participant-safe description of the bounded smoke activity.
+      description: Participant-safe description of the Scenario2 activity boundary.
     - path: docs/concepts.md
       export: public
       description: Participant-safe concept and portability overview.
@@ -53,7 +54,7 @@ assets:
     path: sdl/cage2-research.sdl.yaml
     visibility: public
     status: shipped
-    description: Portable RAES smoke scenario document.
+    description: Full portable RAES Scenario2 module snapshot.
   - asset_id: experiment-task
     path: experiment/cage2-research.task.exp.json
     visibility: public

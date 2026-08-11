@@ -34,7 +34,10 @@ from raes_contracts.participant_configuration import (  # type: ignore[import-un
 from raes_contracts.participant_episode import (  # type: ignore[import-untyped]
     ParticipantEpisodeInitializeRequest,
 )
-from raes_contracts.planning import OrchestrationPlan  # type: ignore[import-untyped]
+from raes_contracts.planning import (  # type: ignore[import-untyped]
+    EvaluationPlan,
+    OrchestrationPlan,
+)
 from raes_contracts.runtime_state import RuntimeSnapshot  # type: ignore[import-untyped]
 from raes_contracts.satisfiability import canonical_contract_digest  # type: ignore[import-untyped]
 from raes_runtime.manager import RuntimeManager  # type: ignore[import-untyped]
@@ -145,6 +148,8 @@ class EpisodeEvidence(object):
     completed_steps: int
     evidence_records: tuple[ExperimentEvidenceRecordModel, ...]
     derived_measures: tuple[ExperimentDerivedMeasureModel, ...]
+    proposition_truth_results: dict[str, dict[str, object]]
+    objective_results: dict[str, dict[str, object]]
     diagnostics: tuple[DiagnosticModel, ...]
     cleanup_verified: bool
 
@@ -310,11 +315,12 @@ def _orchestration_plan(controls: RunControls) -> OrchestrationPlan:
 
 def _start_runtime(
     target: RuntimeTarget, scenario: object, controls: RunControls
-) -> tuple[RuntimeSnapshot, list[DiagnosticModel]]:
+) -> tuple[RuntimeSnapshot, list[DiagnosticModel], EvaluationPlan]:
     """Apply the scenario, logical clock, and bounded workflow."""
 
     manager = RuntimeManager(target)
-    applied = manager.apply(manager.plan(scenario))
+    planned = manager.plan(scenario)
+    applied = manager.apply(planned)
     diagnostics = [diagnostic_model(item) for item in applied.diagnostics]
     if not applied.success or target.time_runtime is None or target.orchestrator is None:
         raise RuntimeError("researcher runtime admission failed")
@@ -326,7 +332,10 @@ def _start_runtime(
     diagnostics.extend(diagnostic_model(item) for item in started.diagnostics)
     if not started.success or target.participant_runtime is None or target.evaluator is None:
         raise RuntimeError("researcher orchestration admission failed")
-    return started.snapshot, diagnostics
+    evaluation = planned.evaluation
+    if not evaluation.resources:
+        evaluation = cage2_evaluation_plan()
+    return started.snapshot, diagnostics, evaluation
 
 
 def _initialize_participants(
@@ -383,6 +392,7 @@ def _evaluate_episode(
     target: RuntimeTarget,
     snapshot: RuntimeSnapshot,
     diagnostics: list[DiagnosticModel],
+    evaluation_plan: EvaluationPlan,
 ) -> tuple[
     RuntimeSnapshot,
     tuple[ExperimentEvidenceRecordModel, ...],
@@ -392,7 +402,7 @@ def _evaluate_episode(
 
     if target.evaluator is None:
         raise RuntimeError("researcher evaluator is unavailable")
-    evaluated = target.evaluator.start(cage2_evaluation_plan(), snapshot)
+    evaluated = target.evaluator.start(evaluation_plan, snapshot)
     diagnostics.extend(diagnostic_model(item) for item in evaluated.diagnostics)
     if not evaluated.success:
         raise RuntimeError("researcher evaluation failed")
@@ -411,8 +421,12 @@ def execute_episode(
 ) -> EpisodeEvidence:
     """Execute one selected episode and return only validated RAES evidence."""
 
-    target = create_cyborg_target(seed=controls.seed, **({"driver": driver} if driver else {}))
-    snapshot, diagnostics = _start_runtime(target, scenario, controls)
+    target = create_cyborg_target(
+        scenario=scenario,
+        seed=controls.seed,
+        **({"driver": driver} if driver else {}),
+    )
+    snapshot, diagnostics, evaluation_plan = _start_runtime(target, scenario, controls)
     completed_steps = 0
     cleanup_verified = False
     evidence_records: tuple[ExperimentEvidenceRecordModel, ...] = ()
@@ -421,7 +435,7 @@ def execute_episode(
         snapshot = _initialize_participants(target, snapshot, controls, diagnostics)
         snapshot, completed_steps = _execute_steps(target, snapshot, controls, diagnostics)
         snapshot, evidence_records, derived_measures = _evaluate_episode(
-            target, snapshot, diagnostics
+            target, snapshot, diagnostics, evaluation_plan
         )
     finally:
         cleanup = RuntimeManager(target, initial_snapshot=snapshot).destroy()
@@ -433,6 +447,13 @@ def execute_episode(
         completed_steps=completed_steps,
         evidence_records=evidence_records,
         derived_measures=derived_measures,
+        proposition_truth_results={
+            address: dict(payload)
+            for address, payload in snapshot.proposition_truth_results.items()
+        },
+        objective_results={
+            address: dict(payload) for address, payload in snapshot.evaluation_results.items()
+        },
         diagnostics=tuple(diagnostics),
         cleanup_verified=cleanup_verified,
     )

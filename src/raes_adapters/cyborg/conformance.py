@@ -8,6 +8,7 @@ import textwrap
 from collections.abc import Iterable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import replace
+from importlib.resources import files
 from pathlib import Path
 from typing import cast
 
@@ -125,8 +126,11 @@ _CAPABILITY_PROBE_REQUIREMENTS: Mapping[str, tuple[str, ...]] = {
     "/capabilities/participant_runtime/supported_behavior_features": _ALL_EVIDENCE,
     "/capabilities/participant_runtime/supported_interaction_features": _ALL_EVIDENCE,
     "/capabilities/participant_runtime/supported_participant_roles": _ALL_EVIDENCE,
+    "/capabilities/provisioner/supported_account_features": _ALL_EVIDENCE,
     "/capabilities/provisioner/supported_node_types": _ALL_EVIDENCE,
     "/capabilities/provisioner/supported_os_families": _ALL_EVIDENCE,
+    "/capabilities/provisioner/supports_accounts": _ALL_EVIDENCE,
+    "/capabilities/provisioner/supports_acls": _ALL_EVIDENCE,
     "/capabilities/time/max_clocks": _ALL_EVIDENCE,
     "/capabilities/time/max_time_domains": _ALL_EVIDENCE,
     "/capabilities/time/supported_advancement_modes": _ALL_EVIDENCE,
@@ -329,6 +333,7 @@ def cyborg_adapter_diagnostics(*, seed: int = 3) -> tuple[Diagnostic, ...]:
     applied = target.provisioner.apply(plan.provisioning, RuntimeSnapshot())
     manifest = target.manifest
     checks = _initial_adapter_checks(target, seed)
+    checks["scenario2-realization"] = _scenario2_realization_probe(seed)
     with suppress(Exception):
         runtime_checks = _execute_runtime_probes(target, driver, applied)
         runtime_checks["seed-clock"] = bool(
@@ -342,6 +347,42 @@ def cyborg_adapter_diagnostics(*, seed: int = 3) -> tuple[Diagnostic, ...]:
     for diagnostic in diagnostics:
         diagnostic_model(diagnostic)
     return diagnostics
+
+
+def _scenario2_realization_probe(seed: int) -> bool:
+    """Prove the packaged full scenario reaches the dependency-free driver seam."""
+
+    driver = _HermeticProbeDriver()
+    try:
+        source = (
+            files(__package__)
+            .joinpath("scenario", "cage2-scenario2.sdl.yaml")
+            .read_text(encoding="utf-8")
+        )
+        scenario = parse_sdl(source)
+        target = create_cyborg_target(driver=driver, scenario=scenario, seed=seed)
+        manager = RuntimeManager(target)
+        plan = manager.plan(scenario)
+        applied = manager.apply(plan)
+        descriptor = driver.descriptors[-1] if driver.descriptors else None
+        resource_types = (
+            {resource.resource_type for resource in descriptor.resources}
+            if descriptor is not None
+            else set()
+        )
+        realized = bool(
+            not plan.diagnostics
+            and applied.success
+            and descriptor is not None
+            and len(descriptor.resources) == 38
+            and resource_types == {"account-placement", "network", "node"}
+        )
+        destroyed = RuntimeManager(target, initial_snapshot=applied.snapshot).destroy()
+        return realized and destroyed.success and not driver.handles
+    except Exception:
+        with suppress(Exception):
+            target.provisioner.cleanup()
+        return False
 
 
 def _initial_adapter_checks(target: RuntimeTarget, seed: int) -> dict[str, bool]:
