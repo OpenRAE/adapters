@@ -65,6 +65,8 @@ _COLLECTION_FILE = "collection.json"
 _AGGREGATES_FILE = "aggregates.json"
 _TIERS_FILE = "tiers.json"
 _BENCH_NOTES_FILE = "bench-notes.json"
+_EVIDENCE_RECORDS_FILE = "evidence-records.json"
+_EPISODE_OUTCOME_FILE = "episode-outcome.json"
 _INVALID_JSON = "invalid JSON artifact"
 _INVALID_BENCH_TIMESTAMP = "bench note timestamp is invalid"
 _INVALID_ARTIFACT_REFS = "artifact references are invalid"
@@ -2412,7 +2414,7 @@ def _execute_mediated_attempt(schedule: dict[str, object], run_root: Path) -> di
     summary = load_strict_json(portable / "summary.json")
     run_summary = load_strict_json(portable / "runs" / f"{run_id}-1" / "summary.json")
     derived_path = portable / "runs" / f"{run_id}-1" / "derived-measures.json"
-    outcome_path = portable / "runs" / f"{run_id}-1" / "episode-outcome.json"
+    outcome_path = portable / "runs" / f"{run_id}-1" / _EPISODE_OUTCOME_FILE
     reward = _mediated_measure(derived_path)
     availability, terminal_cause = _mediated_outcome(outcome_path)
     steps = run_summary.get("completed_steps")
@@ -2424,7 +2426,7 @@ def _execute_mediated_attempt(schedule: dict[str, object], run_root: Path) -> di
         raise RuntimeError(_INVALID_MEDIATED_EVIDENCE)
     evidence_paths = (
         portable / "runs" / f"{run_id}-1" / "run.json",
-        portable / "runs" / f"{run_id}-1" / "evidence-records.json",
+        portable / "runs" / f"{run_id}-1" / _EVIDENCE_RECORDS_FILE,
         derived_path,
         outcome_path,
         portable / _INVENTORY_NAME,
@@ -2938,22 +2940,22 @@ def _validate_mediated_portable(
     ParticipantImplementationProvenanceModel.model_validate(
         load_strict_json(archival / "participant-provenance.json")
     )
-    _validate_model_list(archival / "evidence-records.json", ExperimentEvidenceRecordModel)
+    _validate_model_list(archival / _EVIDENCE_RECORDS_FILE, ExperimentEvidenceRecordModel)
     _validate_model_list(archival / "derived-measures.json", ExperimentDerivedMeasureModel)
     _validate_model_list(archival / "diagnostics.json", DiagnosticModel)
-    outcome_path = archival / "episode-outcome.json"
+    outcome_path = archival / _EPISODE_OUTCOME_FILE
     if not require_outcome:
         _verify_inventory(portable)
         return
     _mediated_outcome(outcome_path)
-    evidence_payload = _load_strict_value(archival / "evidence-records.json")
+    evidence_payload = _load_strict_value(archival / _EVIDENCE_RECORDS_FILE)
     if not isinstance(evidence_payload, list):
         raise ValueError("portable outcome evidence is invalid")
     records = [ExperimentEvidenceRecordModel.model_validate(item) for item in evidence_payload]
     matching = [
         record.raw_content
         for record in records
-        if record.raw_content.content_uri == "episode-outcome.json"
+        if record.raw_content.content_uri == _EPISODE_OUTCOME_FILE
     ]
     if (
         len(matching) != 1

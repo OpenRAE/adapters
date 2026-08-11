@@ -1519,31 +1519,48 @@ def _write_supplemental_artifacts(run_output: Path, result: _EpisodeEvidence) ->
         getattr(result, "supplemental_artifacts", ()),
     )
     for artifact in artifacts:
-        relative = PurePosixPath(artifact.relative_path)
-        if (
-            relative.is_absolute()
-            or not relative.parts
-            or ".." in relative.parts
-            or relative.as_posix() != artifact.relative_path
-            or artifact.relative_path in seen
-        ):
-            raise ValueError("supplemental evidence path is invalid")
+        relative = _validated_supplemental_path(artifact, seen)
         seen.add(artifact.relative_path)
         path = run_output.joinpath(*relative.parts)
         atomic_write_json_artifact(path, dict(artifact.payload))
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        matching = [
-            record.raw_content
-            for record in result.evidence_records
-            if record.raw_content.content_uri == artifact.relative_path
-        ]
-        if (
-            len(matching) != 1
-            or matching[0].content_checksum is None
-            or matching[0].content_checksum.algorithm != "sha256"
-            or matching[0].content_checksum.value != digest
-        ):
-            raise ValueError("supplemental evidence binding is invalid")
+        _verify_supplemental_binding(path, artifact, result)
+
+
+def _validated_supplemental_path(
+    artifact: _SupplementalJsonArtifact, seen: set[str]
+) -> PurePosixPath:
+    """Return one safe, unique supplemental-artifact path."""
+
+    relative = PurePosixPath(artifact.relative_path)
+    if (
+        relative.is_absolute()
+        or not relative.parts
+        or ".." in relative.parts
+        or relative.as_posix() != artifact.relative_path
+        or artifact.relative_path in seen
+    ):
+        raise ValueError("supplemental evidence path is invalid")
+    return relative
+
+
+def _verify_supplemental_binding(
+    path: Path, artifact: _SupplementalJsonArtifact, result: _EpisodeEvidence
+) -> None:
+    """Verify that one supplemental artifact is bound by exactly one record."""
+
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    matching = [
+        record.raw_content
+        for record in result.evidence_records
+        if record.raw_content.content_uri == artifact.relative_path
+    ]
+    if (
+        len(matching) != 1
+        or matching[0].content_checksum is None
+        or matching[0].content_checksum.algorithm != "sha256"
+        or matching[0].content_checksum.value != digest
+    ):
+        raise ValueError("supplemental evidence binding is invalid")
 
 
 def _complete_native_run(

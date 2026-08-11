@@ -111,7 +111,9 @@ class CyberBattleSimEvaluator(GymEvaluator):
             "terminal_cause": selected.terminal_cause,
         }
         serialized = serialize_run_artifact(payload).encode("utf-8")
-        outcome_config = replace(_EVIDENCE_CONFIG, evidence_ref=OUTCOME_EVIDENCE_REF)
+        outcome_config: EvaluatorEvidenceConfig = replace(
+            _EVIDENCE_CONFIG, evidence_ref=OUTCOME_EVIDENCE_REF
+        )
         record = build_evidence_only(
             outcome_config,
             summary,

@@ -26,23 +26,23 @@ def classify_terminal_cause(
     Unknown source terminal rewards remain generic rather than being guessed.
     """
 
+    cause: str | None = None
     if terminated:
+        cause = "source-terminated"
         if last_reward is not None and math.isclose(last_reward, WINNING_REWARD):
-            if network_availability is None:
-                return "source-terminated"
-            return (
-                "defender-sla"
-                if network_availability < defender_sla_floor
-                else "attacker-ownership"
-            )
-        if last_reward is not None and math.isclose(last_reward, LOSING_REWARD):
-            return "defender-eviction"
-        return "source-terminated"
-    if truncated:
-        return "source-truncated"
-    if step_count >= maximum_steps:
-        return "evaluator-cutoff"
-    return None
+            if network_availability is not None:
+                cause = (
+                    "defender-sla"
+                    if network_availability < defender_sla_floor
+                    else "attacker-ownership"
+                )
+        elif last_reward is not None and math.isclose(last_reward, LOSING_REWARD):
+            cause = "defender-eviction"
+    elif truncated:
+        cause = "source-truncated"
+    elif step_count >= maximum_steps:
+        cause = "evaluator-cutoff"
+    return cause
 
 
 __all__ = [
