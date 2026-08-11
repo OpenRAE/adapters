@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import math
-from dataclasses import replace
 from typing import cast
 
 from raes_contracts.contracts import ExperimentChecksumModel  # type: ignore[import-untyped]
@@ -32,51 +31,60 @@ OUTCOME_ARTIFACT = "episode-outcome.json"
 _OUTCOME_SCHEMA = "cyberbattlesim-sanitized-episode-outcome/v1"
 
 _TASK_ID = CYBERBATTLE_CHAIN.task_id
-_EVIDENCE_CONFIG = EvaluatorEvidenceConfig(
-    task_id=_TASK_ID,
-    evidence_ref=EVALUATION_EVIDENCE_REF,
-    capture_spec_id="cyberbattlesim-evaluator-capture",
-    capture_requirement_id="cyberbattlesim-evaluator-summary",
-    capture_window_id="cyberbattlesim-selected-episode",
-    source_protocol_ref_id="cyberbattlesim-chain-public",
-    provenance_ref_id="qualification.cyberbattlesim.selected-source",
-    measure_id_base="measure.cyberbattlesim.cumulative-attacker-reward",
-    metric_ref_id="cumulative_attacker_reward",
-    method_id="cyberbattlesim-cumulative-reward",
-    method_name="Source cumulative attacker reward",
-    method_description=(
-        "Report the sanitized cumulative reward maintained by the serialized source driver."
-    ),
-    capture_title="CyberBattleSim evaluator summary capture",
-    capture_description=(
-        "Capture the sanitized evaluator-owned summary used to derive the selected "
-        "cumulative-reward measure."
-    ),
-    capture_window_description=(
-        "One read-only evaluator projection after the current serialized source transition."
-    ),
-    capture_requirement_title="Sanitized evaluator summary",
-    channel_ref_id="cyberbattlesim-evaluation-history",
-    redaction_policy="redaction.cyberbattlesim.evaluator-summary",
-    validity_note=(
-        "The capture attests one observed summary; it does not establish deterministic replay."
-    ),
-    validity_mitigation="Record applied and unbound stochastic streams with the run.",
-    loss_disclosure=(
-        "Source-native observations, action availability, credentials, reward components, "
-        "hidden state, and all source info except network availability are withheld."
-    ),
-    limitations=(
-        "Single-run cumulative source reward; no deterministic replay or outcome "
-        "equivalence is claimed.",
-        "Python-global and NumPy-global random streams remain unbound by the selected "
-        "reset protocol.",
-    ),
-    capture_notes=(
-        "Native observations, masks, credentials, reward components, hidden state, and all "
-        "source info except network availability remain driver-private.",
-    ),
-)
+
+
+def _evidence_config(evidence_ref: str) -> EvaluatorEvidenceConfig:
+    """Build the shared evaluator config with one typed evidence identity."""
+
+    return EvaluatorEvidenceConfig(
+        task_id=_TASK_ID,
+        evidence_ref=evidence_ref,
+        capture_spec_id="cyberbattlesim-evaluator-capture",
+        capture_requirement_id="cyberbattlesim-evaluator-summary",
+        capture_window_id="cyberbattlesim-selected-episode",
+        source_protocol_ref_id="cyberbattlesim-chain-public",
+        provenance_ref_id="qualification.cyberbattlesim.selected-source",
+        measure_id_base="measure.cyberbattlesim.cumulative-attacker-reward",
+        metric_ref_id="cumulative_attacker_reward",
+        method_id="cyberbattlesim-cumulative-reward",
+        method_name="Source cumulative attacker reward",
+        method_description=(
+            "Report the sanitized cumulative reward maintained by the serialized source driver."
+        ),
+        capture_title="CyberBattleSim evaluator summary capture",
+        capture_description=(
+            "Capture the sanitized evaluator-owned summary used to derive the selected "
+            "cumulative-reward measure."
+        ),
+        capture_window_description=(
+            "One read-only evaluator projection after the current serialized source transition."
+        ),
+        capture_requirement_title="Sanitized evaluator summary",
+        channel_ref_id="cyberbattlesim-evaluation-history",
+        redaction_policy="redaction.cyberbattlesim.evaluator-summary",
+        validity_note=(
+            "The capture attests one observed summary; it does not establish deterministic replay."
+        ),
+        validity_mitigation="Record applied and unbound stochastic streams with the run.",
+        loss_disclosure=(
+            "Source-native observations, action availability, credentials, reward components, "
+            "hidden state, and all source info except network availability are withheld."
+        ),
+        limitations=(
+            "Single-run cumulative source reward; no deterministic replay or outcome "
+            "equivalence is claimed.",
+            "Python-global and NumPy-global random streams remain unbound by the selected "
+            "reset protocol.",
+        ),
+        capture_notes=(
+            "Native observations, masks, credentials, reward components, hidden state, and all "
+            "source info except network availability remain driver-private.",
+        ),
+    )
+
+
+_EVIDENCE_CONFIG = _evidence_config(EVALUATION_EVIDENCE_REF)
+_OUTCOME_EVIDENCE_CONFIG = _evidence_config(OUTCOME_EVIDENCE_REF)
 
 
 class CyberBattleSimEvaluator(GymEvaluator):
@@ -111,11 +119,8 @@ class CyberBattleSimEvaluator(GymEvaluator):
             "terminal_cause": selected.terminal_cause,
         }
         serialized = serialize_run_artifact(payload).encode("utf-8")
-        outcome_config: EvaluatorEvidenceConfig = replace(
-            _EVIDENCE_CONFIG, evidence_ref=OUTCOME_EVIDENCE_REF
-        )
         record = build_evidence_only(
-            outcome_config,
+            _OUTCOME_EVIDENCE_CONFIG,
             summary,
             now,
             self._source_revision(),
