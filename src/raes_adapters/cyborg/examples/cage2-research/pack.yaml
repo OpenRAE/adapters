@@ -1,8 +1,8 @@
 name: cage2-research
 title: CAGE-2 researcher example
-version: 1.0.0
+version: 2.0.0
 status: built
-description: A bounded CAGE-2 topology for the installed RAES adapter command.
+description: The full qualified CAGE-2 Scenario2 topology for the installed RAES adapter command.
 authors:
   - RAES
 license: MIT

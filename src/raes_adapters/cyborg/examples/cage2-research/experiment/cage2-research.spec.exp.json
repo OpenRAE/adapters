@@ -1,14 +1,14 @@
 {
   "schema_version": "experiment-authoring-input/v1",
   "spec_id": "cage2-research-spec",
-  "spec_version": "1.0.0",
+  "spec_version": "2.0.0",
   "title": "CAGE-2 reproducible two-seed run plan",
   "description": "Declares exact episode, seed, and red-policy controls for the installed researcher command.",
   "task_ref": {"ref_kind": "task", "ref_id": "cage2-research-task"},
   "intended_scenario_ref": {
     "ref_kind": "scenario-snapshot",
     "ref_id": "cage2-research",
-    "ref_digest": "sha256:926f13857da070f1ebdc3afbb3193c7c13f4aa9fe324b3eb93e1c2595871abda",
+    "ref_digest": "sha256:58aa6b438c38bb53a5d6636e11835e44ebd6e57b48561e48aa80f0f14bfa6bf2",
     "ref_path": "sdl/cage2-research.sdl.yaml"
   },
   "run_plan": {

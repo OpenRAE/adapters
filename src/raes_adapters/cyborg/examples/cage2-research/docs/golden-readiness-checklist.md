@@ -19,8 +19,8 @@ in the review issue or rehearsal report.
 - [ ] No native CybORG state, action id or class, reward vector, hidden truth,
       raw log, host path, environment or argument dump, credential, or full
       traceback appears in a portable or participant-visible artifact.
-- [ ] Issue #77 has replaced the bounded smoke SDL with the reviewed full
-      Scenario2 SDL before any full-CAGE or replication claim is made.
+- [ ] The pack-local SDL is byte-identical to the reviewed full Scenario2
+      module from issue #77 and its RAES module lock verifies.
 - [ ] A clean installed `raes-adapters[cyborg]` command validates the exact
       declared pack, scenario, experiment, task, participant, control, and
       digest identities before native construction.
@@ -30,7 +30,7 @@ in the review issue or rehearsal report.
 ## Final Manual Participant Walkthrough Protocol
 
 - [ ] Read `docs/concepts.md` and `docs/attack-path.md`; confirm that they expose
-      only the bounded portable scenario and make no native or equivalence claim.
+      only portable Scenario2 intent and make no native or equivalence claim.
 - [ ] Confirm the blue sleep-policy selection, manifest, and realized
       configuration agree and remain operator-only.
 - [ ] Run the installed validation command from `docs/researcher-command.md`

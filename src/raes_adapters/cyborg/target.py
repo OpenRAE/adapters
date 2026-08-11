@@ -23,12 +23,14 @@ from .orchestrator import CyborgExecutionControl, CyborgOrchestrator
 from .participant_runtime import CyborgParticipantRuntime
 from .provisioner import CyborgProvisioner
 from .qualification import load_qualification
+from .scenario import bind_scenario_profile
 from .source_ledger import CAGE2_SOURCE_26CE1C1
 
 _CONFIG_KEYS = {
     "driver",
     "mapping_ledger_resource",
     "qualification_profile_id",
+    "scenario",
     "seed",
     "simulator_version",
     "source_commit",
@@ -61,6 +63,7 @@ def _normalized_config(config: dict[str, object]) -> dict[str, object]:
         ),
         "seed": config.get("seed"),
         "driver": config.get("driver"),
+        "scenario": config.get("scenario"),
     }
     _validate_selection(normalized, qualification)
     return normalized
@@ -139,6 +142,15 @@ def create_cyborg_components(
         profile_id=str(normalized["qualification_profile_id"]),
         source_commit=str(normalized["source_commit"]),
         seed=normalized["seed"] if isinstance(normalized["seed"], int) else None,
+        scenario_binding=(
+            bind_scenario_profile(
+                normalized["scenario"],
+                manifest,
+                target_name=CYBORG_BACKEND_NAME,
+            )
+            if normalized["scenario"] is not None
+            else None
+        ),
     )
     time_runtime = ReferenceTimeRuntime()
     control = CyborgExecutionControl()

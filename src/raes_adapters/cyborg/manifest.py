@@ -89,7 +89,7 @@ def create_cyborg_realization_envelope(
         "architecture": "mixed",
         "image_policy": (
             f"{CYBORG_PROFILE_ID}:{CYBORG_SCENARIO_MAPPING_VERSION}:"
-            "linux=linux_decoy_host,windows=windows_user_host1"
+            "qualified-scenario2-image-selection"
         ),
         "network_policy": (
             "cyborg-v2.1-private-address-allocation;"
@@ -98,9 +98,9 @@ def create_cyborg_realization_envelope(
         "supported_node_types": ["switch", "vm"],
         "supported_os_families": ["linux", "windows"],
         "supported_content_types": [],
-        "supported_account_features": [],
+        "supported_account_features": ["auth_method", "groups"],
         "supported_domain_profiles": [],
-        "supports_acls": False,
+        "supports_acls": True,
         "memory_mib": {"minimum": 1, "maximum": None},
         "vcpus": {"minimum": 1, "maximum": None},
     }
@@ -135,6 +135,24 @@ def create_cyborg_realization_envelope(
         "mechanism": "cyborg-v2.1-private-address-allocation",
         "transformations": ["descriptor-substitution"],
     }
+    selected_service: dict[str, Any] = {
+        "disposition": "transformed",
+        "observation_strength": "driver-reported",
+        "mechanism": "selected-cyborg-image-catalog",
+        "transformations": ["image-substitution", "bounded-normalization"],
+    }
+    selected_accounts: dict[str, Any] = {
+        "disposition": "transformed",
+        "observation_strength": "driver-reported",
+        "mechanism": "selected-cyborg-scenario-sessions",
+        "transformations": ["bounded-normalization"],
+    }
+    selected_acl: dict[str, Any] = {
+        "disposition": "transformed",
+        "observation_strength": "driver-reported",
+        "mechanism": "generated-raes-scenario-v1",
+        "transformations": ["bounded-normalization"],
+    }
     payload: dict[str, Any] = {
         "schema_version": "realization-envelope/v1",
         "contract_id": "realization-envelope-v1",
@@ -155,10 +173,10 @@ def create_cyborg_realization_envelope(
             {"concern": "resource-allocation", **unsupported},
             {"concern": "network", **network},
             {"concern": "content-placement", **unsupported},
-            {"concern": "account-placement", **unsupported},
+            {"concern": "account-placement", **selected_accounts},
             {"concern": "feature-binding", **unsupported},
-            {"concern": "service", **unsupported},
-            {"concern": "acl", **unsupported},
+            {"concern": "service", **selected_service},
+            {"concern": "acl", **selected_acl},
         ],
     }
     payload["digest"] = realization_envelope_digest(payload)
@@ -184,8 +202,9 @@ def _provisioner_capabilities(
         supports_accounts=bool(configuration.supported_account_features),
         constraints={
             "scenario_projection": (
-                "The complete admitted RAES network and VM desired state is "
-                "deterministically projected into a generated CybORG scenario."
+                "The complete admitted RAES Scenario2 network, VM, service, account, "
+                "and ACL desired state is matched to the immutable selected mapping "
+                "before projection into a generated CybORG scenario."
             )
         },
     )

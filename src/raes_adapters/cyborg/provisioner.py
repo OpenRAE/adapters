@@ -34,14 +34,16 @@ from .driver import (
 )
 from .scenario import (
     CYBORG_SCENARIO_MAPPING_VERSION,
+    CyborgScenarioBinding,
     CyborgScenarioDescriptor,
     copied_resource,
+    host_address_map,
     translate_scenario,
     validate_scenario_resources,
 )
 
 _DOMAIN = "runtime"
-_SUPPORTED_RESOURCE_TYPES = frozenset({"network", "node"})
+_SUPPORTED_RESOURCE_TYPES = frozenset({"account-placement", "network", "node"})
 
 
 class _Reconciliation(NamedTuple):
@@ -62,12 +64,14 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
         profile_id: str,
         source_commit: str,
         seed: int | None,
+        scenario_binding: CyborgScenarioBinding | None = None,
     ) -> None:
         self._driver = driver
         self._realization_envelope = realization_envelope
         self._profile_id = profile_id
         self._source_commit = source_commit
         self._seed = seed
+        self._scenario_binding = scenario_binding
         self._active: object | None = None
         self._active_available = False
         self._active_descriptor: CyborgScenarioDescriptor | None = None
@@ -91,7 +95,7 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
             ]
         diagnostics = list(plan.diagnostics)
         diagnostics.extend(self._identity_diagnostics(plan, RuntimeSnapshot()))
-        diagnostics.extend(_resource_diagnostics(plan))
+        diagnostics.extend(_resource_diagnostics(plan, self._scenario_binding))
         return diagnostics
 
     def apply(self, plan: ProvisioningPlan, snapshot: RuntimeSnapshot) -> ApplyResult:
@@ -154,7 +158,7 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
         self._active_available = True
         self._active_descriptor = descriptor
         self._active_hostnames = frozenset(translate_scenario(descriptor)["Hosts"])
-        self._active_host_addresses = _host_address_map(descriptor)
+        self._active_host_addresses = host_address_map(descriptor)
         self._clear_evaluation()
         return _success(snapshot, reconciliation, self._realization_envelope)
 
@@ -343,6 +347,7 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
             source_commit=self._source_commit,
             mapping_version=CYBORG_SCENARIO_MAPPING_VERSION,
             resources=resources,
+            scenario_binding=self._scenario_binding,
         )
 
     def _identity_diagnostics(
@@ -411,7 +416,7 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
             diagnostics = [
                 *plan.diagnostics,
                 *self._identity_diagnostics(plan, snapshot),
-                *_resource_diagnostics(plan),
+                *_resource_diagnostics(plan, self._scenario_binding),
             ]
             if any(item.is_error for item in diagnostics):
                 failure = ApplyResult(
@@ -474,24 +479,9 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
         return _success(snapshot, reconciliation, self._realization_envelope)
 
 
-def _host_address_map(descriptor: CyborgScenarioDescriptor) -> dict[str, str]:
-    """Map generated native host labels back to admitted node addresses."""
-
-    result: dict[str, str] = {}
-    for resource in descriptor.resources:
-        if resource.resource_type != "node":
-            continue
-        name = resource.payload["name"]
-        count = resource.payload["count"]
-        if not isinstance(name, str) or type(count) is not int or count < 1:
-            raise ValueError
-        native_names = (name,) if count == 1 else tuple(f"{name}-{index}" for index in range(count))
-        result.update(dict.fromkeys(native_names, resource.address))
-    return result
-
-
 def _resource_diagnostics(
     plan: ProvisioningPlan,
+    scenario_binding: CyborgScenarioBinding | None,
 ) -> list[Diagnostic]:
     """Validate complete projection and backend representability."""
 
@@ -519,7 +509,7 @@ def _resource_diagnostics(
             )
             for resource in sorted(plan.resources.values(), key=lambda item: item.address)
         )
-        issue = validate_scenario_resources(resources) if resources else None
+        issue = validate_scenario_resources(resources, scenario_binding) if resources else None
         if issue is not None:
             diagnostic = _diagnostic(issue.code, issue.message)
     return [] if diagnostic is None else [diagnostic]

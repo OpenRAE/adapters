@@ -53,16 +53,16 @@ sources:
   - source_id: adapter-example
     name: RAES CybORG adapter example
     url: https://github.com/OpenRAE/adapters
-    ref: OpenRAE/adapters#20 and #21
+    ref: OpenRAE/adapters#20, #21, and #77
     license: MIT
     usage: reimplemented
     attribution_required: false
     used: >-
-      Portable smoke topology, participant selection, experiment controls,
-      bounded documentation, and installed researcher command examples.
+      Full portable Scenario2 module, participant selection, experiment
+      controls, bounded documentation, and installed researcher command examples.
     excluded: >-
-      The full CAGE-2 Scenario2 SDL remains issue #77; this bounded example
-      carries no deterministic replay, equivalence, or scientific-validity claim.
+      The full Scenario2 module carries no deterministic replay, equivalence,
+      replication-result, or scientific-validity claim.
   - source_id: manifest-generator
     name: raes-env-packs content-manifest derivation
     url: https://github.com/OpenRAE/env-packs
@@ -83,7 +83,7 @@ artifacts:
       - cage2-upstream
       - raes-contracts
       - adapter-example
-    description: Portable RAES smoke scenario informed by the qualified CAGE source.
+    description: Full portable RAES Scenario2 module informed by the qualified CAGE source.
   - artifact_id: experiment-controls
     path: experiment/
     classification: redistributable
