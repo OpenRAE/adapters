@@ -22,6 +22,10 @@ from raes_backend_protocols.capabilities import (  # type: ignore[import-untyped
     PARTICIPANT_RUNTIME_CAPABILITY_REQUIRED_CONTRACTS,
     BackendCapabilitySet,
     CleanupCapabilities,
+    EvaluatorCapabilities,
+    OrchestratorCapabilities,
+    ParticipantRuntimeCapabilities,
+    ProvisionerCapabilities,
 )
 from raes_contracts.apparatus import (  # type: ignore[import-untyped]
     ConceptBinding,
@@ -172,6 +176,25 @@ def declared_cleanup_capabilities(
     )
 
 
+def compose_capability_set(
+    *,
+    provisioner: ProvisionerCapabilities,
+    orchestrator: OrchestratorCapabilities,
+    evaluator: EvaluatorCapabilities,
+    participant_runtime: ParticipantRuntimeCapabilities,
+    cleanup: CleanupCapabilities,
+) -> BackendCapabilitySet:
+    """Compose backend-authored RAES capability declarations without defaults."""
+
+    return BackendCapabilitySet(
+        provisioner=provisioner,
+        orchestrator=orchestrator,
+        evaluator=evaluator,
+        participant_runtime=participant_runtime,
+        cleanup=cleanup,
+    )
+
+
 def assemble_manifest(
     name: str,
     capabilities: BackendCapabilitySet,
@@ -195,6 +218,7 @@ def assemble_manifest(
 __all__ = [
     "adapter_version",
     "assemble_manifest",
+    "compose_capability_set",
     "concept_bindings",
     "declared_cleanup_capabilities",
     "model_contract_id",

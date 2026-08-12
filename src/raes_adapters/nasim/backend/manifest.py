@@ -14,7 +14,6 @@ from raes_backend_protocols.backend_manifest import (  # type: ignore[import-unt
 )
 from raes_backend_protocols.capabilities import (  # type: ignore[import-untyped]
     CLEANUP_CAPABILITY_REQUIRED_CONTRACTS,
-    BackendCapabilitySet,
     CleanupCapabilities,
     EvaluatorCapabilities,
     OrchestratorCapabilities,
@@ -31,6 +30,7 @@ from raes_contracts.vocabulary import (  # type: ignore[import-untyped]
 
 from raes_adapters._manifest_support import (
     assemble_manifest,
+    compose_capability_set,
     declared_cleanup_capabilities,
     read_source_revision,
 )
@@ -169,18 +169,6 @@ def _cleanup_capabilities() -> CleanupCapabilities:
     )
 
 
-def _capabilities() -> BackendCapabilitySet:
-    """Compose the complete selected backend capability declaration."""
-
-    return BackendCapabilitySet(
-        provisioner=_provisioner_capabilities(),
-        orchestrator=_orchestrator_capabilities(),
-        evaluator=_evaluator_capabilities(),
-        participant_runtime=_participant_capabilities(),
-        cleanup=_cleanup_capabilities(),
-    )
-
-
 def _realization_support(source_revision: str) -> tuple[RealizationSupportDeclaration, ...]:
     """Declare the selected static-scenario realization and its disclosures."""
 
@@ -225,7 +213,13 @@ def create_nasim_manifest() -> BackendManifest:
     source_revision = read_source_revision(load_qualification)
     return assemble_manifest(
         NASIM_BACKEND_NAME,
-        _capabilities(),
+        compose_capability_set(
+            provisioner=_provisioner_capabilities(),
+            orchestrator=_orchestrator_capabilities(),
+            evaluator=_evaluator_capabilities(),
+            participant_runtime=_participant_capabilities(),
+            cleanup=_cleanup_capabilities(),
+        ),
         _realization_support(source_revision),
         {
             "source_identity": "qualified-complete-runtime-artifact-roots-attested",
