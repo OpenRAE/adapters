@@ -106,7 +106,8 @@ native-readiness plan must extend this same isolated source-native run instead
 of stopping at the upstream smoke. For issue #28, that means running the
 adapter conformance path with the real `CyberBattleSimDriver`, serializing the
 result through `backend_conformance_report_payload()`, collecting
-`cyberbattlesim_source_protocol_diagnostics()` and manifest capability evidence,
+`cyberbattlesim_source_protocol_diagnostics()` and unresolved manifest
+capability inventory,
 and checking the emitted RAES payloads remain bounded and free of native action
 ids, observations, reward vectors, object representations, paths, environments,
 tracebacks, and hidden state. This is adapter-readiness evidence in this repo;

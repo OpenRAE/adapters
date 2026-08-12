@@ -166,6 +166,10 @@ _INVENTORY_NAME = "inventory.json"
 _RUNTIME_FAILURE_CODE = "researcher.runtime.failure"
 _CONTROLS_INVALID_CODE = "researcher.validation.controls-invalid"
 _CONTROLS_INVALID_MESSAGE = "run controls were not admitted"
+_EVIDENCE_UNVERIFIABLE_CODE = "researcher.validation.evidence-unverifiable"
+_EVIDENCE_UNVERIFIABLE_MESSAGE = (
+    "task evidence requirements cannot be verified by the backend manifest"
+)
 
 
 class _UsageFailure(Exception):
@@ -178,6 +182,10 @@ class _OutputFailure(Exception):
 
 class _ValidationFailure(Exception):
     """Internal pre-execution validation control flow."""
+
+
+class _EvidenceUnverifiableFailure(_ValidationFailure):
+    """Internal task-evidence admission control flow."""
 
 
 @dataclass(frozen=True)
@@ -270,7 +278,6 @@ class _BackendAdapter(object):
         [str, ParticipantImplementationSelectionModel], ParticipantImplementationProvenanceModel
     ]
     evidence_source_label: str
-    evidence_satisfies_refs: tuple[str, ...]
     provenance_payload: Callable[[argparse.Namespace, _AdmittedRun], dict[str, object]]
     machine_software: Callable[[], dict[str, str]]
 
@@ -963,7 +970,6 @@ _BACKENDS: dict[str, _BackendAdapter] = {
         build_controls=_cyborg_build_controls,
         episode_provenance=cyborg_researcher.blue_implementation_provenance,
         evidence_source_label="cyborg-cage2 evaluator projection",
-        evidence_satisfies_refs=("source-ledger:reward-components",),
         provenance_payload=_cyborg_provenance_payload,
         machine_software=_cyborg_machine_software,
     ),
@@ -991,7 +997,6 @@ _BACKENDS: dict[str, _BackendAdapter] = {
         build_controls=_nasim_build_controls,
         episode_provenance=nasim_researcher.red_implementation_provenance,
         evidence_source_label="nasim-tiny evaluator projection",
-        evidence_satisfies_refs=("attacker-action-log", "host-compromise-series"),
         provenance_payload=_nasim_provenance_payload,
         machine_software=_nasim_machine_software,
     ),
@@ -1019,7 +1024,6 @@ _BACKENDS: dict[str, _BackendAdapter] = {
         build_controls=_cyberbattlesim_build_controls,
         episode_provenance=cyberbattlesim_researcher.red_implementation_provenance,
         evidence_source_label="cyberbattlesim-chain evaluator projection",
-        evidence_satisfies_refs=("attacker-action-log", "availability-series"),
         provenance_payload=_cyberbattlesim_provenance_payload,
         machine_software=_cyberbattlesim_machine_software,
     ),
@@ -1200,6 +1204,37 @@ def _validate_runtime_plan(
         raise _ValidationFailure
 
 
+def _task_capture_admission_gaps(
+    task: ExperimentTaskModel,
+    manifest: BackendManifest,
+) -> tuple[str, ...]:
+    """Return semantic task evidence refs the published manifest cannot verify.
+
+    RAES 3.3's observation capability describes capture kinds, channels,
+    contracts, media, sealing, redaction, loss disclosure, and custody. It does
+    not bind a semantic task reference to an emitted artifact and its required
+    fields or negative data-quality states. Consequently, even a non-null
+    observation capability cannot admit these semantic references yet.
+    """
+
+    required = {
+        requirement.ref_id for requirement in task.evaluation_protocol.observation_requirements
+    }
+    required.update(
+        requirement.ref_id
+        for metric in task.evaluation_protocol.metric_definitions.values()
+        for requirement in metric.evidence_requirements
+    )
+    if not required:
+        return ()
+    # Validate/project the live manifest through its published owner. The
+    # resulting RAES 3.3 payload has no semantic-ref/field witness to inspect,
+    # so even observation-capability presence cannot promote the requirement. A
+    # later RAES contract owns that seam.
+    backend_manifest_payload(manifest)
+    return tuple(sorted(required))
+
+
 def _admit_native_run(adapter: _BackendAdapter, args: argparse.Namespace) -> _AdmittedRun:
     """Admit all authoring, participant, and runtime controls before execution."""
 
@@ -1221,6 +1256,8 @@ def _admit_native_run(adapter: _BackendAdapter, args: argparse.Namespace) -> _Ad
         args, participant_manifest, participant_selection, participant_configuration
     ):
         raise _ValidationFailure
+    if _task_capture_admission_gaps(task, adapter.backend_manifest()):
+        raise _EvidenceUnverifiableFailure
     if not 1 <= len(args.run_id) <= 64 or not args.run_id.replace("-", "").isalnum():
         raise _ValidationFailure
     seeds = adapter.admitted_seeds(args, spec)
@@ -1322,17 +1359,29 @@ def _retain_failure(output: Path, code: str, message: str) -> None:
         atomic_write_json_artifact(output / "failure.json", diagnostic.model_dump(mode="json"))
 
 
+def _admit_native_run_or_command_failure(
+    adapter: _BackendAdapter, args: argparse.Namespace
+) -> _AdmittedRun:
+    """Project internal admission failures to their stable CLI diagnostics."""
+
+    try:
+        return _admit_native_run(adapter, args)
+    except _EvidenceUnverifiableFailure:
+        raise _CommandFailure(
+            EXIT_VALIDATION, _EVIDENCE_UNVERIFIABLE_CODE, _EVIDENCE_UNVERIFIABLE_MESSAGE
+        ) from None
+    except _ValidationFailure:
+        raise _CommandFailure(
+            EXIT_VALIDATION, _CONTROLS_INVALID_CODE, _CONTROLS_INVALID_MESSAGE
+        ) from None
+
+
 def _run_conformance(adapter: _BackendAdapter, args: argparse.Namespace) -> int:
     """Run the selected backend conformance suite and seal its evidence."""
 
     admitted: _AdmittedRun | None = None
     if adapter.expected_pack_digest is not None:
-        try:
-            admitted = _admit_native_run(adapter, args)
-        except _ValidationFailure:
-            raise _CommandFailure(
-                EXIT_VALIDATION, _CONTROLS_INVALID_CODE, _CONTROLS_INVALID_MESSAGE
-            ) from None
+        admitted = _admit_native_run_or_command_failure(adapter, args)
         if util.find_spec(adapter.native_module) is None:
             raise _CommandFailure(
                 EXIT_RUNTIME,
@@ -1409,12 +1458,7 @@ def _native_environment(
 ) -> tuple[_AdmittedRun, Path]:
     """Admit native inputs, selected source, and the exclusive output root."""
 
-    try:
-        admitted = _admit_native_run(adapter, args)
-    except _ValidationFailure:
-        raise _CommandFailure(
-            EXIT_VALIDATION, _CONTROLS_INVALID_CODE, _CONTROLS_INVALID_MESSAGE
-        ) from None
+    admitted = _admit_native_run_or_command_failure(adapter, args)
     if util.find_spec(adapter.native_module) is None:
         raise _CommandFailure(
             EXIT_RUNTIME,
@@ -1494,9 +1538,6 @@ def _write_episode_evidence(
         size_bytes=len(evidence_bytes),
         created_at=result.evidence_records[0].captured_at,
         source=adapter.evidence_source_label,
-        satisfies_refs=[
-            {"ref_kind": "evidence", "ref_id": ref} for ref in adapter.evidence_satisfies_refs
-        ],
         sensitivity="redacted",
     )
 
@@ -1642,12 +1683,7 @@ def _run_native(adapter: _BackendAdapter, args: argparse.Namespace) -> int:
 def _validated_admission(adapter: _BackendAdapter, args: argparse.Namespace) -> int:
     """Validate native controls and report the admitted run scope."""
 
-    try:
-        admitted = _admit_native_run(adapter, args)
-    except _ValidationFailure:
-        raise _CommandFailure(
-            EXIT_VALIDATION, _CONTROLS_INVALID_CODE, _CONTROLS_INVALID_MESSAGE
-        ) from None
+    admitted = _admit_native_run_or_command_failure(adapter, args)
     print(
         json.dumps(
             {

@@ -56,8 +56,7 @@ from raes_adapters.primaite.backend import (
     create_primaite_target,
     execute_primaite_cleanup,
     primaite_declared_weaknesses,
-    primaite_manifest_capability_evidence,
-    primaite_manifest_capability_evidence_gaps,
+    primaite_manifest_capability_gaps,
     primaite_source_protocol_diagnostics,
     run_primaite_conformance,
 )
@@ -756,9 +755,7 @@ def test_bounded_conformance_probe_never_certifies_the_non_runnable_target() -> 
     # No affirmative runtime capability is production-evidenced: the live driver
     # fails closed, so a fake-driver probe cannot certify it. Every affirmative
     # capability is disclosed as an open gap instead.
-    evidence = primaite_manifest_capability_evidence()
-    gaps = primaite_manifest_capability_evidence_gaps()
-    assert evidence == {}
+    gaps = primaite_manifest_capability_gaps()
     assert "/capabilities/cleanup/supported_action_kinds" in gaps
     assert "/capabilities/participant_runtime/feature_support" in gaps
     assert "/capabilities/evaluator/supports_scoring" not in gaps  # no longer declared

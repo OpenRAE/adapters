@@ -58,8 +58,7 @@ from raes_adapters.cyberbattlesim.backend import (
 from raes_adapters.cyberbattlesim.backend.conformance import (
     cyberbattlesim_backend_conformance_payload,
     cyberbattlesim_declared_weaknesses,
-    cyberbattlesim_manifest_capability_evidence,
-    cyberbattlesim_manifest_capability_evidence_gaps,
+    cyberbattlesim_manifest_capability_gaps,
     cyberbattlesim_source_protocol_diagnostics,
     run_cyberbattlesim_conformance,
 )
@@ -334,15 +333,9 @@ def test_source_protocol_diagnostics_and_declared_weaknesses_are_raes_models() -
     assert "loss:loss-unbound-random-streams:deterministic-replay" in weaknesses
 
 
-def test_manifest_capability_evidence_is_derived_and_fails_closed() -> None:
+def test_manifest_capability_inventory_is_derived_and_fails_closed() -> None:
     manifest = create_cyberbattlesim_manifest()
-    report = _run_selected_conformance()
-    diagnostics = cyberbattlesim_source_protocol_diagnostics()
-    inventory = cyberbattlesim_manifest_capability_evidence(
-        manifest,
-        conformance_report=report,
-        source_diagnostics=diagnostics,
-    )
+    gaps = cyberbattlesim_manifest_capability_gaps(manifest)
 
     assert {
         "/capabilities/cleanup/supported_action_kinds",
@@ -350,32 +343,13 @@ def test_manifest_capability_evidence_is_derived_and_fails_closed() -> None:
         "/capabilities/orchestrator/supports_workflows",
         "/capabilities/participant_runtime/supported_behavior_features",
         "/capabilities/provisioner/supported_node_types",
-    } <= set(inventory)
-    assert set(inventory["/capabilities/provisioner/supported_node_types"]) == {
-        "evidence.cyberbattlesim.backend-conformance",
-        "evidence.cyberbattlesim.source-protocol.validated",
-    }
-    assert inventory["/capabilities/cleanup/supported_action_kinds"] == (
-        "evidence.cyberbattlesim.backend-conformance",
-    )
-    assert (
-        cyberbattlesim_manifest_capability_evidence_gaps(
-            manifest,
-            conformance_report=report,
-            source_diagnostics=diagnostics,
-        )
-        == ()
-    )
+    } <= set(gaps)
 
     payload = backend_manifest_payload(manifest)
     payload["capabilities"]["provisioner"]["supports_new_mode"] = True
 
-    payload_gaps = cyberbattlesim_manifest_capability_evidence_gaps(
-        payload=payload,
-        conformance_report=report,
-        source_diagnostics=diagnostics,
-    )
-    assert payload_gaps == ("/capabilities/provisioner/supports_new_mode",)
+    payload_gaps = cyberbattlesim_manifest_capability_gaps(payload=payload)
+    assert "/capabilities/provisioner/supports_new_mode" in payload_gaps
 
 
 def test_manual_native_readiness_protocol_covers_adapter_conformance_path() -> None:

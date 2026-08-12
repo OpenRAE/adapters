@@ -29,8 +29,7 @@ from raes_adapters.cyborg import (
     cyborg_backend_conformance_payload,
     cyborg_conformance_reproduction_commands,
     cyborg_declared_weaknesses,
-    cyborg_manifest_capability_evidence,
-    cyborg_manifest_capability_evidence_gaps,
+    cyborg_manifest_capability_gaps,
     cyborg_source_diagnostics,
     register_cyborg_backend,
     run_cyborg_conformance,
@@ -132,28 +131,11 @@ def test_pr_conformance_uses_the_exact_published_report_shape() -> None:
     assert report.unsupported_capability_gaps == ()
 
 
-def test_every_affirmative_manifest_capability_has_passing_evidence() -> None:
-    report = run_cyborg_conformance(seed=3)
-    diagnostics = cyborg_source_diagnostics()
-    adapter_diagnostics = cyborg_adapter_diagnostics(seed=3)
+def test_affirmative_manifest_capabilities_remain_unresolved_inventory() -> None:
+    gaps = cyborg_manifest_capability_gaps()
 
-    evidence = cyborg_manifest_capability_evidence(
-        conformance_report=report,
-        source_diagnostics=diagnostics,
-        adapter_diagnostics=adapter_diagnostics,
-    )
-
-    assert evidence
-    assert (
-        cyborg_manifest_capability_evidence_gaps(
-            conformance_report=report,
-            source_diagnostics=diagnostics,
-            adapter_diagnostics=adapter_diagnostics,
-        )
-        == ()
-    )
-    assert all(pointer.startswith("/capabilities/") for pointer in evidence)
-    assert all(refs for refs in evidence.values())
+    assert gaps
+    assert all(pointer.startswith("/capabilities/") for pointer in gaps)
 
 
 def test_adapter_probes_cover_every_runtime_surface_with_valid_diagnostics() -> None:
@@ -333,6 +315,7 @@ def test_suite_index_preserves_canonical_reports_and_non_claims(
     persisted = json.loads(report_path.read_text(encoding="utf-8"))
     assert persisted["profile"] == "full-remote-control-plane"
     assert persisted["native_conformance"] is False
+    assert reports[0]["capability_gaps"] == list(cyborg_manifest_capability_gaps())
     assert json.loads((tmp_path / "index.json").read_text(encoding="utf-8")) == index
 
 
@@ -385,23 +368,6 @@ def test_suite_refuses_an_unexpected_published_failure(
     )
 
     with pytest.raises(RuntimeError, match="published conformance cases failed"):
-        run_cyborg_conformance_suite(suite="pr", output_dir=tmp_path)
-
-    assert not (tmp_path / "index.json").exists()
-
-
-def test_suite_refuses_manifest_capability_evidence_gaps(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.chdir(tmp_path.parent)
-    monkeypatch.setattr(
-        conformance_module,
-        "cyborg_manifest_capability_evidence_gaps",
-        lambda *args, **kwargs: ("/capabilities/provisioner/supported_node_types",),
-    )
-
-    with pytest.raises(RuntimeError, match="manifest capability evidence is incomplete"):
         run_cyborg_conformance_suite(suite="pr", output_dir=tmp_path)
 
     assert not (tmp_path / "index.json").exists()

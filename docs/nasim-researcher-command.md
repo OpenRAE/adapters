@@ -43,6 +43,14 @@ neither an `ExperimentRunModel` nor a native attacker episode merely because it
 shares the command. The conformance run reports `execution_basis`
 `installed-source-probe`.
 
+Native `validate`, `run --mode smoke`, and `run --mode study` are currently
+fail-closed for the packaged task. Its action-log and host-compromise-series
+requirements cannot be verified at artifact-field and data-quality granularity
+by the pinned RAES contract. These commands exit `3` before runtime planning,
+native import, output reservation, or simulator effects. Issue #87 owns the
+NASim capture/manifest remediation; the authored task is not weakened in the
+interim.
+
 The final line of each run prints only a bounded JSON summary. The newly
 reserved output root contains the canonical conformance reports and an
 `inventory.json` seal with relative artifact names, sizes, and SHA-256 digests.
@@ -55,9 +63,8 @@ single autonomous red bruteforce attacker. NASim declares **no** red variant and
 **no** defender: the attacker is fixed by the admitted participant
 implementation, so the selection surface is the closed `--participant-*` set —
 there is no `--red-variant` and no `--blue-*` flag. Validation performs the
-complete admission path without native construction: pack bytes, SDL, task/spec
-joins, participant manifest/selection/configuration bindings, controls, seeds,
-and runtime planning:
+pack, SDL, task/spec, and participant joins, then rejects the current
+unverifiable semantic evidence requirements before runtime planning:
 
 ```shell
 raes-adapters validate --backend nasim-tiny --mode study \

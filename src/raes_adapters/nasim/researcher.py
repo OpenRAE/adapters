@@ -72,7 +72,7 @@ from raes_adapters.nasim.backend.conformance import (
     PR_CONFORMANCE_SEED,
     nasim_backend_conformance_payload,
     nasim_declared_weaknesses,
-    nasim_manifest_capability_evidence_gaps,
+    nasim_manifest_capability_gaps,
     nasim_source_protocol_diagnostics,
     run_nasim_conformance,
 )
@@ -478,10 +478,7 @@ def nasim_conformance_suite(*, suite: str, output_dir: Path) -> dict[str, object
             or any(not case.passed for case in report.cases)
         ):
             raise RuntimeError("NASim published conformance cases failed.")
-        if nasim_manifest_capability_evidence_gaps(
-            conformance_report=report, source_diagnostics=diagnostics
-        ):
-            raise RuntimeError("NASim manifest capability evidence is incomplete.")
+        capability_gaps = nasim_manifest_capability_gaps()
         report_path = write_backend_conformance_report(
             payload,
             output_dir=output_dir,
@@ -493,6 +490,7 @@ def nasim_conformance_suite(*, suite: str, output_dir: Path) -> dict[str, object
                 "execution_basis": "installed-source-probe",
                 "native_conformance": report.native_conformance,
                 "report_path": report_path.relative_to(output_dir).as_posix(),
+                "capability_gaps": list(capability_gaps),
             }
         )
     index: dict[str, object] = {
