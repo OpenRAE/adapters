@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import cast
 
@@ -25,67 +25,10 @@ from raes_contracts.diagnostics import (  # type: ignore[import-untyped]
 from raes_runtime.registry import RuntimeTarget  # type: ignore[import-untyped]
 
 from raes_adapters._conformance_support import (
-    manifest_capability_evidence,
-    manifest_capability_evidence_gaps,
-    passed_probe_evidence_refs,
+    manifest_capability_gaps,
 )
 from raes_adapters._scenario_ledger import EvidenceSelection, LedgerProblem
 from raes_adapters.base import run_conformance_probe
-
-# Capability surfaces every gym backend declares affirmatively. Backend
-# conformance alone backs the control-plane surfaces; the provisioner and
-# participant surfaces additionally require validated source-protocol evidence.
-_BACKEND_ONLY_POINTERS = (
-    "cleanup/supported_action_kinds",
-    "cleanup/supported_contract_versions",
-    "cleanup/supported_verification_methods",
-    "cleanup/supports_residual_state_disclosure",
-    "cleanup/supports_reusable_state",
-    "evaluator/preserves_binding_provenance",
-    "evaluator/supported_evidence_channels",
-    "evaluator/supported_predicate_families",
-    "evaluator/supported_quantifiers",
-    "evaluator/supported_sections",
-    "evaluator/supported_time_domains",
-    "evaluator/supported_truth_outcomes",
-    "evaluator/supports_objectives",
-    "evaluator/supports_scoring",
-    "orchestrator/supported_sections",
-    "orchestrator/supported_workflow_features",
-    "orchestrator/supports_workflows",
-)
-_PROVISIONER_DUAL_POINTERS = (
-    "provisioner/max_total_nodes",
-    "provisioner/supported_account_features",
-    "provisioner/supported_node_types",
-    "provisioner/supported_os_families",
-    "provisioner/supports_accounts",
-)
-
-
-def standard_probe_requirements(
-    backend_evidence: str,
-    source_evidence: str,
-    *,
-    participant_dual: Iterable[str],
-) -> dict[str, tuple[str, ...]]:
-    """Build the standard capability probe-requirement map for a gym backend.
-
-    ``participant_dual`` names the participant-runtime capability sub-fields the
-    backend declares (each requires both backend and source evidence).
-    """
-
-    requirements: dict[str, tuple[str, ...]] = {
-        f"/capabilities/{pointer}": (backend_evidence,) for pointer in _BACKEND_ONLY_POINTERS
-    }
-    for pointer in _PROVISIONER_DUAL_POINTERS:
-        requirements[f"/capabilities/{pointer}"] = (backend_evidence, source_evidence)
-    for field in participant_dual:
-        requirements[f"/capabilities/participant_runtime/{field}"] = (
-            backend_evidence,
-            source_evidence,
-        )
-    return requirements
 
 
 @dataclass(frozen=True)
@@ -93,10 +36,7 @@ class GymConformanceConfig(object):
     """Backend-local identities and bindings for conformance composition."""
 
     name: str
-    backend_evidence: str
-    source_evidence: str
     source_validation_failed: str
-    probe_requirements: Mapping[str, tuple[str, ...]]
     default_selection: EvidenceSelection
     create_target: Callable[..., RuntimeTarget]
     create_manifest: Callable[[], BackendManifest]
@@ -121,36 +61,14 @@ def conformance_payload(report: BackendConformanceReport) -> dict[str, object]:
     return cast(dict[str, object], backend_conformance_report_payload(report))
 
 
-def capability_evidence(
+def capability_gaps(
     config: GymConformanceConfig,
     manifest: BackendManifest | None,
     payload: Mapping[str, object] | None,
-    conformance_report: BackendConformanceReport | None,
-    source_diagnostics: Iterable[Diagnostic],
-) -> dict[str, tuple[str, ...]]:
-    """Return evidence references for declared affirmative manifest surfaces."""
-
-    return manifest_capability_evidence(
-        _manifest_payload(config, manifest, payload),
-        probe_requirements=config.probe_requirements,
-        passed_evidence_refs=_passed_refs(config, conformance_report, source_diagnostics),
-    )
-
-
-def capability_evidence_gaps(
-    config: GymConformanceConfig,
-    manifest: BackendManifest | None,
-    payload: Mapping[str, object] | None,
-    conformance_report: BackendConformanceReport | None,
-    source_diagnostics: Iterable[Diagnostic],
 ) -> tuple[str, ...]:
-    """Return declared affirmative capability surfaces with no probe evidence."""
+    """Return every affirmative manifest leaf as unresolved inventory."""
 
-    return manifest_capability_evidence_gaps(
-        _manifest_payload(config, manifest, payload),
-        probe_requirements=config.probe_requirements,
-        passed_evidence_refs=_passed_refs(config, conformance_report, source_diagnostics),
-    )
+    return manifest_capability_gaps(_manifest_payload(config, manifest, payload))
 
 
 def declared_weaknesses(
@@ -232,29 +150,11 @@ def _manifest_payload(
     )
 
 
-def _passed_refs(
-    config: GymConformanceConfig,
-    conformance_report: BackendConformanceReport | None,
-    source_diagnostics: Iterable[Diagnostic],
-) -> tuple[str, ...]:
-    """Resolve passed-probe evidence refs under the backend's identities."""
-
-    return passed_probe_evidence_refs(
-        conformance_report,
-        source_diagnostics,
-        backend_conformance_evidence=config.backend_evidence,
-        source_protocol_evidence=config.source_evidence,
-        source_validation_failed_code=config.source_validation_failed,
-    )
-
-
 __all__ = [
     "GymConformanceConfig",
-    "capability_evidence",
-    "capability_evidence_gaps",
+    "capability_gaps",
     "conformance_payload",
     "declared_weaknesses",
     "run_conformance",
     "source_protocol_diagnostics",
-    "standard_probe_requirements",
 ]

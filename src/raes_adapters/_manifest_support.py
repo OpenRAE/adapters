@@ -21,10 +21,6 @@ from raes_backend_protocols.capabilities import (  # type: ignore[import-untyped
     CLEANUP_CAPABILITY_REQUIRED_CONTRACTS,
     PARTICIPANT_RUNTIME_CAPABILITY_REQUIRED_CONTRACTS,
     BackendCapabilitySet,
-    CleanupCapabilities,
-    EvaluatorCapabilities,
-    OrchestratorCapabilities,
-    WorkflowFeature,
 )
 from raes_contracts.apparatus import (  # type: ignore[import-untyped]
     ConceptBinding,
@@ -139,57 +135,6 @@ def concept_bindings() -> tuple[ConceptBinding, ...]:
     )
 
 
-def standard_orchestrator_capabilities(
-    name: str,
-    constraints: Mapping[str, str],
-) -> OrchestratorCapabilities:
-    """Declare the portable episode-orchestration support every gym backend shares."""
-
-    return OrchestratorCapabilities(
-        name=f"{name}-orchestrator",
-        supported_sections=frozenset({"events", "workflows"}),
-        supports_workflows=True,
-        supports_assertion_refs=False,
-        supports_inject_bindings=False,
-        supported_workflow_features=frozenset({WorkflowFeature.CALL}),
-        constraints=dict(constraints),
-    )
-
-
-def standard_evaluator_capabilities(
-    name: str,
-    constraints: Mapping[str, str],
-) -> EvaluatorCapabilities:
-    """Declare the evaluator vocabulary every gym backend shares."""
-
-    return EvaluatorCapabilities(
-        name=f"{name}-evaluator",
-        supported_sections=frozenset({"conditions", "propositions", "assertions", "objectives"}),
-        supports_scoring=True,
-        supports_objectives=True,
-        supported_predicate_families=frozenset({"presence", "boolean", "string", "number"}),
-        supported_quantifiers=frozenset({"all", "any", "at_least"}),
-        supported_truth_outcomes=frozenset({"true", "false", "unknown", "unsupported"}),
-        supported_evidence_channels=frozenset({"api_response"}),
-        supported_time_domains=frozenset({"wall_clock"}),
-        preserves_binding_provenance=True,
-        constraints=dict(constraints),
-    )
-
-
-def standard_cleanup_capabilities(name: str) -> CleanupCapabilities:
-    """Declare the verified in-process cleanup support every gym backend shares."""
-
-    return CleanupCapabilities(
-        name=f"{name}-cleanup",
-        supported_contract_versions=CLEANUP_CAPABILITY_REQUIRED_CONTRACTS,
-        supported_action_kinds=frozenset({"destroy", "reset", "verify"}),
-        supported_verification_methods=frozenset({"probe", "receipt"}),
-        supports_reusable_state=True,
-        supports_residual_state_disclosure=True,
-    )
-
-
 def read_source_revision(load_qualification: Callable[[], Mapping[str, object]]) -> str:
     """Read the selected source revision from a backend qualification record."""
 
@@ -227,8 +172,5 @@ __all__ = [
     "concept_bindings",
     "model_contract_id",
     "read_source_revision",
-    "standard_cleanup_capabilities",
-    "standard_evaluator_capabilities",
-    "standard_orchestrator_capabilities",
     "supported_contracts",
 ]

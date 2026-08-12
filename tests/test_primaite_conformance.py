@@ -67,8 +67,7 @@ from raes_adapters.primaite.backend import (
 from raes_adapters.primaite.backend.conformance import (
     primaite_backend_conformance_payload,
     primaite_declared_weaknesses,
-    primaite_manifest_capability_evidence,
-    primaite_manifest_capability_evidence_gaps,
+    primaite_manifest_capability_gaps,
     primaite_source_protocol_diagnostics,
     run_primaite_conformance,
     run_primaite_pr_conformance,
@@ -393,15 +392,13 @@ def test_source_protocol_diagnostics_and_declared_weaknesses_are_raes_models() -
     assert any(item.startswith("loss:loss-abstracted-participant-interface") for item in weaknesses)
 
 
-def test_manifest_capability_evidence_fails_closed_for_the_non_runnable_target() -> None:
+def test_manifest_capability_inventory_fails_closed_for_the_non_runnable_target() -> None:
     manifest = create_primaite_manifest()
 
     # No affirmative runtime capability is production-evidenced: the live driver
     # fails closed, so an injected-driver probe cannot certify it. Evidence is
     # unconditionally empty and every affirmative capability is a disclosed gap.
-    evidence = primaite_manifest_capability_evidence()
-    gaps = primaite_manifest_capability_evidence_gaps(manifest)
-    assert evidence == {}
+    gaps = primaite_manifest_capability_gaps(manifest)
     assert {
         "/capabilities/cleanup/supported_action_kinds",
         "/capabilities/participant_runtime/feature_support",
@@ -414,7 +411,7 @@ def test_manifest_capability_evidence_fails_closed_for_the_non_runnable_target()
     payload = backend_manifest_payload(manifest)
     payload["capabilities"]["provisioner"]["supports_new_mode"] = True
     assert "/capabilities/provisioner/supports_new_mode" in (
-        primaite_manifest_capability_evidence_gaps(payload=payload)
+        primaite_manifest_capability_gaps(payload=payload)
     )
 
 
@@ -430,7 +427,6 @@ def test_pr_conformance_bundle_composes_published_and_source_evidence() -> None:
     assert bundle["source_diagnostics"]
     # PrimAITE is fail-closed: no capability evidence closes and every affirmative
     # capability is disclosed as an explicit non-claim rather than raising.
-    assert bundle["capability_evidence"] == {}
     assert bundle["capability_gaps"]
     assert any(str(item).startswith("limitation:") for item in bundle["declared_weaknesses"])
     # The composed bundle is the machine-readable evidence the clean-install proof

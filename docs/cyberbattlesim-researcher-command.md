@@ -19,6 +19,14 @@ raes-adapters inspect --backend cyberbattlesim-chain
 pinned native source is available and byte-verified, along with the qualified
 source commit and supported RAES profiles.
 
+Native `validate`, `run --mode smoke`, and `run --mode study` are currently
+fail-closed for the selected task. Its attacker-action-log and
+availability-series requirements cannot be verified at artifact-field and
+data-quality granularity by the pinned RAES contract. These commands exit `3`
+before runtime planning, native import, output reservation, or simulator
+effects. Issue #86 owns the CyberBattleSim capture/manifest remediation; the
+authored task is not weakened in the interim.
+
 The native simulator remains separately installed because upstream publishes no
 selected index or release artifact. Build or acquire the wheel from commit
 `854d6966607fb68645651f55b0f97221bd293e0d`, verify the complete identity

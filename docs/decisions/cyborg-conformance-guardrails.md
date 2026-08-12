@@ -86,22 +86,21 @@ construction.
 | Packaging and CI | The single `pyproject.toml`/`uv.lock`, `_verification_envs()`, `_tests()`, `_distributions()`, `probe_installed_identity.py`, the existing CI workflow and `PR Gate`, strict docs/policy gates, and canonical `nox -s verify`. Extend these paths; do not create a second lock, workflow, or unenforced verification graph. |
 
 The CyberBattleSim conformance module is the closest repository precedent for
-canonical report projection, manifest-derived evidence closure, RAES
-diagnostics, weakness references, and hostile-value tests. Reuse its composition
-pattern, not its source protocol, action model, seed semantics, cleanup claims,
-capability inventory, or backend-specific helper module.
+canonical report projection, RAES diagnostics, weakness references, and
+hostile-value tests. Reuse its composition pattern, not its source protocol,
+action model, seed semantics, cleanup claims, capability inventory, or
+backend-specific helper module.
 
-## Local probes, capability evidence, and leakage
+## Local probes, capability inventory, and leakage
 
 Derive affirmative capability JSON pointers from the live
-`backend_manifest_payload()` and join them to stable references from probes that
-actually passed. A small module-local pointer-to-evidence requirement map is a
-closure check, not capability authority: it contains no copied capability
-values, fails when a new affirmative surface has no evidence, and does not turn
-constraints or component names into capabilities. Exercise negative and
-unsupported declarations as well, especially replay, autonomous execution,
-bounded concurrency, execution control, accounts, ACLs, generated artifacts,
-persistent volumes, and cleanup when undeclared.
+`backend_manifest_payload()` as unresolved inventory only. A broad published
+conformance disposition, source-ledger validation, or adapter-local probe does
+not prove every capability leaf, so there is no pointer-to-evidence requirement
+map or positive join. Exercise negative and unsupported declarations as well,
+especially replay, autonomous execution, bounded concurrency, execution
+control, accounts, ACLs, generated artifacts, persistent volumes, and cleanup
+when undeclared.
 
 Weaknesses are machine-resolvable references derived from qualification
 `admission.limitations`, `known_defects`, and the selected loss disclosures.
@@ -225,11 +224,12 @@ does not rewrite, append, or locally reclassify that case.
 The executable adapter-local probes separately construct a supported switch/VM
 topology with a hostile injected native handle, validate the source selection
 and every declared runtime surface, verify cleanup, and inspect actual portable
-projections. Capability evidence requires all three independent references:
-the bounded published conformance disposition, validated source-ledger evidence,
-and passing adapter-runtime diagnostics. A future RAES release that publishes a
-constructive list-domain or equivalent governed witness seam can replace this
-unsupported case without a local schema or profile.
+projections. The bounded published conformance disposition, validated
+source-ledger evidence, and passing adapter-runtime diagnostics remain three
+independent facts; their conjunction is not per-leaf capability evidence. A
+future RAES release that publishes a constructive list-domain or equivalent
+governed witness seam can replace this unsupported case without a local schema
+or profile.
 
 The checked-in full tier remains hermetic at ordered seeds `(3, 153)` and keeps
 `native_conformance=false`; the existing qualified-source reproducer owns native
@@ -247,8 +247,8 @@ registry, or environment binding.
 A new qualified selection may add source resources, evidence bindings, seeds,
 or a native harness without changing the RAES profile corpus, report type,
 diagnostic model, control-plane persistence, or cross-simulator base API. A new
-affirmative manifest claim automatically creates an evidence-closure gap until
-a passing probe reference is joined to its derived pointer.
+affirmative manifest claim automatically remains an unresolved inventory gap
+until a published contract can verify the owning production path.
 
 ## Gotchas and anti-patterns
 

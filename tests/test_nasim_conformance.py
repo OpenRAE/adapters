@@ -13,7 +13,6 @@ import json
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-import pytest
 from raes_backend_protocols.manifest import backend_manifest_payload
 from raes_conformance.conformance import BackendConformanceReport
 from raes_conformance.conformance.report import backend_conformance_report_payload
@@ -49,8 +48,7 @@ from raes_adapters.nasim.backend import (
 from raes_adapters.nasim.backend.conformance import (
     nasim_backend_conformance_payload,
     nasim_declared_weaknesses,
-    nasim_manifest_capability_evidence,
-    nasim_manifest_capability_evidence_gaps,
+    nasim_manifest_capability_gaps,
     nasim_source_protocol_diagnostics,
     run_nasim_conformance,
     run_nasim_pr_conformance,
@@ -232,15 +230,9 @@ def test_source_protocol_diagnostics_and_declared_weaknesses_are_raes_models() -
     assert "loss:loss-unbound-action-rng:deterministic-replay" in weaknesses
 
 
-def test_manifest_capability_evidence_is_derived_and_fails_closed() -> None:
+def test_manifest_capability_inventory_is_derived_and_fails_closed() -> None:
     manifest = create_nasim_manifest()
-    report = run_nasim_conformance(driver=ProbeDriver(), seed=PR_CONFORMANCE_SEED)
-    diagnostics = nasim_source_protocol_diagnostics()
-    inventory = nasim_manifest_capability_evidence(
-        manifest,
-        conformance_report=report,
-        source_diagnostics=diagnostics,
-    )
+    gaps = nasim_manifest_capability_gaps(manifest)
 
     assert {
         "/capabilities/cleanup/supported_action_kinds",
@@ -248,39 +240,14 @@ def test_manifest_capability_evidence_is_derived_and_fails_closed() -> None:
         "/capabilities/orchestrator/supports_workflows",
         "/capabilities/participant_runtime/supported_behavior_features",
         "/capabilities/provisioner/supported_node_types",
-    } <= set(inventory)
-    # Provisioner/participant surfaces require both backend and source evidence;
-    # control-plane surfaces need only the canonical report.
-    assert set(inventory["/capabilities/provisioner/supported_node_types"]) == {
-        "evidence.nasim.backend-conformance",
-        "evidence.nasim.source-protocol.validated",
-    }
-    assert inventory["/capabilities/cleanup/supported_action_kinds"] == (
-        "evidence.nasim.backend-conformance",
-    )
-    assert (
-        nasim_manifest_capability_evidence_gaps(
-            manifest,
-            conformance_report=report,
-            source_diagnostics=diagnostics,
-        )
-        == ()
-    )
+    } <= set(gaps)
 
     # A newly declared affirmative capability with no probe evidence must fail
     # closed as a gap rather than be silently backed.
     payload = backend_manifest_payload(manifest)
     payload["capabilities"]["provisioner"]["supports_new_mode"] = True
-    payload_gaps = nasim_manifest_capability_evidence_gaps(
-        payload=payload,
-        conformance_report=report,
-        source_diagnostics=diagnostics,
-    )
-    assert payload_gaps == ("/capabilities/provisioner/supports_new_mode",)
-
-    # With no probe evidence at all, every affirmative surface is a gap.
-    assert nasim_manifest_capability_evidence(payload=backend_manifest_payload(manifest)) == {}
-    assert nasim_manifest_capability_evidence_gaps(payload=backend_manifest_payload(manifest))
+    payload_gaps = nasim_manifest_capability_gaps(payload=payload)
+    assert "/capabilities/provisioner/supports_new_mode" in payload_gaps
 
 
 def test_pr_conformance_suite_composes_published_and_source_evidence() -> None:
@@ -290,32 +257,11 @@ def test_pr_conformance_suite_composes_published_and_source_evidence() -> None:
     assert bundle["native_conformance"] is False
     assert bundle["backend_conformance"]["passed"] is True
     assert bundle["source_diagnostics"]
-    assert bundle["capability_evidence"]["/capabilities/provisioner/supported_node_types"] == [
-        "evidence.nasim.backend-conformance",
-        "evidence.nasim.source-protocol.validated",
-    ]
+    assert bundle["capability_gaps"] == list(nasim_manifest_capability_gaps())
     assert any(item.startswith("limitation:") for item in bundle["declared_weaknesses"])
     # The composed bundle is the machine-readable evidence run by the
     # clean-install proof; it must carry no native leakage.
     assert not any(marker in _json_text(bundle) for marker in NATIVE_MARKERS)
-
-
-def test_pr_conformance_suite_fails_closed_on_capability_evidence_gaps(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # Drive the fail-closed branch: if any declared affirmative capability
-    # lacks passing evidence, the bundle must refuse rather than ship an
-    # unbacked surface (the guarantee run_nasim_pr_conformance's docstring
-    # exists to enforce). The success-path test above never reaches this
-    # branch because the real manifest has zero gaps.
-    monkeypatch.setattr(
-        "raes_adapters.nasim.backend.conformance.nasim_manifest_capability_evidence_gaps",
-        lambda *args, **kwargs: ("/capabilities/provisioner/supported_node_types",),
-    )
-
-    driver = ProbeDriver()
-    with pytest.raises(RuntimeError, match="incomplete"):
-        run_nasim_pr_conformance(driver=driver)
 
 
 def test_clock_control_is_unsupported_consistent_with_manifest() -> None:
