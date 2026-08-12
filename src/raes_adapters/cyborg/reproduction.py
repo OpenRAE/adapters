@@ -52,6 +52,7 @@ from .researcher import (
 
 _INVALID_JSON = "invalid JSON artifact"
 _INVALID_ATTEMPT_SLOT_JOIN = "attempt slot join is invalid"
+_INVALID_ATTEMPT_SEQUENCE = "attempt sequence is invalid"
 _INVALID_FORBIDDEN_MATERIAL = "forbidden native material"
 _INVALID_INVENTORY = "inventory is invalid"
 _INVALID_PROTOCOL_SCHEDULE = "protocol schedule is invalid"
@@ -851,7 +852,7 @@ def _attempt_retry_limit(protocol: Mapping[str, object]) -> int:
         raise ValueError("attempt protocol join is invalid")
     retry_limit = cast(dict[str, object], declaration["attempt_policy"])["retry_limit"]
     if type(retry_limit) is not int:
-        raise ValueError("attempt sequence is invalid")
+        raise ValueError(_INVALID_ATTEMPT_SEQUENCE)
     return retry_limit
 
 
@@ -862,7 +863,7 @@ def _validate_attempt_identity(
 
     sequence = value["attempt_sequence"]
     if type(sequence) is not int or not 1 <= sequence <= retry_limit + 1:
-        raise ValueError("attempt sequence is invalid")
+        raise ValueError(_INVALID_ATTEMPT_SEQUENCE)
     expected_run_id = f"{slot['slot_id']}-attempt-{sequence:02d}"
     predecessor = None
     if sequence > 1:
@@ -979,7 +980,7 @@ def select_eligible_attempts(
     for slot_id in slots:
         ordered = sorted(by_slot[slot_id], key=lambda item: cast(int, item["attempt_sequence"]))
         if [item["attempt_sequence"] for item in ordered] != list(range(1, len(ordered) + 1)):
-            raise ValueError("attempt sequence is invalid")
+            raise ValueError(_INVALID_ATTEMPT_SEQUENCE)
         valid = next((item for item in ordered if item["disposition"] == "valid"), None)
         if valid is not None:
             selected.append(valid)
