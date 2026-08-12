@@ -74,14 +74,12 @@ off as a copied fixture family. The published realization harness is used only
 for realization-envelope questions it actually models; it is not a generic hook
 for unrelated source-protocol assertions.
 
-Every affirmative manifest capability must join to passing executable evidence.
-Derive the capability addresses from `backend_manifest_payload()` at runtime and
-join them to stable adapter-probe evidence references. The join may be a small
-module-local test/probe inventory, but it is not portable authority: it carries
-only manifest JSON pointers and evidence references, contains no copied
-capability values or expected manifest payload, and fails closed when a newly
-declared affirmative capability has no passing evidence. Negative declarations
-and limitations must also be exercised so absence is not mistaken for support.
+Every affirmative manifest capability is derived from
+`backend_manifest_payload()` at runtime and retained as unresolved inventory.
+There is no module-local pointer-to-reference join: a broad conformance pass,
+source validation, or adapter probe cannot certify each leaf. Negative
+declarations and limitations must also be exercised so absence is not mistaken
+for support.
 Where RAES already provides `evidence_refs`, `limitation_refs`, claim
 `limitations`, or `explicit_non_claims`, reuse those fields rather than creating
 adapter equivalents.
@@ -98,7 +96,7 @@ constructed `RuntimeTarget` with an injected deterministic driver to run the
 published profile/fixtures and bounded local probes. It must cover manifest and
 source/profile identity, all four surfaces on success and failure, reset and
 stream dispositions, action/observation/evaluator separation, terminal
-semantics, cleanup, capability-to-evidence closure, and portable serialization.
+semantics, cleanup, unresolved capability inventory, and portable serialization.
 It must not import the native simulator or depend on network, user-home state,
 or an editable checkout.
 

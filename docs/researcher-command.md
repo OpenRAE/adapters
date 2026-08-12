@@ -20,12 +20,19 @@ root contains canonical conformance reports and an `inventory.json` seal with
 relative artifact names, sizes, and SHA-256 digests. An existing output path is
 always rejected.
 
+Native `validate`, `run --mode smoke`, and `run --mode study` are currently
+fail-closed for the packaged task. That task requires semantic reward-component
+evidence, while the pinned RAES contract cannot verify required artifact fields
+or negative data-quality states. These commands exit `3` before runtime
+planning, native import, output reservation, or simulator effects. Issue #85
+owns the CybORG capture/manifest remediation; the authored task is not weakened
+in the interim.
+
 ## Validate the packaged example
 
 The wheel includes the symbolic environment-pack identity `cage2-research`.
-Validation performs the complete non-native admission path: pack bytes, SDL,
-task/spec joins, participant manifest/selection/configuration bindings, controls,
-seeds, and runtime planning:
+Validation performs pack, SDL, task/spec, and participant joins, then rejects
+the current unverifiable semantic evidence requirement before runtime planning:
 
 ```shell
 raes-adapters validate \

@@ -23,7 +23,7 @@ from raes_contracts.diagnostics import (  # type: ignore[import-untyped]
     diagnostic_payload,
 )
 
-from raes_adapters._conformance_support import affirmative_capability_pointers
+from raes_adapters._conformance_support import manifest_capability_gaps
 from raes_adapters.base import run_conformance_probe
 from raes_adapters.primaite import load_qualification
 from raes_adapters.primaite.scenario_ledger import (
@@ -62,22 +62,7 @@ def primaite_backend_conformance_payload(
     return cast(dict[str, object], backend_conformance_report_payload(report))
 
 
-def primaite_manifest_capability_evidence() -> dict[str, tuple[str, ...]]:
-    """Return production capability evidence for the backend — deliberately none.
-
-    No affirmative runtime capability is production-evidenced, and none can be
-    derived from a manifest or its payload: the live ``PrimaiteDriver`` fails closed
-    (it cannot execute in-process), so any passing target-conformance report
-    necessarily came from an injected test double, and a fake driver cannot upgrade
-    a live-runtime claim. Every declared capability is therefore reported as an open
-    gap by :func:`primaite_manifest_capability_evidence_gaps` rather than certified
-    here, so this evidence set is unconditionally empty.
-    """
-
-    return {}
-
-
-def primaite_manifest_capability_evidence_gaps(
+def primaite_manifest_capability_gaps(
     manifest: BackendManifest | None = None,
     *,
     payload: Mapping[str, object] | None = None,
@@ -98,7 +83,7 @@ def primaite_manifest_capability_evidence_gaps(
             backend_manifest_payload(manifest or create_primaite_manifest()),
         )
     )
-    return affirmative_capability_pointers(resolved)
+    return manifest_capability_gaps(resolved)
 
 
 def primaite_declared_weaknesses(
@@ -189,24 +174,22 @@ def run_primaite_pr_conformance(
     Unlike the NASim bundle this function does **not** raise on capability gaps.
     For PrimAITE every declared affirmative capability is an *expected* open gap:
     no affirmative runtime capability is production-evidenced while the live driver
-    is non-runnable, so ``capability_evidence`` is empty and ``capability_gaps``
-    surfaces the full affirmative-pointer set as explicit non-claims rather than a
-    failure. Certifying any of those surfaces requires a real, qualified, isolated
-    live driver (blocked pending worker-process isolation and CPython 3.12
-    qualification evidence), never a fake driver.
+    is non-runnable, so ``capability_gaps`` surfaces the full affirmative-pointer
+    set as explicit non-claims rather than manufacturing positive evidence.
+    Certifying any of those surfaces requires a real, qualified, isolated live
+    driver (blocked pending worker-process isolation and CPython 3.12 qualification
+    evidence), never a fake driver.
     """
 
     report = run_primaite_conformance(driver=driver, seed=seed)
     diagnostics = primaite_source_protocol_diagnostics()
     payload = backend_manifest_payload(create_primaite_manifest())
-    evidence = primaite_manifest_capability_evidence()
-    gaps = primaite_manifest_capability_evidence_gaps(payload=payload)
+    gaps = primaite_manifest_capability_gaps(payload=payload)
     return {
         "seed": seed,
         "native_conformance": report.native_conformance,
         "backend_conformance": primaite_backend_conformance_payload(report),
         "source_diagnostics": [diagnostic_payload(item) for item in diagnostics],
-        "capability_evidence": {pointer: list(refs) for pointer, refs in sorted(evidence.items())},
         "capability_gaps": list(gaps),
         "declared_weaknesses": list(primaite_declared_weaknesses()),
     }
@@ -216,8 +199,7 @@ __all__ = [
     "PR_CONFORMANCE_SEED",
     "primaite_backend_conformance_payload",
     "primaite_declared_weaknesses",
-    "primaite_manifest_capability_evidence",
-    "primaite_manifest_capability_evidence_gaps",
+    "primaite_manifest_capability_gaps",
     "primaite_source_protocol_diagnostics",
     "run_primaite_conformance",
     "run_primaite_pr_conformance",

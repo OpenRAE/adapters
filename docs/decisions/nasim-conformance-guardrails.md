@@ -51,7 +51,7 @@ Implementation must build on these incumbents:
 | Cleanup | `execute_nasim_cleanup()`, cleanup capability admission, base `execute_cleanup()`, `TrialCleanupPlanModel`, `TrialCleanupReceiptModel`, and `validate_trial_cleanup_receipt()`. A close boolean is not verified clean state. |
 | Diagnostics and failure hygiene | RAES `Diagnostic`, `diagnostic_model()`, `diagnostic_payload()`, `ApplyResult`; shared `diagnostic_address()`, `redact_native_value()`, and `bounded_context_label()`. Use stable pointer-addressed, input-free failures; add no exception or diagnostic hierarchy. |
 | Report and artifact persistence | `backend_conformance_report_payload()` and `write_backend_conformance_report()` own canonical report validation, redaction checking, safe run labels, and atomic persistence. Other JSON uses `atomic_write_json_artifact()` only after its content is validated; no checked-in generated report or new evidence repository. |
-| Capability evidence | `_conformance_support` and `_gym_backend.conformance` own live-manifest traversal, fail-closed pointer coverage, passed-evidence accounting, source diagnostics, and weakness derivation. Add NASim-local passing evidence through their explicit configuration/input seam; do not fork the traversal or maintain a second capability catalog. |
+| Capability inventory | `_conformance_support` and `_gym_backend.conformance` own live-manifest traversal, unresolved-pointer inventory, source diagnostics, and weakness derivation. They produce no positive per-leaf evidence join; do not fork the traversal or maintain a second capability catalog. |
 | Packaging and workflow | The single `pyproject.toml`/`uv.lock`, the isolated `nasim` extra, `_extras()`, `_verification_envs()`, `_tests()`, `_distributions()`, `probe_installed_identity.py`, `.github/workflows/ci.yml`, its `PR Gate`, and canonical `nox -s verify`. Extend these paths; do not add a lock, distribution, combined-extras environment, or parallel workflow. |
 
 The existing `tests/test_nasim_backend.py`, `tests/test_nasim_driver.py`,
@@ -63,7 +63,7 @@ semantics in a second test-only controller. The current clean-wheel
 generalize to the installed suite, not a second inline suite to grow in
 parallel.
 
-## Additive probes and evidence closure
+## Additive probes and unresolved capability inventory
 
 Adapter-local probes cover facts RAES cannot know: the selected source/ledger
 join, installed-source identity, stochastic-stream dispositions, private action
@@ -71,15 +71,12 @@ mapping, observation sealing, evaluator ownership, native terminal semantics,
 and verified close. They do not become `BackendConformanceReport.cases`, a
 fixture overlay, or a realization-harness misuse.
 
-Every affirmative manifest capability must resolve from the live
-`backend_manifest_payload()` to evidence references owned by probes that
-passed. The existing shared pointer traversal remains the closure check. Stable
-NASim-local probe references may be requirements for the applicable component
-surface, but the requirement mapping contains only JSON pointers and evidence
-references—not copied capability values—and must fail closed when a new
-affirmative capability has no evidence. Source-ledger validation alone is not
-runtime evidence; canonical target conformance alone is not source-protocol
-evidence.
+Every affirmative manifest capability is inventoried from the live
+`backend_manifest_payload()` as unresolved. The shared pointer traversal is
+inventory only: there is no static pointer-to-reference map and no broad pass
+flag can certify a leaf. Source-ledger validation alone is not runtime evidence;
+canonical target conformance alone is not source-protocol evidence; their
+conjunction is still not field-verifiable capability evidence.
 
 Leakage coverage is the success/failure cross-product over the four declared
 backend surfaces—provisioner, orchestrator, participant runtime, and evaluator—
@@ -106,7 +103,7 @@ impossible.
 The PR suite is fixed, deterministic, offline, and dependency-light. It uses
 the selected public seed `20260802`, a fully constructed `RuntimeTarget`, and an
 explicit deterministic injected driver. It runs the published profile/corpus,
-the additive success/failure probes, capability-evidence closure, leakage
+the additive success/failure probes, unresolved capability inventory, leakage
 checks, report projection, and cleanup. The suite never derives seed or case
 order from time, PR number, hashing, environment, test order, or global random
 state.
@@ -127,8 +124,8 @@ qualified runtime from issue #32. It must explicitly construct a real
 inventory without substituting a stub/mock at any point, run
 `run_nasim_conformance()` through that target, serialize the canonical report
 through `backend_conformance_report_payload()`, collect
-`nasim_source_protocol_diagnostics()` and manifest capability evidence, validate
-every local diagnostic, close capability evidence, and verify cleanup. It does
+`nasim_source_protocol_diagnostics()` and unresolved capability inventory,
+validate every local diagnostic, and verify cleanup. It does
 not replace the deterministic injected-driver CI probe; it exercises the same
 composition against installed NASim. The emitted report, diagnostics, evidence
 references, and cleanup receipt must not contain native action coordinates,
