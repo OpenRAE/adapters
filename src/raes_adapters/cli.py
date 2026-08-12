@@ -79,6 +79,7 @@ from raes_adapters.cyborg import (
     run_cyborg_conformance_suite,
     verify_selected_cyborg_source,
 )
+from raes_adapters.cyborg import reproduction as cyborg_reproduction
 from raes_adapters.cyborg import researcher as cyborg_researcher
 from raes_adapters.nasim import load_qualification as load_nasim_qualification
 from raes_adapters.nasim import researcher as nasim_researcher
@@ -310,6 +311,12 @@ def _parser() -> _Parser:
     run_parser.add_argument("--suite", choices=("pr", "full"), default="pr")
     run_parser.add_argument("--output", type=_relative_output, required=True)
     _add_admission_arguments(run_parser)
+
+    reproduce_parser = commands.add_parser("reproduce")
+    reproduce_parser.add_argument("--phase", choices=("declare", "run", "verify"), required=True)
+    reproduce_parser.add_argument("--output", type=_relative_output, required=True)
+    reproduce_parser.add_argument("--source-root", type=Path)
+    reproduce_parser.add_argument("--bundle", type=Path)
     return parser
 
 
@@ -1683,6 +1690,8 @@ def _conformance_controls_absent(args: argparse.Namespace) -> bool:
 def _dispatch(args: argparse.Namespace) -> int:
     """Dispatch one parsed command through its closed execution path."""
 
+    if args.command == "reproduce":
+        return _reproduce(args)
     if args.command == "inspect":
         print(json.dumps(_adapter(args).inspection_payload(), sort_keys=True))
         return 0
@@ -1690,6 +1699,77 @@ def _dispatch(args: argparse.Namespace) -> int:
     if args.command == "validate":
         return _validated_admission(adapter, args)
     return _run_command(adapter, args)
+
+
+def _reproduce(args: argparse.Namespace) -> int:
+    """Dispatch the frozen CAGE-2 study and offline recomputation paths."""
+
+    source_root = args.source_root
+    bundle = args.bundle
+    if args.phase in {"declare", "run"}:
+        if source_root is None or bundle is not None:
+            raise _CommandFailure(
+                EXIT_VALIDATION,
+                _CONTROLS_INVALID_CODE,
+                _CONTROLS_INVALID_MESSAGE,
+            )
+    elif bundle is None or source_root is not None:
+        raise _CommandFailure(
+            EXIT_VALIDATION,
+            _CONTROLS_INVALID_CODE,
+            _CONTROLS_INVALID_MESSAGE,
+        )
+    invocation_root = Path.cwd().resolve()
+    output = (invocation_root / args.output).resolve()
+    try:
+        relative_output = output.relative_to(invocation_root)
+    except ValueError:
+        relative_output = None
+    if relative_output is None or not relative_output.parts:
+        raise _CommandFailure(
+            EXIT_OUTPUT,
+            "researcher.output.unavailable",
+            "output root is unavailable",
+        )
+    result: dict[str, object]
+    try:
+        if args.phase == "declare":
+            cyborg_reproduction.write_declaration(source_root, output)
+            result = {
+                "disposition": "declared",
+                "frozen_revision": cyborg_reproduction.FROZEN_SELECTION.frozen_revision,
+                "inventory": _INVENTORY_NAME,
+            }
+        elif args.phase == "run":
+            cyborg_reproduction.run_full_study(source_root, output)
+            verified = cyborg_reproduction.verify_bundle(output)
+            result = {"disposition": "completed", "inventory": _INVENTORY_NAME, **verified}
+        else:
+            cyborg_reproduction.recompute_bundle(bundle, output)
+            result = {
+                "disposition": "verified",
+                "inventory": _INVENTORY_NAME,
+            }
+    except FileExistsError:
+        raise _CommandFailure(
+            EXIT_OUTPUT,
+            "researcher.output.unavailable",
+            "output root is unavailable",
+        ) from None
+    except ValueError:
+        raise _CommandFailure(
+            EXIT_VALIDATION,
+            "researcher.validation.reproduction-invalid",
+            "reproduction evidence is invalid",
+        ) from None
+    except Exception:
+        raise _CommandFailure(
+            EXIT_RUNTIME,
+            _RUNTIME_FAILURE_CODE,
+            "reproduction execution failed",
+        ) from None
+    print(json.dumps(result, sort_keys=True))
+    return 0
 
 
 def _run_command(adapter: _BackendAdapter, args: argparse.Namespace) -> int:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from raes_contracts.contracts import (  # type: ignore[import-untyped]
@@ -332,6 +332,10 @@ def _start_runtime(
     diagnostics.extend(diagnostic_model(item) for item in started.diagnostics)
     if not started.success or target.participant_runtime is None or target.evaluator is None:
         raise RuntimeError("researcher orchestration admission failed")
+    begin_run = getattr(target.orchestrator, "begin_run", None)
+    if not callable(begin_run):
+        raise RuntimeError("researcher run identity admission failed")
+    begin_run(controls.run_id)
     evaluation = planned.evaluation
     if not evaluation.resources:
         evaluation = cage2_evaluation_plan()
@@ -459,6 +463,129 @@ def execute_episode(
     )
 
 
+def _begin_independent_run(
+    target: RuntimeTarget,
+    baseline: RuntimeSnapshot,
+    controls: RunControls,
+    diagnostics: list[DiagnosticModel],
+) -> RuntimeSnapshot:
+    """Reset one retained native session and start a fresh portable run."""
+
+    if target.participant_runtime is None or target.orchestrator is None:
+        raise RuntimeError("researcher reset runtime is unavailable")
+    begin = getattr(target.participant_runtime, "begin_independent_run", None)
+    if not callable(begin) or begin() is not True:
+        raise RuntimeError("researcher coordinated reset failed")
+    begin_run = getattr(target.orchestrator, "begin_run", None)
+    if not callable(begin_run):
+        raise RuntimeError("researcher run identity admission failed")
+    begin_run(controls.run_id)
+    return _initialize_participants(target, baseline, controls, diagnostics)
+
+
+def execute_episode_series(
+    scenario: object,
+    controls: Sequence[RunControls],
+    *,
+    driver: CyborgDriver,
+    episode_consumer: Callable[[RunControls, EpisodeEvidence], None] | None = None,
+    retain_evidence: bool = True,
+) -> tuple[EpisodeEvidence, ...]:
+    """Execute one ordered condition series on a retained native session.
+
+    The supplied driver must already own the frozen study-scoped stream.  The
+    target therefore constructs without a per-episode seed and coordinated
+    resets continue, rather than restart, that stream.
+    """
+
+    if not controls:
+        raise ValueError("researcher condition series is empty")
+    first = controls[0]
+    if any(
+        item.seed != first.seed
+        or item.max_steps != first.max_steps
+        or item.red_variant != first.red_variant
+        for item in controls
+    ):
+        raise ValueError("researcher condition series controls are inconsistent")
+    target = create_cyborg_target(
+        scenario=scenario,
+        seed=None,
+        reseed_on_reset=False,
+        driver=driver,
+    )
+    baseline, startup_diagnostics, evaluation_plan = _start_runtime(target, scenario, first)
+    snapshot = _initialize_participants(target, baseline, first, startup_diagnostics)
+    captured: list[
+        tuple[
+            int,
+            tuple[ExperimentEvidenceRecordModel, ...],
+            tuple[ExperimentDerivedMeasureModel, ...],
+            dict[str, dict[str, object]],
+            dict[str, dict[str, object]],
+            tuple[DiagnosticModel, ...],
+        ]
+    ] = []
+    cleanup_verified = False
+    try:
+        for index, item in enumerate(controls):
+            diagnostics = list(startup_diagnostics) if index == 0 else []
+            if index:
+                snapshot = _begin_independent_run(target, baseline, item, diagnostics)
+            snapshot, completed_steps = _execute_steps(target, snapshot, item, diagnostics)
+            snapshot, records, measures = _evaluate_episode(
+                target, snapshot, diagnostics, evaluation_plan
+            )
+            captured.append(
+                (
+                    completed_steps,
+                    records,
+                    measures,
+                    {
+                        address: dict(payload)
+                        for address, payload in snapshot.proposition_truth_results.items()
+                    },
+                    {
+                        address: dict(payload)
+                        for address, payload in snapshot.evaluation_results.items()
+                    },
+                    tuple(diagnostics),
+                )
+            )
+            if episode_consumer is not None:
+                episode_consumer(
+                    item,
+                    EpisodeEvidence(
+                        completed_steps=completed_steps,
+                        evidence_records=records,
+                        derived_measures=measures,
+                        proposition_truth_results=captured[-1][3],
+                        objective_results=captured[-1][4],
+                        diagnostics=tuple(diagnostics),
+                        cleanup_verified=False,
+                    ),
+                )
+            if not retain_evidence:
+                captured.pop()
+    finally:
+        cleanup = RuntimeManager(target, initial_snapshot=snapshot).destroy()
+        cleanup_verified = cleanup.success
+    if not cleanup_verified:
+        raise RuntimeError("researcher cleanup failed")
+    return tuple(
+        EpisodeEvidence(
+            completed_steps=completed,
+            evidence_records=records,
+            derived_measures=measures,
+            proposition_truth_results=truth,
+            objective_results=objectives,
+            diagnostics=diagnostics,
+            cleanup_verified=True,
+        )
+        for completed, records, measures, truth, objectives, diagnostics in captured
+    )
+
+
 __all__ = [
     "EpisodeEvidence",
     "RunControls",
@@ -466,4 +593,5 @@ __all__ = [
     "archival_run",
     "blue_implementation_provenance",
     "execute_episode",
+    "execute_episode_series",
 ]

@@ -354,8 +354,13 @@ def _prepared_target(
     *,
     max_steps: int,
     red_variant: str = "sleep",
+    reseed_on_reset: bool = True,
 ) -> tuple[Any, RuntimeSnapshot]:
-    target = create_cyborg_target(driver=driver, seed=7)
+    target = create_cyborg_target(
+        driver=driver,
+        seed=7,
+        reseed_on_reset=reseed_on_reset,
+    )
     assert target.orchestrator is not None
     assert target.participant_runtime is not None
     assert target.time_runtime is not None
@@ -627,11 +632,13 @@ def test_evaluator_joins_supported_objective_to_typed_evidence_and_measure() -> 
     measures = evaluator.derived_measures()
     assert records
     assert all(isinstance(item, ExperimentEvidenceRecordModel) for item in records)
-    assert len(measures) == 1
-    assert isinstance(measures[0], ExperimentDerivedMeasureModel)
-    assert measures[0].value == -0.1
-    assert measures[0].measure_kind == "score"
-    assert "not a conformance" in measures[0].limitations[0]
+    assert all(isinstance(item, ExperimentDerivedMeasureModel) for item in measures)
+    measure_values = {item.metric_ref.ref_id: item.value for item in measures}
+    assert measure_values["cage2-cumulative-blue-confidentiality-reward"] == -0.1
+    assert measures[-1].value == -0.1
+    assert measures[-1].measure_kind == "score"
+    assert measures[-1].metric_ref.ref_id == "cage2-cumulative-blue-reward"
+    assert "not a conformance" in measures[-1].limitations[0]
     joined = str([item.model_dump(mode="json") for item in records])
     for expected in (
         f"{_WORKFLOW}-run",
@@ -1020,6 +1027,33 @@ def test_coordinated_reset_resets_the_aggregate_once() -> None:
         f"{_GREEN}-episode-2",
         f"{_RED}-episode-2",
     }
+
+
+def test_study_scoped_reset_does_not_reseed_each_episode() -> None:
+    driver = FakeExecutionDriver()
+    target, snapshot = _prepared_target(
+        driver,
+        max_steps=1,
+        reseed_on_reset=False,
+    )
+    assert target.participant_runtime is not None
+    exhausted = target.participant_runtime.admit_action(_request(), snapshot)
+    assert exhausted.success
+
+    reset = target.participant_runtime.reset_many(
+        tuple(
+            ParticipantEpisodeResetRequest(
+                participant_address=address,
+                episode_id=f"{address}-episode-2",
+            )
+            for address in (_BLUE, _GREEN, _RED)
+        ),
+        exhausted.snapshot,
+    )
+
+    assert reset.success
+    assert driver.resets == 1
+    assert driver.seed is None
     assert {
         value["previous_episode_id"]
         for value in reset.snapshot.participant_episode_results.values()
@@ -1318,6 +1352,48 @@ def test_source_driver_step_projects_turn_and_preserves_caller_rng(
     )
 
 
+def test_source_driver_ordered_stream_continues_across_unseeded_resets() -> None:
+    class NativeHandle:
+        def __init__(self) -> None:
+            self.reset_draws: list[float] = []
+
+        def reset(self) -> object:
+            self.reset_draws.append(random.random())
+            return object()
+
+        def set_seed(self, seed: int) -> None:
+            random.seed(seed)
+
+        def shutdown(self) -> None:
+            return None
+
+    source_driver = SourceInstalledCyborgDriver(expected_version="2.1")
+    source_driver.begin_ordered_stream(153)
+    initial = source_driver.ordered_stream_checkpoint()
+    native = NativeHandle()
+    source_driver._random_states[id(native)] = initial
+    random.seed(99)
+    caller_state = random.getstate()
+
+    assert source_driver.reset(native, seed=None)
+    assert source_driver.reset(native, seed=None)
+
+    expected = random.Random(153)
+    assert native.reset_draws == [expected.random(), expected.random()]
+    assert random.getstate() == caller_state
+
+
+def test_source_driver_ordered_stream_checkpoint_can_discard_provisional_construction() -> None:
+    source_driver = SourceInstalledCyborgDriver(expected_version="2.1")
+    source_driver.begin_ordered_stream(153)
+    checkpoint = source_driver.ordered_stream_checkpoint()
+    source_driver.restore_ordered_stream(random.Random(7).getstate())
+
+    source_driver.restore_ordered_stream(checkpoint)
+
+    assert source_driver.ordered_stream_checkpoint() == checkpoint
+
+
 def test_source_driver_projects_actual_dict_observation_shape(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1447,6 +1523,37 @@ def test_source_driver_retains_zero_availability_objective_evidence() -> None:
             "source-ledger:reward-components",
         ),
     )
+
+
+def test_source_driver_accepts_bounded_reward_reconciliation_roundoff() -> None:
+    class NativeHandle:
+        def get_rewards(self) -> dict[str, float]:
+            return {"Blue": -0.3, "Green": 0.0, "Red": 0.3}
+
+        def get_reward_breakdown(self, agent: str) -> dict[str, object]:
+            sign = -1.0 if agent == "Blue" else 1.0
+            return {
+                "User0": SimpleNamespace(confidentiality=sign * 0.1, availability=0.0),
+                "User1": SimpleNamespace(confidentiality=sign * 0.2, availability=0.0),
+            }
+
+    projected = SourceInstalledCyborgDriver._project_evaluation_turn(
+        NativeHandle(),
+        _NativeEvaluationContext(
+            external_address=_SLEEP,
+            host_addresses={
+                "User0": "provision.node.user-0",
+                "User1": "provision.node.user-1",
+            },
+            run_id="run-roundoff",
+            episode_id="episode-roundoff",
+            action_instance_id="action-roundoff",
+            logical_step=1,
+            terminal_cause="logical-step-limit",
+        ),
+    )
+
+    assert all(item.component != "action-cost" for item in projected.components)
 
 
 @pytest.mark.parametrize(

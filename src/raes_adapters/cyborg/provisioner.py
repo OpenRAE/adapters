@@ -6,7 +6,7 @@ import copy
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import NamedTuple
+from typing import NamedTuple, cast
 
 from raes_backend_protocols.protocols import Provisioner  # type: ignore[import-untyped]
 from raes_contracts.contracts import (  # type: ignore[import-untyped]
@@ -64,6 +64,7 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
         profile_id: str,
         source_commit: str,
         seed: int | None,
+        reseed_on_reset: bool = True,
         scenario_binding: CyborgScenarioBinding | None = None,
     ) -> None:
         self._driver = driver
@@ -71,6 +72,7 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
         self._profile_id = profile_id
         self._source_commit = source_commit
         self._seed = seed
+        self._reseed_on_reset = reseed_on_reset
         self._scenario_binding = scenario_binding
         self._active: object | None = None
         self._active_available = False
@@ -137,9 +139,12 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
         """Construct the desired backend before retiring the current handle."""
 
         descriptor = self._descriptor(plan)
+        checkpoint = self._ordered_stream_checkpoint()
         try:
             candidate = self._driver.construct(descriptor, seed=self._seed)
         except Exception:
+            if checkpoint is not None:
+                self._restore_ordered_stream(checkpoint)
             return _failure(
                 snapshot,
                 _diagnostic(
@@ -152,8 +157,12 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
             self._active_available = False
             if not self._cleanup_handle(candidate):
                 self._pending_cleanup.append(candidate)
+            if checkpoint is not None:
+                self._restore_ordered_stream(checkpoint)
             return _failure(snapshot, _cleanup_failed_diagnostic())
 
+        if checkpoint is not None:
+            self._restore_ordered_stream(checkpoint)
         self._active = candidate
         self._active_available = True
         self._active_descriptor = descriptor
@@ -161,6 +170,25 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
         self._active_host_addresses = host_address_map(descriptor)
         self._clear_evaluation()
         return _success(snapshot, reconciliation, self._realization_envelope)
+
+    def _ordered_stream_checkpoint(self) -> object | None:
+        """Capture an optional driver study stream around provisional realization."""
+
+        checkpoint = getattr(self._driver, "ordered_stream_checkpoint", None)
+        if not callable(checkpoint):
+            return None
+        try:
+            return cast(object, checkpoint())
+        except RuntimeError:
+            return None
+
+    def _restore_ordered_stream(self, checkpoint: object) -> None:
+        """Restore a captured driver stream or fail the provisional realization."""
+
+        restore = getattr(self._driver, "restore_ordered_stream", None)
+        if not callable(restore):
+            raise RuntimeError("ordered study stream is unavailable")
+        restore(checkpoint)
 
     @contextmanager
     def execution_transaction(self) -> Iterator[None]:
@@ -314,7 +342,8 @@ class CyborgProvisioner(Provisioner):  # type: ignore[misc]
             if self._active is None or not self._active_available or not callable(reset):
                 return False
             try:
-                succeeded = reset(self._active, seed=self._seed) is True
+                reset_seed = self._seed if self._reseed_on_reset else None
+                succeeded = reset(self._active, seed=reset_seed) is True
             except Exception:
                 succeeded = False
             if not succeeded:

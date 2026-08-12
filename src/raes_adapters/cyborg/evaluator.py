@@ -779,6 +779,79 @@ class CyborgEvaluator(_EvaluatorBase):
         if not facts or not records:
             return tuple(measures)
         blue_total = sum(dict(turn.rewards)[_BLUE] for turn in facts)
+        blue_components: dict[str, float] = dict.fromkeys(_SUPPORTED_COMPONENTS, 0.0)
+        component_refs: dict[str, list[ExperimentEvidenceRecordReferenceModel]] = {
+            name: [] for name in _SUPPORTED_COMPONENTS
+        }
+        record_by_id = {record.evidence_record_id: record for record in records}
+        for turn in facts:
+            for component in turn.components:
+                if (
+                    component.participant_address == _BLUE
+                    and component.component in _SUPPORTED_COMPONENTS
+                ):
+                    blue_components[component.component] += component.value
+                    record_id = _identity(
+                        turn.run_id,
+                        turn.action_instance_id,
+                        turn.logical_step,
+                        component.participant_address,
+                        component.target_address,
+                        component.component,
+                    )
+                    evidence_id = "evidence-record.cyborg-cage2." + record_id
+                    if evidence_id in record_by_id:
+                        component_refs[component.component].append(
+                            ExperimentEvidenceRecordReferenceModel(
+                                ref_kind="evidence-record",
+                                ref_id=evidence_id,
+                                ref_version=_RECORD_VERSION,
+                            )
+                        )
+        for component_name in sorted(_SUPPORTED_COMPONENTS):
+            refs_for_component = component_refs[component_name]
+            if refs_for_component:
+                measures.append(
+                    ExperimentDerivedMeasureModel(
+                        schema_version="experiment-derived-measure/v1",
+                        derived_measure_id=(
+                            f"measure.cyborg-cage2.cumulative-blue-{component_name}."
+                            + _identity(facts[-1].run_id, facts[-1].episode_id, len(facts))
+                        ),
+                        measure_version="1.0.0",
+                        measure_kind="metric",
+                        metric_ref=ExperimentReferenceModel(
+                            ref_kind="metric-definition",
+                            ref_id=f"cage2-cumulative-blue-{component_name}-reward",
+                            ref_version="1.0.0",
+                        ),
+                        method=ExperimentDerivedMeasureMethodModel(
+                            method_id=f"cyborg-cage2-sum-blue-{component_name}-rewards",
+                            method_version="1.0.0",
+                            name=f"Cumulative committed Blue {component_name} reward",
+                            description=(
+                                "Sum the named committed per-step Blue component in logical "
+                                "step order."
+                            ),
+                        ),
+                        source_evidence_refs=refs_for_component,
+                        generated_at=now,
+                        value_status="reported",
+                        value=blue_components[component_name],
+                        uncertainty="No uncertainty interval is inferred from one source run.",
+                        limitations=[
+                            "This component is not a conformance result, objective outcome, "
+                            "or replication-equivalence claim."
+                        ],
+                        provenance_refs=[
+                            ExperimentReferenceModel(
+                                ref_kind="run",
+                                ref_id=facts[-1].run_id,
+                                ref_version="1.0.0",
+                            )
+                        ],
+                    )
+                )
         refs = [
             ExperimentEvidenceRecordReferenceModel(
                 ref_kind="evidence-record",

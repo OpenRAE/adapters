@@ -227,7 +227,7 @@ def _add_action_cost(
     if not math.isclose(red_difference, 0.0, rel_tol=0.0, abs_tol=1e-9):
         raise ValueError
     action_cost = totals[_BLUE] - component_totals[_BLUE]
-    if action_cost > 0.0:
+    if action_cost > 0.0 and not math.isclose(action_cost, 0.0, rel_tol=0.0, abs_tol=1e-9):
         raise ValueError
     if external_address == _RESTORE and not math.isclose(
         action_cost, -1.0, rel_tol=0.0, abs_tol=1e-9
@@ -363,6 +363,31 @@ class SourceInstalledCyborgDriver(CyborgDriver):
         self._runtime_workspace: tempfile.TemporaryDirectory[str] | None = None
         self._cyborg_type: _NativeCyborgType | None = None
         self._random_states: dict[int, object] = {}
+        self._ordered_stream_state: object | None = None
+
+    def begin_ordered_stream(self, seed: int) -> None:
+        """Initialize one study-scoped Python random stream without global effects."""
+
+        if type(seed) is not int or not 0 <= seed <= 0xFFFFFFFF:
+            raise ValueError("ordered stream seed is outside the supported range")
+        self._ordered_stream_state = random.Random(seed).getstate()
+
+    def ordered_stream_checkpoint(self) -> object:
+        """Return the current opaque stream checkpoint for bounded orchestration."""
+
+        if self._ordered_stream_state is None:
+            raise RuntimeError("ordered stream is not initialized")
+        return self._ordered_stream_state
+
+    def restore_ordered_stream(self, checkpoint: object) -> None:
+        """Restore a checkpoint previously returned by this driver."""
+
+        validator = random.Random()
+        try:
+            validator.setstate(cast(tuple[object, ...], checkpoint))
+        except Exception:
+            raise ValueError("ordered stream checkpoint is invalid") from None
+        self._ordered_stream_state = checkpoint
 
     def construct(
         self,
@@ -418,6 +443,8 @@ class SourceInstalledCyborgDriver(CyborgDriver):
                 try:
                     if seed is not None:
                         random.seed(seed)
+                    elif self._ordered_stream_state is not None:
+                        random.setstate(cast(tuple[object, ...], self._ordered_stream_state))
                     native = (
                         cyborg_type(str(scenario_path), "sim")
                         if agents is None
@@ -441,11 +468,14 @@ class SourceInstalledCyborgDriver(CyborgDriver):
     def cleanup(self, handle: object) -> bool:
         """Shut down an owned CybORG backend without inspecting native output."""
 
+        retained_state = self._random_states.get(id(handle))
         try:
             cast(_NativeCyborg, handle).shutdown()
         except Exception:
             return False
         self._random_states.pop(id(handle), None)
+        if retained_state is not None and self._ordered_stream_state is not None:
+            self._ordered_stream_state = retained_state
         return True
 
     def reset(self, handle: object, *, seed: int | None) -> bool:
@@ -457,6 +487,11 @@ class SourceInstalledCyborgDriver(CyborgDriver):
                 if seed is not None:
                     random.seed(seed)
                     cast(_NativeCyborg, handle).set_seed(seed)
+                else:
+                    stream_state = self._random_states.get(id(handle))
+                    if stream_state is None:
+                        raise ValueError
+                    random.setstate(cast(tuple[object, ...], stream_state))
                 cast(_NativeCyborg, handle).reset()
                 self._random_states[id(handle)] = random.getstate()
             except Exception:
