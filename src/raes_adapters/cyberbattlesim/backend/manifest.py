@@ -27,6 +27,7 @@ from raes_contracts.vocabulary import (  # type: ignore[import-untyped]
 
 from raes_adapters._manifest_support import (
     assemble_manifest,
+    declared_cleanup_capabilities,
     read_source_revision,
 )
 from raes_adapters.cyberbattlesim import load_qualification
@@ -212,7 +213,7 @@ def _evaluator_capabilities() -> EvaluatorCapabilities:
 def _cleanup_capabilities() -> CleanupCapabilities:
     """Declare the CyberBattleSim cleanup surface."""
 
-    return CleanupCapabilities(
+    return declared_cleanup_capabilities(
         name="cyberbattlesim-cleanup",
         supported_contract_versions=CLEANUP_CAPABILITY_REQUIRED_CONTRACTS,
         supported_action_kinds=frozenset({"destroy", "reset", "verify"}),

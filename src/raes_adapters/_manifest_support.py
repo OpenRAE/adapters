@@ -21,6 +21,7 @@ from raes_backend_protocols.capabilities import (  # type: ignore[import-untyped
     CLEANUP_CAPABILITY_REQUIRED_CONTRACTS,
     PARTICIPANT_RUNTIME_CAPABILITY_REQUIRED_CONTRACTS,
     BackendCapabilitySet,
+    CleanupCapabilities,
 )
 from raes_contracts.apparatus import (  # type: ignore[import-untyped]
     ConceptBinding,
@@ -146,6 +147,31 @@ def read_source_revision(load_qualification: Callable[[], Mapping[str, object]])
     return revision
 
 
+def declared_cleanup_capabilities(
+    *,
+    name: str,
+    supported_contract_versions: frozenset[str],
+    supported_action_kinds: frozenset[str],
+    supported_verification_methods: frozenset[str],
+    supports_reusable_state: bool,
+    supports_residual_state_disclosure: bool,
+) -> CleanupCapabilities:
+    """Build exactly the cleanup declaration supplied by one backend.
+
+    Every value remains backend-local and explicit; this helper only projects
+    those values into the published RAES model.
+    """
+
+    return CleanupCapabilities(
+        name=name,
+        supported_contract_versions=supported_contract_versions,
+        supported_action_kinds=supported_action_kinds,
+        supported_verification_methods=supported_verification_methods,
+        supports_reusable_state=supports_reusable_state,
+        supports_residual_state_disclosure=supports_residual_state_disclosure,
+    )
+
+
 def assemble_manifest(
     name: str,
     capabilities: BackendCapabilitySet,
@@ -170,6 +196,7 @@ __all__ = [
     "adapter_version",
     "assemble_manifest",
     "concept_bindings",
+    "declared_cleanup_capabilities",
     "model_contract_id",
     "read_source_revision",
     "supported_contracts",

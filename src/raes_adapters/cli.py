@@ -1350,21 +1350,29 @@ def _retain_failure(output: Path, code: str, message: str) -> None:
         atomic_write_json_artifact(output / "failure.json", diagnostic.model_dump(mode="json"))
 
 
+def _admit_native_run_or_command_failure(
+    adapter: _BackendAdapter, args: argparse.Namespace
+) -> _AdmittedRun:
+    """Project internal admission failures to their stable CLI diagnostics."""
+
+    try:
+        return _admit_native_run(adapter, args)
+    except _EvidenceUnverifiableFailure:
+        raise _CommandFailure(
+            EXIT_VALIDATION, _EVIDENCE_UNVERIFIABLE_CODE, _EVIDENCE_UNVERIFIABLE_MESSAGE
+        ) from None
+    except _ValidationFailure:
+        raise _CommandFailure(
+            EXIT_VALIDATION, _CONTROLS_INVALID_CODE, _CONTROLS_INVALID_MESSAGE
+        ) from None
+
+
 def _run_conformance(adapter: _BackendAdapter, args: argparse.Namespace) -> int:
     """Run the selected backend conformance suite and seal its evidence."""
 
     admitted: _AdmittedRun | None = None
     if adapter.expected_pack_digest is not None:
-        try:
-            admitted = _admit_native_run(adapter, args)
-        except _EvidenceUnverifiableFailure:
-            raise _CommandFailure(
-                EXIT_VALIDATION, _EVIDENCE_UNVERIFIABLE_CODE, _EVIDENCE_UNVERIFIABLE_MESSAGE
-            ) from None
-        except _ValidationFailure:
-            raise _CommandFailure(
-                EXIT_VALIDATION, _CONTROLS_INVALID_CODE, _CONTROLS_INVALID_MESSAGE
-            ) from None
+        admitted = _admit_native_run_or_command_failure(adapter, args)
         if util.find_spec(adapter.native_module) is None:
             raise _CommandFailure(
                 EXIT_RUNTIME,
@@ -1441,16 +1449,7 @@ def _native_environment(
 ) -> tuple[_AdmittedRun, Path]:
     """Admit native inputs, selected source, and the exclusive output root."""
 
-    try:
-        admitted = _admit_native_run(adapter, args)
-    except _EvidenceUnverifiableFailure:
-        raise _CommandFailure(
-            EXIT_VALIDATION, _EVIDENCE_UNVERIFIABLE_CODE, _EVIDENCE_UNVERIFIABLE_MESSAGE
-        ) from None
-    except _ValidationFailure:
-        raise _CommandFailure(
-            EXIT_VALIDATION, _CONTROLS_INVALID_CODE, _CONTROLS_INVALID_MESSAGE
-        ) from None
+    admitted = _admit_native_run_or_command_failure(adapter, args)
     if util.find_spec(adapter.native_module) is None:
         raise _CommandFailure(
             EXIT_RUNTIME,
@@ -1675,16 +1674,7 @@ def _run_native(adapter: _BackendAdapter, args: argparse.Namespace) -> int:
 def _validated_admission(adapter: _BackendAdapter, args: argparse.Namespace) -> int:
     """Validate native controls and report the admitted run scope."""
 
-    try:
-        admitted = _admit_native_run(adapter, args)
-    except _EvidenceUnverifiableFailure:
-        raise _CommandFailure(
-            EXIT_VALIDATION, _EVIDENCE_UNVERIFIABLE_CODE, _EVIDENCE_UNVERIFIABLE_MESSAGE
-        ) from None
-    except _ValidationFailure:
-        raise _CommandFailure(
-            EXIT_VALIDATION, _CONTROLS_INVALID_CODE, _CONTROLS_INVALID_MESSAGE
-        ) from None
+    admitted = _admit_native_run_or_command_failure(adapter, args)
     print(
         json.dumps(
             {
