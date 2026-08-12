@@ -90,6 +90,162 @@ def _identity(*parts: object) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
+def _blue_component_values_and_refs(
+    facts: tuple[_NativeEvaluationTurn, ...],
+    records: tuple[ExperimentEvidenceRecordModel, ...],
+) -> tuple[
+    dict[str, float],
+    dict[str, list[ExperimentEvidenceRecordReferenceModel]],
+]:
+    """Accumulate allowlisted Blue components and their committed evidence refs."""
+
+    values: dict[str, float] = dict.fromkeys(_SUPPORTED_COMPONENTS, 0.0)
+    refs: dict[str, list[ExperimentEvidenceRecordReferenceModel]] = {
+        name: [] for name in _SUPPORTED_COMPONENTS
+    }
+    record_ids = {record.evidence_record_id for record in records}
+    for turn in facts:
+        for component in turn.components:
+            if component.participant_address != _BLUE:
+                continue
+            if component.component not in _SUPPORTED_COMPONENTS:
+                continue
+            values[component.component] += component.value
+            record_id = _identity(
+                turn.run_id,
+                turn.action_instance_id,
+                turn.logical_step,
+                component.participant_address,
+                component.target_address,
+                component.component,
+            )
+            evidence_id = "evidence-record.cyborg-cage2." + record_id
+            if evidence_id in record_ids:
+                refs[component.component].append(
+                    ExperimentEvidenceRecordReferenceModel(
+                        ref_kind="evidence-record",
+                        ref_id=evidence_id,
+                        ref_version=_RECORD_VERSION,
+                    )
+                )
+    return values, refs
+
+
+def _blue_component_measure(
+    facts: tuple[_NativeEvaluationTurn, ...],
+    component_name: str,
+    value: float,
+    refs: list[ExperimentEvidenceRecordReferenceModel],
+    now: str,
+) -> ExperimentDerivedMeasureModel:
+    """Build one allowlisted cumulative Blue component measure."""
+
+    identity = _identity(facts[-1].run_id, facts[-1].episode_id, len(facts))
+    return ExperimentDerivedMeasureModel(
+        schema_version="experiment-derived-measure/v1",
+        derived_measure_id=f"measure.cyborg-cage2.cumulative-blue-{component_name}.{identity}",
+        measure_version="1.0.0",
+        measure_kind="metric",
+        metric_ref=ExperimentReferenceModel(
+            ref_kind="metric-definition",
+            ref_id=f"cage2-cumulative-blue-{component_name}-reward",
+            ref_version="1.0.0",
+        ),
+        method=ExperimentDerivedMeasureMethodModel(
+            method_id=f"cyborg-cage2-sum-blue-{component_name}-rewards",
+            method_version="1.0.0",
+            name=f"Cumulative committed Blue {component_name} reward",
+            description="Sum the named committed per-step Blue component in logical step order.",
+        ),
+        source_evidence_refs=refs,
+        generated_at=now,
+        value_status="reported",
+        value=value,
+        uncertainty="No uncertainty interval is inferred from one source run.",
+        limitations=[
+            "This component is not a conformance result, objective outcome, "
+            "or replication-equivalence claim."
+        ],
+        provenance_refs=[
+            ExperimentReferenceModel(ref_kind="run", ref_id=facts[-1].run_id, ref_version="1.0.0")
+        ],
+    )
+
+
+def _blue_component_measures(
+    facts: tuple[_NativeEvaluationTurn, ...],
+    records: tuple[ExperimentEvidenceRecordModel, ...],
+    now: str,
+) -> list[ExperimentDerivedMeasureModel]:
+    """Build measures only for Blue components with retained source evidence."""
+
+    values, component_refs = _blue_component_values_and_refs(facts, records)
+    return [
+        _blue_component_measure(facts, name, values[name], component_refs[name], now)
+        for name in sorted(_SUPPORTED_COMPONENTS)
+        if component_refs[name]
+    ]
+
+
+def _blue_score_refs(
+    records: tuple[ExperimentEvidenceRecordModel, ...],
+) -> list[ExperimentEvidenceRecordReferenceModel]:
+    """Return evidence references for committed per-step Blue rewards."""
+
+    return [
+        ExperimentEvidenceRecordReferenceModel(
+            ref_kind="evidence-record",
+            ref_id=record.evidence_record_id,
+            ref_version=_RECORD_VERSION,
+        )
+        for record in records
+        if f"participant={_BLUE};" in (record.raw_content.payload_summary or "")
+        and "meaning=per-step-reward;" in (record.raw_content.payload_summary or "")
+    ]
+
+
+def _blue_score_measure(
+    facts: tuple[_NativeEvaluationTurn, ...],
+    records: tuple[ExperimentEvidenceRecordModel, ...],
+    now: str,
+) -> ExperimentDerivedMeasureModel:
+    """Build the cumulative committed Blue score measure."""
+
+    identity = _identity(facts[-1].run_id, facts[-1].episode_id, len(facts))
+    return ExperimentDerivedMeasureModel(
+        schema_version="experiment-derived-measure/v1",
+        derived_measure_id=f"measure.cyborg-cage2.cumulative-blue-score.{identity}",
+        measure_version="1.0.0",
+        measure_kind="score",
+        metric_ref=ExperimentReferenceModel(
+            ref_kind="metric-definition",
+            ref_id="cage2-cumulative-blue-reward",
+            ref_version="1.0.0",
+        ),
+        method=ExperimentDerivedMeasureMethodModel(
+            method_id="cyborg-cage2-sum-committed-blue-rewards",
+            method_version="1.0.0",
+            name="Cumulative committed Blue reward",
+            description="Sum exact per-step Blue rewards in committed logical-step order.",
+        ),
+        source_evidence_refs=_blue_score_refs(records),
+        generated_at=now,
+        value_status="reported",
+        value=sum(dict(turn.rewards)[_BLUE] for turn in facts),
+        uncertainty="No uncertainty interval is inferred from one source run.",
+        limitations=[
+            "This score is not a conformance result, objective outcome, "
+            "scenario-correctness claim, or replication-equivalence claim."
+        ],
+        provenance_refs=[
+            ExperimentReferenceModel(ref_kind="run", ref_id=facts[-1].run_id, ref_version="1.0.0"),
+            ExperimentReferenceModel(
+                ref_kind="other", ref_id=facts[-1].episode_id, ref_version="1.0.0"
+            ),
+        ],
+    )
+
+
 class _PredicateBinding(NamedTuple):
     """Supported proposition fields resolved from one compiled operation."""
 
@@ -775,132 +931,12 @@ class CyborgEvaluator(_EvaluatorBase):
         records: tuple[ExperimentEvidenceRecordModel, ...],
         now: str,
     ) -> tuple[ExperimentDerivedMeasureModel, ...]:
-        measures: list[ExperimentDerivedMeasureModel] = []
+        """Build the component and score measures for committed Blue reward facts."""
+
         if not facts or not records:
-            return tuple(measures)
-        blue_total = sum(dict(turn.rewards)[_BLUE] for turn in facts)
-        blue_components: dict[str, float] = dict.fromkeys(_SUPPORTED_COMPONENTS, 0.0)
-        component_refs: dict[str, list[ExperimentEvidenceRecordReferenceModel]] = {
-            name: [] for name in _SUPPORTED_COMPONENTS
-        }
-        record_by_id = {record.evidence_record_id: record for record in records}
-        for turn in facts:
-            for component in turn.components:
-                if (
-                    component.participant_address == _BLUE
-                    and component.component in _SUPPORTED_COMPONENTS
-                ):
-                    blue_components[component.component] += component.value
-                    record_id = _identity(
-                        turn.run_id,
-                        turn.action_instance_id,
-                        turn.logical_step,
-                        component.participant_address,
-                        component.target_address,
-                        component.component,
-                    )
-                    evidence_id = "evidence-record.cyborg-cage2." + record_id
-                    if evidence_id in record_by_id:
-                        component_refs[component.component].append(
-                            ExperimentEvidenceRecordReferenceModel(
-                                ref_kind="evidence-record",
-                                ref_id=evidence_id,
-                                ref_version=_RECORD_VERSION,
-                            )
-                        )
-        for component_name in sorted(_SUPPORTED_COMPONENTS):
-            refs_for_component = component_refs[component_name]
-            if refs_for_component:
-                measures.append(
-                    ExperimentDerivedMeasureModel(
-                        schema_version="experiment-derived-measure/v1",
-                        derived_measure_id=(
-                            f"measure.cyborg-cage2.cumulative-blue-{component_name}."
-                            + _identity(facts[-1].run_id, facts[-1].episode_id, len(facts))
-                        ),
-                        measure_version="1.0.0",
-                        measure_kind="metric",
-                        metric_ref=ExperimentReferenceModel(
-                            ref_kind="metric-definition",
-                            ref_id=f"cage2-cumulative-blue-{component_name}-reward",
-                            ref_version="1.0.0",
-                        ),
-                        method=ExperimentDerivedMeasureMethodModel(
-                            method_id=f"cyborg-cage2-sum-blue-{component_name}-rewards",
-                            method_version="1.0.0",
-                            name=f"Cumulative committed Blue {component_name} reward",
-                            description=(
-                                "Sum the named committed per-step Blue component in logical "
-                                "step order."
-                            ),
-                        ),
-                        source_evidence_refs=refs_for_component,
-                        generated_at=now,
-                        value_status="reported",
-                        value=blue_components[component_name],
-                        uncertainty="No uncertainty interval is inferred from one source run.",
-                        limitations=[
-                            "This component is not a conformance result, objective outcome, "
-                            "or replication-equivalence claim."
-                        ],
-                        provenance_refs=[
-                            ExperimentReferenceModel(
-                                ref_kind="run",
-                                ref_id=facts[-1].run_id,
-                                ref_version="1.0.0",
-                            )
-                        ],
-                    )
-                )
-        refs = [
-            ExperimentEvidenceRecordReferenceModel(
-                ref_kind="evidence-record",
-                ref_id=record.evidence_record_id,
-                ref_version=_RECORD_VERSION,
-            )
-            for record in records
-            if f"participant={_BLUE};" in (record.raw_content.payload_summary or "")
-            and "meaning=per-step-reward;" in (record.raw_content.payload_summary or "")
-        ]
-        measures.append(
-            ExperimentDerivedMeasureModel(
-                schema_version="experiment-derived-measure/v1",
-                derived_measure_id=(
-                    "measure.cyborg-cage2.cumulative-blue-score."
-                    + _identity(facts[-1].run_id, facts[-1].episode_id, len(facts))
-                ),
-                measure_version="1.0.0",
-                measure_kind="score",
-                metric_ref=ExperimentReferenceModel(
-                    ref_kind="metric-definition",
-                    ref_id="cage2-cumulative-blue-reward",
-                    ref_version="1.0.0",
-                ),
-                method=ExperimentDerivedMeasureMethodModel(
-                    method_id="cyborg-cage2-sum-committed-blue-rewards",
-                    method_version="1.0.0",
-                    name="Cumulative committed Blue reward",
-                    description="Sum exact per-step Blue rewards in committed logical-step order.",
-                ),
-                source_evidence_refs=refs,
-                generated_at=now,
-                value_status="reported",
-                value=blue_total,
-                uncertainty="No uncertainty interval is inferred from one source run.",
-                limitations=[
-                    "This score is not a conformance result, objective outcome, "
-                    "scenario-correctness claim, or replication-equivalence claim."
-                ],
-                provenance_refs=[
-                    ExperimentReferenceModel(
-                        ref_kind="run", ref_id=facts[-1].run_id, ref_version="1.0.0"
-                    ),
-                    ExperimentReferenceModel(
-                        ref_kind="other", ref_id=facts[-1].episode_id, ref_version="1.0.0"
-                    ),
-                ],
-            )
-        )
+            return ()
+        measures = _blue_component_measures(facts, records, now)
+        measures.append(_blue_score_measure(facts, records, now))
         return tuple(measures)
 
     def status(self) -> dict[str, object]:

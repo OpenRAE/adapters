@@ -18,11 +18,10 @@ import tempfile
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout, suppress
-from dataclasses import dataclass, replace
 from importlib import metadata
 from pathlib import Path
 from statistics import NormalDist
-from typing import cast
+from typing import NamedTuple, cast
 
 from raes_contracts.contracts import (  # type: ignore[import-untyped]
     ExperimentArtifactRefModel,
@@ -52,18 +51,26 @@ from .researcher import (
 )
 
 _INVALID_JSON = "invalid JSON artifact"
+_INVALID_ATTEMPT_SLOT_JOIN = "attempt slot join is invalid"
+_INVALID_FORBIDDEN_MATERIAL = "forbidden native material"
+_INVALID_INVENTORY = "inventory is invalid"
+_INVALID_PROTOCOL_SCHEDULE = "protocol schedule is invalid"
+_INVALID_SCORE_MEASURE = "score measure is invalid"
 _DISPOSITIONS = ("excluded", "failed", "invalid", "valid")
 _RED_VARIANTS = ("b-line", "meander", "sleep")
 _TRIAL_LENGTHS = (30, 50, 100)
+_STATE_OBSERVATION_TIER = "state/observation"
+_OUTCOME_EVALUATION_TIER = "outcome/evaluation"
 _TIERS = (
     "authored-source",
     "contract",
     "execution-control",
-    "state/observation",
-    "outcome/evaluation",
+    _STATE_OBSERVATION_TIER,
+    _OUTCOME_EVALUATION_TIER,
     "disclosure",
 )
 _SCORE_METRIC_ID = "cage2-cumulative-blue-reward"
+_SOURCE_PROFILE = "cage2-cyborg-2.1-source-26ce1c1"
 _SOURCE_COMMIT = "26ce1c1253fa9e2e73f25e6a7f2da32860c11257"
 _PAPER_SHA256 = "45a6e564da6dff67453ec75585e847228a7f407641f250f4abe28d1f29406f29"
 _PRIVATE_KEY_MARKERS = (
@@ -88,10 +95,22 @@ _FORBIDDEN_FIELDS = frozenset(
 )
 _MAX_PUBLIC_FILE_BYTES = 500 * 1024
 _MAX_DECOMPRESSED_JSON_BYTES = 64 * 1024 * 1024
+_AGGREGATES_FILE = "aggregates.json"
+_ATTEMPT_FILE = "attempt.json.gz"
+_CLEANUP_FILE = "cleanup.json"
+_ENVIRONMENT_FILE = "environment.json"
+_EVIDENCE_INDEX_FILE = "evidence-index.json"
+_GZIP_JSON_SUFFIX = ".json.gz"
+_INVENTORY_FILE = "inventory.json"
+_PROTOCOL_FILE = "protocol.json"
+_REFERENCE_FILE = "reference.json"
+_RUN_FILE = "run.json.gz"
+_SOURCE_LEDGER_FILE = "source-ledger.json"
+_TIERS_FILE = "tiers.json"
+_VALIDATION_REPORT_FILE = "validation-report.md"
 
 
-@dataclass(frozen=True)
-class ReproductionSelection:
+class ReproductionSelection(NamedTuple):
     """One immutable backend-local study selection."""
 
     frozen_revision: str
@@ -106,11 +125,24 @@ class ReproductionSelection:
 
         if type(episodes) is not int or episodes < 1:
             raise ValueError("test cardinality is invalid")
-        return replace(
-            self,
+        return ReproductionSelection(
             frozen_revision=f"{self.frozen_revision}-test-{episodes}",
             episodes_per_condition=episodes,
+            seed=self.seed,
+            trial_lengths=self.trial_lengths,
+            red_variants=self.red_variants,
+            retry_limit=self.retry_limit,
         )
+
+
+class _AttemptOutcome(NamedTuple):
+    """Disposition-dependent fields for one terminal operational attempt."""
+
+    disposition: str
+    cleanup_verified: bool
+    score_measure: object = None
+    evidence_refs: Sequence[str] = ()
+    diagnostic_code: str | None = None
 
 
 FROZEN_SELECTION = ReproductionSelection(
@@ -234,14 +266,20 @@ def sha256_payload(payload: object) -> str:
 
 
 def _sha256_file(path: Path) -> str:
+    """Hash one file as raw bytes."""
+
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _reject_constant(_value: str) -> object:
+    """Reject non-finite JSON constants."""
+
     raise ValueError(_INVALID_JSON)
 
 
 def _closed_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    """Build one JSON object while rejecting duplicate keys."""
+
     result: dict[str, object] = {}
     for key, value in pairs:
         if key in result:
@@ -255,7 +293,7 @@ def _load_strict_json_value(path: Path) -> object:
 
     try:
         raw = path.read_bytes()
-        if path.name.endswith(".json.gz"):
+        if path.name.endswith(_GZIP_JSON_SUFFIX):
             raw = gzip.decompress(raw)
             if len(raw) > _MAX_DECOMPRESSED_JSON_BYTES:
                 raise ValueError(_INVALID_JSON)
@@ -264,7 +302,7 @@ def _load_strict_json_value(path: Path) -> object:
             object_pairs_hook=_closed_pairs,
             parse_constant=_reject_constant,
         )
-    except (OSError, UnicodeError, ValueError, gzip.BadGzipFile) as error:
+    except (OSError, ValueError) as error:
         raise ValueError(_INVALID_JSON) from error
     return value
 
@@ -279,10 +317,14 @@ def load_strict_json(path: Path) -> dict[str, object]:
 
 
 def _condition_id(trial_length: int, red_variant: str) -> str:
+    """Return the stable identifier for one matrix condition."""
+
     return f"steps-{trial_length:03d}--red-{red_variant}"
 
 
 def _schedule(selection: ReproductionSelection) -> list[dict[str, object]]:
+    """Expand one selection into its ordered logical slots."""
+
     schedule: list[dict[str, object]] = []
     ordinal = 0
     for trial_length in selection.trial_lengths:
@@ -308,6 +350,8 @@ def _schedule(selection: ReproductionSelection) -> list[dict[str, object]]:
 
 
 def _schedule_partitions(selection: ReproductionSelection) -> list[dict[str, object]]:
+    """Describe the condition-level partitions of one ordered schedule."""
+
     schedule = _schedule(selection)
     partitions: list[dict[str, object]] = []
     offset = 0
@@ -330,6 +374,8 @@ def _schedule_partitions(selection: ReproductionSelection) -> list[dict[str, obj
 
 
 def _artifact_refs(repo_root: Path) -> list[dict[str, object]]:
+    """Resolve and verify every frozen adapter input."""
+
     refs: list[dict[str, object]] = []
     for artifact_id, relative in sorted(_INPUT_PATHS.items()):
         path = repo_root / relative
@@ -351,6 +397,8 @@ def _artifact_refs(repo_root: Path) -> list[dict[str, object]]:
 
 
 def _contract_payloads(repo_root: Path) -> dict[str, object]:
+    """Load and content-bind the published RAES contract inputs."""
+
     contracts: dict[str, object] = {
         "experiment_spec": load_strict_json(repo_root / _INPUT_PATHS["experiment-authoring-input"]),
         "experiment_task": load_strict_json(repo_root / _INPUT_PATHS["experiment-task"]),
@@ -368,6 +416,8 @@ def _contract_payloads(repo_root: Path) -> dict[str, object]:
 
 
 def _expected_artifact_refs() -> list[dict[str, object]]:
+    """Return the predeclared adapter-input references."""
+
     return [
         {
             "artifact_id": artifact_id,
@@ -380,11 +430,13 @@ def _expected_artifact_refs() -> list[dict[str, object]]:
 
 
 def _source_ledger(artifacts: Sequence[Mapping[str, object]]) -> dict[str, object]:
+    """Project source facts and known losses for this study."""
+
     return {
         "source": {
             "repository": "https://github.com/cage-challenge/cage-challenge-2",
             "commit": _SOURCE_COMMIT,
-            "profile_id": "cage2-cyborg-2.1-source-26ce1c1",
+            "profile_id": _SOURCE_PROFILE,
         },
         "protocol_source_facts": {
             "qualified_evaluator": {
@@ -424,6 +476,8 @@ def _source_ledger(artifacts: Sequence[Mapping[str, object]]) -> dict[str, objec
 
 
 def _published_results() -> dict[str, object]:
+    """Return the frozen published comparison values."""
+
     conditions = []
     for trial_length in _TRIAL_LENGTHS:
         for red_variant in _RED_VARIANTS:
@@ -453,9 +507,11 @@ def _declaration(
     artifacts: list[dict[str, object]],
     contracts: Mapping[str, object],
 ) -> dict[str, object]:
+    """Build the immutable study selection and method declaration."""
+
     return {
         "frozen_revision": selection.frozen_revision,
-        "source_profile": "cage2-cyborg-2.1-source-26ce1c1",
+        "source_profile": _SOURCE_PROFILE,
         "source_commit": _SOURCE_COMMIT,
         "baseline": {
             "observed_implementation": "cyborg-blue-sleep-policy",
@@ -541,11 +597,15 @@ def build_declaration(
 
 
 def _require_exact_keys(value: Mapping[str, object], keys: set[str], label: str) -> None:
+    """Reject unknown or missing operational-index fields."""
+
     if set(value) != keys:
         raise ValueError(f"{label} has unknown or missing fields")
 
 
 def _validate_schedule(value: object, selection: ReproductionSelection) -> None:
+    """Validate an ordered slot schedule against its selection."""
+
     if not isinstance(value, list) or len(value) != (
         len(selection.trial_lengths)
         * len(selection.red_variants)
@@ -561,35 +621,38 @@ def _validate_schedule(value: object, selection: ReproductionSelection) -> None:
         raise ValueError("attempt schedule is invalid")
 
 
-def validate_protocol(
-    payload: Mapping[str, object],
-    *,
-    selection: ReproductionSelection | None = None,
-) -> None:
-    """Validate the closed frozen protocol and its content digest."""
+def _validated_protocol_declaration(payload: Mapping[str, object]) -> dict[str, object]:
+    """Return the digest-verified declaration from a protocol index."""
 
-    _require_exact_keys(
-        payload,
-        {"declaration_sha256", "declaration"},
-        "protocol",
-    )
+    _require_exact_keys(payload, {"declaration_sha256", "declaration"}, "protocol")
     declaration = payload["declaration"]
     if not isinstance(declaration, dict):
         raise ValueError("protocol declaration is invalid")
     if payload["declaration_sha256"] != sha256_payload(declaration):
         raise ValueError("protocol declaration digest is invalid")
+    return declaration
+
+
+def _validated_protocol_contracts(
+    declaration: Mapping[str, object],
+) -> tuple[list[dict[str, object]], dict[str, object]]:
+    """Validate and return the frozen artifacts and published contracts."""
+
     artifacts = declaration.get("artifacts")
     if not isinstance(artifacts, list) or artifacts != _expected_artifact_refs():
         raise ValueError("protocol artifacts are invalid")
-    if selection is None:
-        selection = _selection_from_declaration(declaration)
     contracts = declaration.get("published_contracts")
     if not isinstance(contracts, dict):
         raise ValueError("published contracts are invalid")
-    if {
-        name: sha256_payload(contract) for name, contract in contracts.items()
-    } != _FROZEN_CONTRACT_DIGESTS:
+    digests = {name: sha256_payload(contract) for name, contract in contracts.items()}
+    if digests != _FROZEN_CONTRACT_DIGESTS:
         raise ValueError("published contract identity is invalid")
+    return cast(list[dict[str, object]], artifacts), contracts
+
+
+def _validate_contract_relationships(contracts: Mapping[str, object]) -> None:
+    """Validate the RAES-owned contracts and their required identity joins."""
+
     try:
         spec = ExperimentSpecModel.model_validate(contracts["experiment_spec"])
         task = ExperimentTaskModel.model_validate(contracts["experiment_task"])
@@ -603,33 +666,55 @@ def validate_protocol(
             contracts["participant_configuration"]
         )
         validate_participant_configuration_selection(participant_selection, configuration)
-        if (
-            spec.task_ref.ref_id != task.task_id
-            or participant_selection.implementation_identity != manifest.identity
-        ):
+        valid_join = (
+            spec.task_ref.ref_id == task.task_id
+            and participant_selection.implementation_identity == manifest.identity
+        )
+        if not valid_join:
             raise ValueError
     except Exception as error:
         raise ValueError("published contracts are invalid") from error
-    expected = _declaration(
-        selection,
-        cast(list[dict[str, object]], artifacts),
-        contracts,
-    )
-    if declaration.get("seed_policy") != expected["seed_policy"]:
-        raise ValueError("seed policy is invalid")
-    if declaration.get("attempt_policy") != expected["attempt_policy"]:
-        raise ValueError("attempt policy is invalid")
-    if declaration.get("aggregation") != expected["aggregation"]:
-        raise ValueError("aggregation method is invalid")
-    if declaration.get("comparison") != expected["comparison"]:
-        raise ValueError("comparison method is invalid")
+
+
+def _validate_declaration_methods(
+    declaration: Mapping[str, object], expected: Mapping[str, object]
+) -> None:
+    """Validate the predeclared seed, attempt, aggregation, and comparison methods."""
+
+    labels = {
+        "seed_policy": "seed policy is invalid",
+        "attempt_policy": "attempt policy is invalid",
+        "aggregation": "aggregation method is invalid",
+        "comparison": "comparison method is invalid",
+    }
+    for key, message in labels.items():
+        if declaration.get(key) != expected[key]:
+            raise ValueError(message)
     for key, value in expected.items():
         if key not in {"artifacts", "published_contracts"} and declaration.get(key) != value:
             raise ValueError("protocol declaration is invalid")
+
+
+def validate_protocol(
+    payload: Mapping[str, object],
+    *,
+    selection: ReproductionSelection | None = None,
+) -> None:
+    """Validate the closed frozen protocol and its content digest."""
+
+    declaration = _validated_protocol_declaration(payload)
+    artifacts, contracts = _validated_protocol_contracts(declaration)
+    if selection is None:
+        selection = _selection_from_declaration(declaration)
+    _validate_contract_relationships(contracts)
+    expected = _declaration(selection, artifacts, contracts)
+    _validate_declaration_methods(declaration, expected)
     _validate_schedule(_schedule(selection), selection)
 
 
 def _validate_source_ledger(payload: Mapping[str, object], protocol: Mapping[str, object]) -> None:
+    """Validate source facts against the frozen declaration."""
+
     declaration = protocol["declaration"]
     if not isinstance(declaration, dict):
         raise ValueError("source ledger artifact join is invalid")
@@ -641,8 +726,10 @@ def _validate_source_ledger(payload: Mapping[str, object], protocol: Mapping[str
 
 
 def _score_measure(run_id: str, score: float) -> dict[str, object]:
+    """Build a RAES-owned derived score measure for a test projection."""
+
     if not math.isfinite(score):
-        raise ValueError("score measure is invalid")
+        raise ValueError(_INVALID_SCORE_MEASURE)
     payload = ExperimentDerivedMeasureModel(
         schema_version="experiment-derived-measure/v1",
         derived_measure_id=f"derived-measure.{run_id}.cumulative-blue-reward",
@@ -673,7 +760,7 @@ def _score_measure(run_id: str, score: float) -> dict[str, object]:
         provenance_refs=[
             {
                 "ref_kind": "profile",
-                "ref_id": "cage2-cyborg-2.1-source-26ce1c1",
+                "ref_id": _SOURCE_PROFILE,
                 "ref_version": _SOURCE_COMMIT,
             }
         ],
@@ -723,10 +810,12 @@ def retry_record_for_test(original: Mapping[str, object], *, score: float) -> di
 
 
 def _validate_score_measure(value: object) -> float:
+    """Validate and return one finite RAES-owned score value."""
+
     try:
         measure = ExperimentDerivedMeasureModel.model_validate(value)
     except Exception as error:
-        raise ValueError("score measure is invalid") from error
+        raise ValueError(_INVALID_SCORE_MEASURE) from error
     score = measure.value
     if (
         measure.measure_kind != "score"
@@ -736,13 +825,71 @@ def _validate_score_measure(value: object) -> float:
         or not isinstance(score, (int, float))
         or not math.isfinite(float(score))
     ):
-        raise ValueError("score measure is invalid")
+        raise ValueError(_INVALID_SCORE_MEASURE)
     return float(score)
+
+
+def _validate_attempt_slot_fields(value: Mapping[str, object], slot: Mapping[str, object]) -> None:
+    """Validate the immutable logical-slot fields on one attempt."""
+
+    for key in (
+        "slot_id",
+        "condition_id",
+        "trial_length",
+        "red_variant",
+        "episode_ordinal",
+    ):
+        if value[key] != slot[key]:
+            raise ValueError(_INVALID_ATTEMPT_SLOT_JOIN)
+
+
+def _attempt_retry_limit(protocol: Mapping[str, object]) -> int:
+    """Return the validated retry limit joined through the protocol."""
+
+    declaration = protocol["declaration"]
+    if not isinstance(declaration, dict):
+        raise ValueError("attempt protocol join is invalid")
+    retry_limit = cast(dict[str, object], declaration["attempt_policy"])["retry_limit"]
+    if type(retry_limit) is not int:
+        raise ValueError("attempt sequence is invalid")
+    return retry_limit
+
+
+def _validate_attempt_identity(
+    value: Mapping[str, object], slot: Mapping[str, object], retry_limit: int
+) -> None:
+    """Validate one attempt's sequence and predecessor-linked identity."""
+
+    sequence = value["attempt_sequence"]
+    if type(sequence) is not int or not 1 <= sequence <= retry_limit + 1:
+        raise ValueError("attempt sequence is invalid")
+    expected_run_id = f"{slot['slot_id']}-attempt-{sequence:02d}"
+    predecessor = None
+    if sequence > 1:
+        predecessor = f"{slot['slot_id']}-attempt-{sequence - 1:02d}"
+    if value["run_id"] != expected_run_id or value["predecessor_run_id"] != predecessor:
+        raise ValueError("attempt identities are invalid")
+
+
+def _validate_attempt_outcome(value: Mapping[str, object]) -> None:
+    """Validate disposition-dependent cleanup and score fields."""
+
+    disposition = value["disposition"]
+    if disposition not in _DISPOSITIONS:
+        raise ValueError("attempt disposition is invalid")
+    if disposition == "valid":
+        if value["cleanup_verified"] is not True:
+            raise ValueError("valid attempt cleanup is invalid")
+        _validate_score_measure(value["score_measure"])
+    elif value["score_measure"] is not None:
+        raise ValueError("ineligible attempt has a score measure")
 
 
 def _validate_attempt(
     value: Mapping[str, object], protocol: Mapping[str, object], slot: Mapping[str, object]
 ) -> None:
+    """Validate one operational attempt against its logical slot."""
+
     expected_keys = {
         "declaration_sha256",
         "slot_id",
@@ -762,42 +909,14 @@ def _validate_attempt(
     _require_exact_keys(value, expected_keys, "attempt record")
     if value["declaration_sha256"] != protocol["declaration_sha256"]:
         raise ValueError("attempt protocol join is invalid")
-    for key in (
-        "slot_id",
-        "condition_id",
-        "trial_length",
-        "red_variant",
-        "episode_ordinal",
-    ):
-        if value[key] != slot[key]:
-            raise ValueError("attempt slot join is invalid")
-    sequence = value["attempt_sequence"]
-    declaration = protocol["declaration"]
-    if not isinstance(declaration, dict):
-        raise ValueError("attempt protocol join is invalid")
-    retry_limit = cast(dict[str, object], declaration["attempt_policy"])["retry_limit"]
-    if (
-        type(sequence) is not int
-        or type(retry_limit) is not int
-        or not 1 <= sequence <= retry_limit + 1
-    ):
-        raise ValueError("attempt sequence is invalid")
-    expected_run_id = f"{slot['slot_id']}-attempt-{sequence:02d}"
-    predecessor = None if sequence == 1 else f"{slot['slot_id']}-attempt-{sequence - 1:02d}"
-    if value["run_id"] != expected_run_id or value["predecessor_run_id"] != predecessor:
-        raise ValueError("attempt identities are invalid")
-    disposition = value["disposition"]
-    if disposition not in _DISPOSITIONS:
-        raise ValueError("attempt disposition is invalid")
-    if disposition == "valid":
-        if value["cleanup_verified"] is not True:
-            raise ValueError("valid attempt cleanup is invalid")
-        _validate_score_measure(value["score_measure"])
-    elif value["score_measure"] is not None:
-        raise ValueError("ineligible attempt has a score measure")
+    _validate_attempt_slot_fields(value, slot)
+    _validate_attempt_identity(value, slot, _attempt_retry_limit(protocol))
+    _validate_attempt_outcome(value)
 
 
 def _selection_from_declaration(declaration: Mapping[str, object]) -> ReproductionSelection:
+    """Recover the immutable selection from a validated declaration."""
+
     try:
         selection = ReproductionSelection(
             frozen_revision=cast(str, declaration["frozen_revision"]),
@@ -812,18 +931,20 @@ def _selection_from_declaration(declaration: Mapping[str, object]) -> Reproducti
         if declaration["schedule_partitions"] != _schedule_partitions(selection):
             raise ValueError
     except (KeyError, TypeError, ValueError):
-        raise ValueError("protocol schedule is invalid") from None
+        raise ValueError(_INVALID_PROTOCOL_SCHEDULE) from None
     return selection
 
 
 def _slot_index(protocol: Mapping[str, object]) -> dict[str, dict[str, object]]:
+    """Index every declared logical slot by identifier."""
+
     declaration = protocol["declaration"]
     if not isinstance(declaration, dict):
-        raise ValueError("protocol schedule is invalid")
+        raise ValueError(_INVALID_PROTOCOL_SCHEDULE)
     selection = _selection_from_declaration(declaration)
     schedule = _schedule(selection)
     if declaration["schedule_partitions"] != _schedule_partitions(selection):
-        raise ValueError("protocol schedule is invalid")
+        raise ValueError(_INVALID_PROTOCOL_SCHEDULE)
     return {cast(str, item["slot_id"]): item for item in schedule if isinstance(item, dict)}
 
 
@@ -845,7 +966,7 @@ def select_eligible_attempts(
         record = dict(raw)
         slot_id = record.get("slot_id")
         if not isinstance(slot_id, str) or slot_id not in slots:
-            raise ValueError("attempt slot join is invalid")
+            raise ValueError(_INVALID_ATTEMPT_SLOT_JOIN)
         _validate_attempt(record, protocol, slots[slot_id])
         run_id = cast(str, record["run_id"])
         if run_id in run_ids:
@@ -866,6 +987,8 @@ def select_eligible_attempts(
 
 
 def _interval(values: Sequence[float], critical_value: float) -> dict[str, object]:
+    """Compute the predeclared normal-approximation interval."""
+
     count = len(values)
     if count == 0:
         return {"eligible_n": 0, "mean": None, "sample_variance": None, "interval_95": None}
@@ -888,6 +1011,8 @@ def _interval(values: Sequence[float], critical_value: float) -> dict[str, objec
 
 
 def _finite_float(value: object) -> float:
+    """Return one finite non-boolean numeric value."""
+
     if (
         isinstance(value, bool)
         or not isinstance(value, (int, float))
@@ -897,17 +1022,33 @@ def _finite_float(value: object) -> float:
     return float(value)
 
 
-def _comparison(
-    declaration: Mapping[str, object], conditions: Sequence[Mapping[str, object]]
-) -> dict[str, object]:
-    published = cast(
-        dict[str, object], cast(dict[str, object], declaration["comparison"])["published"]
-    )
-    published_by_id = {
-        cast(str, item["condition_id"]): item
-        for item in cast(list[dict[str, object]], published["conditions"])
-    }
-    minimum = cast(dict[str, object], declaration["aggregation"])["minimum_eligible_per_condition"]
+def _reproduction_classification(*, exact: bool, bounded: bool, complete: bool) -> str:
+    """Return the predeclared result class without nested conditional expressions."""
+
+    if exact:
+        return "exact"
+    if bounded:
+        return "bounded"
+    return "failed" if complete else "unavailable"
+
+
+def _outcome_tier_result(outcome_class: object) -> str:
+    """Map the aggregate result class to the CybORG outcome tier."""
+
+    if outcome_class in {"exact", "bounded"}:
+        return "pass"
+    if outcome_class == "failed":
+        return "fail"
+    return "weakened"
+
+
+def _condition_comparison_flags(
+    conditions: Sequence[Mapping[str, object]],
+    published_by_id: Mapping[str, Mapping[str, object]],
+    minimum: object,
+) -> tuple[bool, bool, bool]:
+    """Return completeness plus exact and bounded condition-level flags."""
+
     complete = all(item["eligible_n"] == minimum for item in conditions)
     exact = complete
     bounded = complete
@@ -919,13 +1060,30 @@ def _comparison(
             continue
         decimals = cast(int, oracle["display_decimals"])
         exact = exact and round(float(mean), decimals) == _finite_float(oracle["mean"])
-        bounded = bounded and abs(float(mean) - _finite_float(oracle["mean"])) <= _finite_float(
-            oracle["bounded_margin"]
-        )
-    total_mean = math.fsum(cast(float, item["mean"]) for item in conditions) if complete else None
+        difference = abs(float(mean) - _finite_float(oracle["mean"]))
+        bounded = bounded and difference <= _finite_float(oracle["bounded_margin"])
+    return complete, exact, bounded
+
+
+def _primary_comparison(
+    declaration: Mapping[str, object],
+    conditions: Sequence[Mapping[str, object]],
+    published: Mapping[str, object],
+    *,
+    complete: bool,
+    bounded: bool,
+) -> tuple[float | None, float | None, list[float] | None, bool]:
+    """Compute the primary total and its interval-level bounded check."""
+
+    total_mean = None
+    if complete:
+        total_mean = math.fsum(cast(float, item["mean"]) for item in conditions)
     total_variance = None
     total_interval = None
-    if complete and all(item["sample_variance"] is not None for item in conditions):
+    variances_available = complete and all(
+        item["sample_variance"] is not None for item in conditions
+    )
+    if variances_available:
         total_variance = math.fsum(
             cast(float, item["sample_variance"]) / cast(int, item["eligible_n"])
             for item in conditions
@@ -934,19 +1092,44 @@ def _comparison(
             cast(dict[str, object], declaration["aggregation"])["critical_value"]
         )
         half_width = critical * math.sqrt(total_variance)
-        total_interval = [
-            cast(float, total_mean) - half_width,
-            cast(float, total_mean) + half_width,
-        ]
+        mean = cast(float, total_mean)
+        total_interval = [mean - half_width, mean + half_width]
         published_interval = cast(list[float], published["primary_total_interval_95"])
-        bounded = bounded and (
+        intervals_cover = (
             total_interval[0] <= _finite_float(published["primary_total"]) <= total_interval[1]
-            and published_interval[0] <= cast(float, total_mean) <= published_interval[1]
+            and published_interval[0] <= mean <= published_interval[1]
         )
+        bounded = bounded and intervals_cover
     else:
         bounded = False
-    classification = (
-        "exact" if exact else "bounded" if bounded else "failed" if complete else "unavailable"
+    return total_mean, total_variance, total_interval, bounded
+
+
+def _comparison(
+    declaration: Mapping[str, object], conditions: Sequence[Mapping[str, object]]
+) -> dict[str, object]:
+    """Compare observed conditions with the frozen published values."""
+
+    published = cast(
+        dict[str, object], cast(dict[str, object], declaration["comparison"])["published"]
+    )
+    published_by_id = {
+        cast(str, item["condition_id"]): item
+        for item in cast(list[dict[str, object]], published["conditions"])
+    }
+    minimum = cast(dict[str, object], declaration["aggregation"])["minimum_eligible_per_condition"]
+    complete, exact, bounded = _condition_comparison_flags(conditions, published_by_id, minimum)
+    total_mean, total_variance, total_interval, bounded = _primary_comparison(
+        declaration,
+        conditions,
+        published,
+        complete=complete,
+        bounded=bounded,
+    )
+    classification = _reproduction_classification(
+        exact=exact,
+        bounded=bounded,
+        complete=complete,
     )
     return {
         "classification": classification,
@@ -1011,32 +1194,31 @@ def build_tiers(
     comparison = cast(dict[str, object], aggregates["comparison"])
     outcome_class = comparison["classification"]
     cyborg_results = {
-        "authored-source": ("pass", ["protocol.json", "source-ledger.json"]),
-        "contract": ("pass", ["protocol.json", "runs/"]),
+        "authored-source": ("pass", [_PROTOCOL_FILE, _SOURCE_LEDGER_FILE]),
+        "contract": ("pass", [_PROTOCOL_FILE, "runs/"]),
         "execution-control": (
             "weakened",
             ["source-ledger.json#loss-evaluation-seed-unbound", "protocol.json#seed_policy"],
         ),
-        "state/observation": (
+        _STATE_OBSERVATION_TIER: (
             "weakened",
             ["source-ledger.json#loss-native-observation-boundary"],
         ),
-        "outcome/evaluation": (
-            "pass"
-            if outcome_class in {"exact", "bounded"}
-            else "fail"
-            if outcome_class == "failed"
-            else "weakened",
+        _OUTCOME_EVALUATION_TIER: (
+            _outcome_tier_result(outcome_class),
             ["aggregates.json#comparison"],
         ),
-        "disclosure": ("pass", ["source-ledger.json#loss_refs", "validation-report.md"]),
+        "disclosure": (
+            "pass",
+            [f"{_SOURCE_LEDGER_FILE}#loss_refs", _VALIDATION_REPORT_FILE],
+        ),
     }
     reference_keys = {
         "authored-source": "authored_source",
         "contract": "contract",
         "execution-control": "execution_control",
-        "state/observation": "state_observation",
-        "outcome/evaluation": "outcome_evaluation",
+        _STATE_OBSERVATION_TIER: "state_observation",
+        _OUTCOME_EVALUATION_TIER: "outcome_evaluation",
         "disclosure": "disclosure",
     }
     tier_rows = []
@@ -1090,16 +1272,47 @@ def build_tiers(
 
 
 def _scan_value(value: object) -> None:
+    """Recursively reject forbidden native or host material."""
+
     if isinstance(value, dict):
         for key, item in value.items():
             if key in _FORBIDDEN_FIELDS:
-                raise ValueError("forbidden native material")
+                raise ValueError(_INVALID_FORBIDDEN_MATERIAL)
             _scan_value(item)
     elif isinstance(value, list):
         for item in value:
             _scan_value(item)
     elif isinstance(value, str) and any(token in value for token in _FORBIDDEN_TEXT):
-        raise ValueError("forbidden native material")
+        raise ValueError(_INVALID_FORBIDDEN_MATERIAL)
+
+
+def _strict_public_json(path: Path, raw: bytes) -> object:
+    """Decode one bounded public JSON or gzip-compressed JSON artifact."""
+
+    if path.name.endswith(_GZIP_JSON_SUFFIX):
+        raw = gzip.decompress(raw)
+        if len(raw) > _MAX_DECOMPRESSED_JSON_BYTES:
+            raise ValueError(_INVALID_JSON)
+    return json.loads(
+        raw,
+        object_pairs_hook=_closed_pairs,
+        parse_constant=_reject_constant,
+    )
+
+
+def _scan_public_file(path: Path) -> None:
+    """Scan one regular public file for forbidden material and JSON fields."""
+
+    raw = path.read_bytes()
+    if any(token.encode() in raw for token in _FORBIDDEN_TEXT):
+        raise ValueError(_INVALID_FORBIDDEN_MATERIAL)
+    if path.suffix != ".json" and not path.name.endswith(_GZIP_JSON_SUFFIX):
+        return
+    try:
+        value = _strict_public_json(path, raw)
+    except ValueError as error:
+        raise ValueError(_INVALID_JSON) from error
+    _scan_value(value)
 
 
 def scan_public_tree(root: Path) -> None:
@@ -1110,25 +1323,8 @@ def scan_public_tree(root: Path) -> None:
     for path in root.rglob("*"):
         if path.is_symlink() or not (path.is_file() or path.is_dir()):
             raise ValueError("public tree is invalid")
-        if not path.is_file():
-            continue
-        raw = path.read_bytes()
-        if any(token.encode() in raw for token in _FORBIDDEN_TEXT):
-            raise ValueError("forbidden native material")
-        if path.suffix == ".json" or path.name.endswith(".json.gz"):
-            try:
-                if path.name.endswith(".json.gz"):
-                    raw = gzip.decompress(raw)
-                    if len(raw) > _MAX_DECOMPRESSED_JSON_BYTES:
-                        raise ValueError(_INVALID_JSON)
-                value = json.loads(
-                    raw,
-                    object_pairs_hook=_closed_pairs,
-                    parse_constant=_reject_constant,
-                )
-            except (UnicodeError, ValueError, gzip.BadGzipFile) as error:
-                raise ValueError(_INVALID_JSON) from error
-            _scan_value(value)
+        if path.is_file():
+            _scan_public_file(path)
 
 
 def _reserve_directory(path: Path) -> Path:
@@ -1140,6 +1336,8 @@ def _reserve_directory(path: Path) -> Path:
 
 
 def _write_json(path: Path, payload: object) -> None:
+    """Atomically write one canonical JSON object."""
+
     atomic_write_json_artifact(path, payload)
 
 
@@ -1184,12 +1382,16 @@ def _write_text(path: Path, value: str) -> None:
 
 
 def _media_type(path: Path) -> str:
+    """Return the allowlisted media type for one exported file."""
+
     if path.suffix == ".gz":
         return "application/gzip"
     return "application/json" if path.suffix == ".json" else "text/markdown"
 
 
 def _inventory_entry(root: Path, path: Path) -> dict[str, object]:
+    """Build one bounded relative inventory entry."""
+
     if path.is_symlink() or not path.is_file() or not path.resolve().is_relative_to(root.resolve()):
         raise ValueError("inventory member is invalid")
     content = path.read_bytes()
@@ -1204,55 +1406,80 @@ def _inventory_entry(root: Path, path: Path) -> dict[str, object]:
 
 
 def _seal_inventory(root: Path, members: Sequence[Path]) -> dict[str, object]:
+    """Write an inventory after all of its members are final."""
+
     inventory: dict[str, object] = {
         "artifacts": [
             _inventory_entry(root, path)
             for path in sorted(members, key=lambda item: item.relative_to(root).as_posix())
         ]
     }
-    _write_json(root / "inventory.json", inventory)
+    _write_json(root / _INVENTORY_FILE, inventory)
     return inventory
 
 
+def _inventory_item_mapping(item: object) -> tuple[dict[str, object], str]:
+    """Return one shape-validated inventory entry and relative path."""
+
+    expected_keys = {"path", "media_type", "sha256", "size_bytes"}
+    if not isinstance(item, dict) or set(item) != expected_keys:
+        raise ValueError(_INVALID_INVENTORY)
+    relative = item["path"]
+    if not isinstance(relative, str):
+        raise ValueError(_INVALID_INVENTORY)
+    return item, relative
+
+
+def _inventory_candidate(root: Path, relative: str, seen: set[str]) -> Path:
+    """Resolve one safe, unique, regular inventory member path."""
+
+    source = root / relative
+    candidate = source.resolve()
+    invalid_path = (
+        relative in seen
+        or Path(relative).is_absolute()
+        or ".." in Path(relative).parts
+        or not candidate.is_relative_to(root.resolve())
+        or source.is_symlink()
+        or not candidate.is_file()
+    )
+    if invalid_path:
+        raise ValueError(_INVALID_INVENTORY)
+    return candidate
+
+
+def _validated_inventory_member(root: Path, item: object, seen: set[str]) -> str:
+    """Validate one inventory member and return its relative path."""
+
+    mapping, relative = _inventory_item_mapping(item)
+    candidate = _inventory_candidate(root, relative, seen)
+    if mapping != _inventory_entry(root, candidate):
+        raise ValueError("inventory digest is invalid")
+    return relative
+
+
+def _verify_direct_inventory_members(root: Path, seen: set[str]) -> None:
+    """Require the inventory to cover every direct regular file."""
+
+    direct_files = {
+        path.name for path in root.iterdir() if path.is_file() and path.name != _INVENTORY_FILE
+    }
+    inventoried = {Path(relative).name for relative in seen if len(Path(relative).parts) == 1}
+    if direct_files != inventoried:
+        raise ValueError("inventory membership is incomplete")
+
+
 def _verify_inventory(root: Path, *, expected_members: set[str] | None = None) -> dict[str, object]:
-    inventory = load_strict_json(root / "inventory.json")
+    """Verify one sealed inventory and its exact membership."""
+
+    inventory = load_strict_json(root / _INVENTORY_FILE)
     if set(inventory) != {"artifacts"} or not isinstance(inventory["artifacts"], list):
-        raise ValueError("inventory is invalid")
+        raise ValueError(_INVALID_INVENTORY)
     seen: set[str] = set()
     for item in inventory["artifacts"]:
-        if not isinstance(item, dict) or set(item) != {
-            "path",
-            "media_type",
-            "sha256",
-            "size_bytes",
-        }:
-            raise ValueError("inventory is invalid")
-        relative = item["path"]
-        if not isinstance(relative, str):
-            raise ValueError("inventory is invalid")
-        source = root / relative
-        candidate = source.resolve()
-        if (
-            relative in seen
-            or Path(relative).is_absolute()
-            or ".." in Path(relative).parts
-            or not candidate.is_relative_to(root.resolve())
-            or source.is_symlink()
-            or not candidate.is_file()
-        ):
-            raise ValueError("inventory is invalid")
+        relative = _validated_inventory_member(root, item, seen)
         seen.add(relative)
-        expected = _inventory_entry(root, candidate)
-        if item != expected:
-            raise ValueError("inventory digest is invalid")
-    direct_files = {
-        path.name for path in root.iterdir() if path.is_file() and path.name != "inventory.json"
-    }
-    inventoried_direct_files = {
-        Path(relative).name for relative in seen if len(Path(relative).parts) == 1
-    }
-    if direct_files != inventoried_direct_files:
-        raise ValueError("inventory membership is incomplete")
+    _verify_direct_inventory_members(root, seen)
     if expected_members is not None and seen != expected_members:
         raise ValueError("inventory membership is incomplete")
     return inventory
@@ -1261,6 +1488,8 @@ def _verify_inventory(root: Path, *, expected_members: set[str] | None = None) -
 def _write_schedule_partitions(
     root: Path, protocol: Mapping[str, object], selection: ReproductionSelection
 ) -> list[Path]:
+    """Write the bounded per-condition schedule files."""
+
     plans = root / "plans"
     os.mkdir(plans, 0o700)
     by_condition: dict[str, list[dict[str, object]]] = {}
@@ -1288,8 +1517,8 @@ def write_declaration(
 
     root = _reserve_directory(output)
     protocol, source_ledger = build_declaration(repo_root, selection=selection)
-    protocol_path = root / "protocol.json"
-    ledger_path = root / "source-ledger.json"
+    protocol_path = root / _PROTOCOL_FILE
+    ledger_path = root / _SOURCE_LEDGER_FILE
     _write_json(protocol_path, protocol)
     _write_json(ledger_path, source_ledger)
     plans = _write_schedule_partitions(root, protocol, selection)
@@ -1306,6 +1535,8 @@ def _load_study_inputs(
     ParticipantImplementationSelectionModel,
     ParticipantConfigurationResultModel,
 ]:
+    """Load the authored scenario and published run contracts."""
+
     from raes import parse_sdl  # type: ignore[import-untyped]
 
     scenario = parse_sdl(
@@ -1360,7 +1591,7 @@ def capture_reference_path(repo_root: Path) -> dict[str, object]:
             "evaluation": len(result.execution_plan.evaluation.operations),
         },
         "evidence_refs": [
-            "reference.json",
+            _REFERENCE_FILE,
             "protocol.json#explicit_non_claims",
         ],
         "limitations": [
@@ -1392,23 +1623,48 @@ def _validate_reference(reference: Mapping[str, object]) -> None:
         },
         "reference evidence",
     )
+    _validate_reference_identity(reference)
+    _validate_reference_diagnostics(reference)
+    _validate_reference_counts(reference)
+    _validate_reference_limitations(reference)
+
+
+def _validate_reference_identity(reference: Mapping[str, object]) -> None:
+    """Validate the fixed reference-processor identity and tier results."""
+
     if (
         reference["processor"] != "raes-processor-reference"
         or reference["scenario_name"] != "cage2-research"
         or reference["target_manifest"] != "cyborg-cage2"
-        or reference["execution_control"] != "weakened"
-        or reference["state_observation"] != "weakened"
-        or reference["outcome_evaluation"] != "weakened"
-        or reference["evidence_refs"] != ["reference.json", "protocol.json#explicit_non_claims"]
+        or reference["evidence_refs"] != [_REFERENCE_FILE, f"{_PROTOCOL_FILE}#explicit_non_claims"]
     ):
+        raise ValueError("reference evidence identity is invalid")
+    _validate_reference_tiers(reference)
+
+
+def _validate_reference_tiers(reference: Mapping[str, object]) -> None:
+    """Validate the fixed reference-path tier strengths."""
+
+    weakened = ("execution_control", "state_observation", "outcome_evaluation")
+    if any(reference[key] != "weakened" for key in weakened):
         raise ValueError("reference evidence identity is invalid")
     if any(reference[key] not in {"pass", "fail"} for key in ("authored_source", "contract")):
         raise ValueError("reference evidence result is invalid")
     if reference["disclosure"] != "pass":
         raise ValueError("reference evidence result is invalid")
+
+
+def _validate_reference_diagnostics(reference: Mapping[str, object]) -> None:
+    """Validate the bounded planning diagnostic code list."""
+
     codes = reference["planning_error_codes"]
     if not isinstance(codes, list) or any(not isinstance(code, str) or not code for code in codes):
         raise ValueError("reference diagnostics are invalid")
+
+
+def _validate_reference_counts(reference: Mapping[str, object]) -> None:
+    """Validate the three non-negative planned-operation counts."""
+
     counts = reference["planned_operation_counts"]
     if (
         not isinstance(counts, dict)
@@ -1416,6 +1672,11 @@ def _validate_reference(reference: Mapping[str, object]) -> None:
         or any(type(value) is not int or value < 0 for value in counts.values())
     ):
         raise ValueError("reference operation counts are invalid")
+
+
+def _validate_reference_limitations(reference: Mapping[str, object]) -> None:
+    """Validate the fixed reference-path limitations statement."""
+
     limitations = reference["limitations"]
     if not isinstance(limitations, list) or limitations != [
         "The reference processor realizes authored contracts and a target plan only.",
@@ -1425,6 +1686,8 @@ def _validate_reference(reference: Mapping[str, object]) -> None:
 
 
 def _evidence_step(record: ExperimentEvidenceRecordModel) -> int:
+    """Return the logical step bound to one evidence record."""
+
     for ref in record.source_refs:
         if ref.ref_id.startswith("logical-step:"):
             return int(ref.ref_id.removeprefix("logical-step:"))
@@ -1490,6 +1753,8 @@ def _write_episode_evidence(
     task: ExperimentTaskModel,
     scenario_digest: str,
 ) -> dict[str, object]:
+    """Persist one valid episode's exact RAES evidence closure."""
+
     evidence_records = episode.evidence_records
     measures = episode.derived_measures
     referenced = {ref.ref_id for measure in measures for ref in measure.source_evidence_refs}
@@ -1508,7 +1773,7 @@ def _write_episode_evidence(
             "diagnostics": [item.model_dump(mode="json") for item in episode.diagnostics],
         },
     )
-    evidence_index = run_root / "evidence-index.json"
+    evidence_index = run_root / _EVIDENCE_INDEX_FILE
     _write_json(
         evidence_index,
         {
@@ -1536,15 +1801,24 @@ def _write_episode_evidence(
         ],
         sensitivity="redacted",
     )
+    retained_episode = EpisodeEvidence(
+        completed_steps=episode.completed_steps,
+        evidence_records=tuple(retained),
+        derived_measures=episode.derived_measures,
+        proposition_truth_results=episode.proposition_truth_results,
+        objective_results=episode.objective_results,
+        diagnostics=episode.diagnostics,
+        cleanup_verified=episode.cleanup_verified,
+    )
     run = archival_run(
         controls=controls,
         scenario_digest=scenario_digest,
         task=task,
-        episode=replace(episode, evidence_records=tuple(retained)),
+        episode=retained_episode,
         evidence_artifact=artifact,
     )
     validate_experiment_run_against_task(task, run)
-    _write_gzip_json(run_root / "run.json.gz", run.model_dump(mode="json"))
+    _write_gzip_json(run_root / _RUN_FILE, run.model_dump(mode="json"))
     score = next(
         (
             item
@@ -1561,9 +1835,9 @@ def _write_episode_evidence(
     return {
         "score_measure": score.model_dump(mode="json"),
         "evidence_refs": [
-            "evidence-index.json",
+            _EVIDENCE_INDEX_FILE,
             "episode-summary.json.gz",
-            "run.json.gz",
+            _RUN_FILE,
         ],
     }
 
@@ -1571,14 +1845,11 @@ def _write_episode_evidence(
 def _attempt_record(
     protocol: Mapping[str, object],
     slot: Mapping[str, object],
-    *,
     attempt_sequence: int,
-    disposition: str,
-    cleanup_verified: bool,
-    score_measure: object = None,
-    evidence_refs: Sequence[str] = (),
-    diagnostic_code: str | None = None,
+    outcome: _AttemptOutcome,
 ) -> dict[str, object]:
+    """Build one immutable terminal operational attempt record."""
+
     slot_id = cast(str, slot["slot_id"])
     run_id = f"{slot_id}-attempt-{attempt_sequence:02d}"
     record = {
@@ -1593,11 +1864,11 @@ def _attempt_record(
         "trial_length": slot["trial_length"],
         "red_variant": slot["red_variant"],
         "episode_ordinal": slot["episode_ordinal"],
-        "disposition": disposition,
-        "diagnostic_code": diagnostic_code,
-        "cleanup_verified": cleanup_verified,
-        "score_measure": score_measure,
-        "evidence_refs": list(evidence_refs),
+        "disposition": outcome.disposition,
+        "diagnostic_code": outcome.diagnostic_code,
+        "cleanup_verified": outcome.cleanup_verified,
+        "score_measure": outcome.score_measure,
+        "evidence_refs": list(outcome.evidence_refs),
     }
     _validate_attempt(record, protocol, slot)
     return record
@@ -1619,6 +1890,8 @@ def _condition_controls(
     selection: ParticipantImplementationSelectionModel,
     configuration: ParticipantConfigurationResultModel,
 ) -> tuple[RunControls, ...]:
+    """Bind one condition's logical slots to RAES run controls."""
+
     declaration = cast(dict[str, object], protocol["declaration"])
     seed = cast(int, cast(dict[str, object], declaration["seed_policy"])["seed"])
     return tuple(
@@ -1636,7 +1909,11 @@ def _condition_controls(
 
 
 def _write_environment(protocol: Mapping[str, object]) -> dict[str, object]:
+    """Project bounded apparatus provenance without host-sensitive values."""
+
     def version(name: str) -> str:
+        """Return one installed distribution version or an absence marker."""
+
         try:
             return metadata.version(name)
         except metadata.PackageNotFoundError:
@@ -1718,6 +1995,8 @@ def _validate_environment(
 
 
 def _validation_report_text(tiers: Mapping[str, object]) -> str:
+    """Render the stable human-readable validation summary."""
+
     return (
         "# CAGE-2 protocol reproduction validation\n\n"
         f"Frozen claim: `{tiers['strongest_supported_claim']}`.\n\n"
@@ -1734,16 +2013,259 @@ def _validation_report_text(tiers: Mapping[str, object]) -> str:
 
 
 def _write_validation_report(root: Path, tiers: Mapping[str, object]) -> Path:
-    path = root / "validation-report.md"
+    """Write the stable validation summary."""
+
+    path = root / _VALIDATION_REPORT_FILE
     _write_text(path, _validation_report_text(tiers))
     return path
 
 
 def _condition_inventory(condition_root: Path) -> Path:
-    members = [condition_root / "cleanup.json"]
-    members.extend(sorted(condition_root.glob("*/inventory.json")))
+    """Seal one condition from its cleanup and attempt inventories."""
+
+    members = [condition_root / _CLEANUP_FILE]
+    members.extend(sorted(condition_root.glob(f"*/{_INVENTORY_FILE}")))
     _seal_inventory(condition_root, members)
-    return condition_root / "inventory.json"
+    return condition_root / _INVENTORY_FILE
+
+
+class _StudyContext(NamedTuple):
+    """Immutable dependencies shared across every condition attempt."""
+
+    root: Path
+    protocol: Mapping[str, object]
+    scenario: object
+    task: ExperimentTaskModel
+    manifest: ParticipantImplementationManifestModel
+    participant_selection: ParticipantImplementationSelectionModel
+    configuration: ParticipantConfigurationResultModel
+    driver: CyborgDriver
+    checkpoint_stream: Callable[[], object]
+    restore_stream: Callable[[object], None]
+    scenario_digest: str
+    progress: Callable[[str, int, int], None] | None
+
+
+class _ConditionAttemptResult(NamedTuple):
+    """Execution state needed to seal one complete condition attempt."""
+
+    sequence: int
+    succeeded: bool
+    attempt_slots: list[dict[str, object]]
+    staged: dict[str, dict[str, object]]
+    run_roots: dict[str, Path]
+
+
+def _recoverable_study_driver(
+    driver: object | None, selection: ReproductionSelection
+) -> tuple[CyborgDriver, Callable[[], object], Callable[[object], None]]:
+    """Initialize and return a driver with recoverable ordered-stream controls."""
+
+    runtime_driver = cast(
+        CyborgDriver,
+        driver if driver is not None else SourceInstalledCyborgDriver(expected_version="2.1"),
+    )
+    begin_value = getattr(runtime_driver, "begin_ordered_stream", None)
+    checkpoint_value = getattr(runtime_driver, "ordered_stream_checkpoint", None)
+    restore_value = getattr(runtime_driver, "restore_ordered_stream", None)
+    if not all(callable(item) for item in (begin_value, checkpoint_value, restore_value)):
+        raise ValueError("study driver has no recoverable ordered stream")
+    begin_stream = cast(Callable[[int], None], begin_value)
+    checkpoint_stream = cast(Callable[[], object], checkpoint_value)
+    restore_stream = cast(Callable[[object], None], restore_value)
+    begin_stream(selection.seed)
+    return runtime_driver, checkpoint_stream, restore_stream
+
+
+def _condition_attempt_roots(
+    condition_root: Path, attempt_slots: Sequence[Mapping[str, object]]
+) -> dict[str, Path]:
+    """Reserve one private directory for every run in a condition attempt."""
+
+    roots: dict[str, Path] = {}
+    for attempt_slot in attempt_slots:
+        run_id = cast(str, attempt_slot["run_id"])
+        run_root = condition_root / run_id
+        os.mkdir(run_root, 0o700)
+        roots[run_id] = run_root
+    return roots
+
+
+def _execute_condition_attempt(
+    context: _StudyContext,
+    condition_id: str,
+    slots: Sequence[Mapping[str, object]],
+    sequence: int,
+) -> _ConditionAttemptResult:
+    """Execute one full condition attempt and retain its per-run evidence."""
+
+    attempt_slots = [_slot_for_attempt(slot, sequence) for slot in slots]
+    condition_root = context.root / "runs" / condition_id
+    run_roots = _condition_attempt_roots(condition_root, attempt_slots)
+    staged: dict[str, dict[str, object]] = {}
+
+    def consume(controls: RunControls, episode: EpisodeEvidence) -> None:
+        """Persist one episode and report bounded condition progress."""
+
+        run_root = run_roots[controls.run_id]
+        staged[controls.run_id] = _write_episode_evidence(
+            run_root,
+            (run_root / _EVIDENCE_INDEX_FILE).relative_to(context.root).as_posix(),
+            controls,
+            episode,
+            context.task,
+            context.scenario_digest,
+        )
+        if context.progress is not None:
+            context.progress(condition_id, len(staged), len(slots))
+
+    controls = _condition_controls(
+        attempt_slots,
+        context.protocol,
+        context.manifest,
+        context.participant_selection,
+        context.configuration,
+    )
+    succeeded = False
+    try:
+        with (
+            Path(os.devnull).open("w", encoding="utf-8") as sink,
+            redirect_stdout(sink),
+            redirect_stderr(sink),
+        ):
+            execute_episode_series(
+                context.scenario,
+                controls,
+                driver=context.driver,
+                episode_consumer=consume,
+                retain_evidence=False,
+            )
+        succeeded = len(staged) == len(slots)
+    except Exception:
+        succeeded = False
+    return _ConditionAttemptResult(sequence, succeeded, attempt_slots, staged, run_roots)
+
+
+def _discard_failed_run(run_root: Path) -> None:
+    """Delete incomplete portable artifacts after validating their boundary."""
+
+    for artifact in run_root.iterdir():
+        if artifact.is_symlink() or not artifact.is_file():
+            raise ValueError("failed attempt artifact boundary is invalid")
+        artifact.unlink()
+
+
+def _condition_attempt_records(
+    protocol: Mapping[str, object],
+    slots: Sequence[Mapping[str, object]],
+    result: _ConditionAttemptResult,
+) -> list[dict[str, object]]:
+    """Seal and return every operational record from one condition attempt."""
+
+    records: list[dict[str, object]] = []
+    for slot, attempt_slot in zip(slots, result.attempt_slots, strict=True):
+        run_id = cast(str, attempt_slot["run_id"])
+        run_root = result.run_roots[run_id]
+        if result.succeeded:
+            stage = result.staged[run_id]
+            outcome = _AttemptOutcome(
+                disposition="valid",
+                cleanup_verified=True,
+                score_measure=stage["score_measure"],
+                evidence_refs=cast(list[str], stage["evidence_refs"]),
+            )
+        else:
+            _discard_failed_run(run_root)
+            outcome = _AttemptOutcome(
+                disposition="failed",
+                cleanup_verified=False,
+                diagnostic_code="cyborg-reproduction.condition-session-failed",
+            )
+        record = _attempt_record(protocol, slot, result.sequence, outcome)
+        _write_gzip_json(run_root / _ATTEMPT_FILE, record)
+        _seal_inventory(run_root, [item for item in run_root.rglob("*") if item.is_file()])
+        records.append(record)
+    return records
+
+
+def _run_study_condition(
+    context: _StudyContext,
+    condition_id: str,
+    slots: Sequence[Mapping[str, object]],
+    retry_limit: int,
+) -> tuple[list[dict[str, object]], Path]:
+    """Execute the retry-bounded lifecycle for one independent condition."""
+
+    condition_root = context.root / "runs" / condition_id
+    os.mkdir(condition_root, 0o700)
+    checkpoint = context.checkpoint_stream()
+    attempts: list[dict[str, object]] = []
+    cleanup_attempts: list[dict[str, object]] = []
+    completed = False
+    for sequence in range(1, retry_limit + 2):
+        if sequence > 1:
+            context.restore_stream(checkpoint)
+        result = _execute_condition_attempt(context, condition_id, slots, sequence)
+        cleanup_attempts.append(
+            {
+                "attempt_sequence": sequence,
+                "run_count": len(result.attempt_slots),
+                "verified": result.succeeded,
+            }
+        )
+        attempts.extend(_condition_attempt_records(context.protocol, slots, result))
+        if result.succeeded:
+            completed = True
+            break
+    _write_json(
+        condition_root / _CLEANUP_FILE,
+        {
+            "condition_id": condition_id,
+            "completed": completed,
+            "attempts": cleanup_attempts,
+        },
+    )
+    return attempts, _condition_inventory(condition_root)
+
+
+def _execute_study_schedule(
+    context: _StudyContext, selection: ReproductionSelection
+) -> tuple[list[dict[str, object]], list[Path]]:
+    """Execute all frozen conditions in their declared stream order."""
+
+    os.mkdir(context.root / "runs", 0o700)
+    schedule = _schedule(selection)
+    all_attempts: list[dict[str, object]] = []
+    inventories: list[Path] = []
+    for partition in _schedule_partitions(selection):
+        condition_id = cast(str, partition["condition_id"])
+        slots = [item for item in schedule if item["condition_id"] == condition_id]
+        attempts, inventory = _run_study_condition(
+            context, condition_id, slots, selection.retry_limit
+        )
+        all_attempts.extend(attempts)
+        inventories.append(inventory)
+    return all_attempts, inventories
+
+
+def _finalize_study_bundle(
+    root: Path,
+    protocol: Mapping[str, object],
+    reference: Mapping[str, object],
+    attempts: Sequence[Mapping[str, object]],
+    members: Sequence[Path],
+) -> None:
+    """Write the deterministic projections and seal the completed study."""
+
+    aggregates = compute_aggregates(protocol, attempts)
+    aggregates_path = root / _AGGREGATES_FILE
+    _write_json(aggregates_path, aggregates)
+    tiers = build_tiers(protocol, aggregates, reference)
+    tiers_path = root / _TIERS_FILE
+    _write_json(tiers_path, tiers)
+    report_path = _write_validation_report(root, tiers)
+    scan_public_tree(root)
+    _seal_inventory(root, [*members, aggregates_path, tiers_path, report_path])
 
 
 def run_full_study(
@@ -1759,179 +2281,293 @@ def run_full_study(
     source_root = repo_root.resolve()
     root = _reserve_directory(output)
     protocol, source_ledger = build_declaration(source_root, selection=selection)
-    protocol_path = root / "protocol.json"
-    ledger_path = root / "source-ledger.json"
+    protocol_path = root / _PROTOCOL_FILE
+    ledger_path = root / _SOURCE_LEDGER_FILE
     _write_json(protocol_path, protocol)
     _write_json(ledger_path, source_ledger)
     plan_paths = _write_schedule_partitions(root, protocol, selection)
     scenario, task, manifest, participant_selection, configuration = _load_study_inputs(source_root)
     reference = capture_reference_path(source_root)
-    reference_path = root / "reference.json"
+    reference_path = root / _REFERENCE_FILE
     _write_json(reference_path, reference)
-    environment_path = root / "environment.json"
+    environment_path = root / _ENVIRONMENT_FILE
     _write_json(environment_path, _write_environment(protocol))
-    runtime_driver = cast(
-        CyborgDriver,
-        driver if driver is not None else SourceInstalledCyborgDriver(expected_version="2.1"),
-    )
-    begin_stream_value = getattr(runtime_driver, "begin_ordered_stream", None)
-    checkpoint_stream_value = getattr(runtime_driver, "ordered_stream_checkpoint", None)
-    restore_stream_value = getattr(runtime_driver, "restore_ordered_stream", None)
-    if not all(
-        callable(item)
-        for item in (begin_stream_value, checkpoint_stream_value, restore_stream_value)
-    ):
-        raise ValueError("study driver has no recoverable ordered stream")
-    begin_stream = cast(Callable[[int], None], begin_stream_value)
-    checkpoint_stream = cast(Callable[[], object], checkpoint_stream_value)
-    restore_stream = cast(Callable[[object], None], restore_stream_value)
-    begin_stream(selection.seed)
-    runs_root = root / "runs"
-    os.mkdir(runs_root, 0o700)
-    all_attempts: list[dict[str, object]] = []
-    condition_inventories: list[Path] = []
-    schedule = _schedule(selection)
+    runtime_driver, checkpoint_stream, restore_stream = _recoverable_study_driver(driver, selection)
     scenario_digest = task.scenario_ref.ref_digest
     if not isinstance(scenario_digest, str):
         raise ValueError("task scenario digest is unavailable")
-    for partition in _schedule_partitions(selection):
-        condition_id = cast(str, partition["condition_id"])
-        condition_root = runs_root / condition_id
-        os.mkdir(condition_root, 0o700)
-        slots = [item for item in schedule if item["condition_id"] == condition_id]
-        condition_checkpoint = checkpoint_stream()
-        cleanup_attempts: list[dict[str, object]] = []
-        condition_completed = False
-        for attempt_sequence in range(1, selection.retry_limit + 2):
-            if attempt_sequence > 1:
-                restore_stream(condition_checkpoint)
-            attempt_slots = [_slot_for_attempt(slot, attempt_sequence) for slot in slots]
-            staged: dict[str, dict[str, object]] = {}
-            run_roots: dict[str, Path] = {}
-            for attempt_slot in attempt_slots:
-                run_id = cast(str, attempt_slot["run_id"])
-                run_root = condition_root / run_id
-                os.mkdir(run_root, 0o700)
-                run_roots[run_id] = run_root
-
-            def consume(
-                controls: RunControls,
-                episode: EpisodeEvidence,
-                *,
-                _staged: dict[str, dict[str, object]] = staged,
-                _run_roots: dict[str, Path] = run_roots,
-                _condition_id: str = condition_id,
-                _slot_count: int = len(slots),
-            ) -> None:
-                _staged[controls.run_id] = _write_episode_evidence(
-                    _run_roots[controls.run_id],
-                    (_run_roots[controls.run_id] / "evidence-index.json")
-                    .relative_to(root)
-                    .as_posix(),
-                    controls,
-                    episode,
-                    task,
-                    scenario_digest,
-                )
-                if progress is not None:
-                    progress(_condition_id, len(_staged), _slot_count)
-
-            controls = _condition_controls(
-                attempt_slots,
-                protocol,
-                manifest,
-                participant_selection,
-                configuration,
-            )
-            condition_success = False
-            try:
-                with (
-                    Path(os.devnull).open("w", encoding="utf-8") as sink,
-                    redirect_stdout(sink),
-                    redirect_stderr(sink),
-                ):
-                    execute_episode_series(
-                        scenario,
-                        controls,
-                        driver=runtime_driver,
-                        episode_consumer=consume,
-                        retain_evidence=False,
-                    )
-                condition_success = len(staged) == len(slots)
-            except Exception:
-                condition_success = False
-            cleanup_attempts.append(
-                {
-                    "attempt_sequence": attempt_sequence,
-                    "run_count": len(attempt_slots),
-                    "verified": condition_success,
-                }
-            )
-            for slot, attempt_slot in zip(slots, attempt_slots, strict=True):
-                run_id = cast(str, attempt_slot["run_id"])
-                run_root = run_roots[run_id]
-                if condition_success:
-                    stage = staged[run_id]
-                    record = _attempt_record(
-                        protocol,
-                        slot,
-                        attempt_sequence=attempt_sequence,
-                        disposition="valid",
-                        cleanup_verified=True,
-                        score_measure=stage["score_measure"],
-                        evidence_refs=cast(list[str], stage["evidence_refs"]),
-                    )
-                else:
-                    for artifact in run_root.iterdir():
-                        if artifact.is_symlink() or not artifact.is_file():
-                            raise ValueError("failed attempt artifact boundary is invalid")
-                        artifact.unlink()
-                    record = _attempt_record(
-                        protocol,
-                        slot,
-                        attempt_sequence=attempt_sequence,
-                        disposition="failed",
-                        cleanup_verified=False,
-                        diagnostic_code="cyborg-reproduction.condition-session-failed",
-                    )
-                attempt_path = run_root / "attempt.json.gz"
-                _write_gzip_json(attempt_path, record)
-                members = [item for item in run_root.rglob("*") if item.is_file()]
-                _seal_inventory(run_root, members)
-                all_attempts.append(record)
-            if condition_success:
-                condition_completed = True
-                break
-        _write_json(
-            condition_root / "cleanup.json",
-            {
-                "condition_id": condition_id,
-                "completed": condition_completed,
-                "attempts": cleanup_attempts,
-            },
-        )
-        condition_inventories.append(_condition_inventory(condition_root))
-    aggregates = compute_aggregates(protocol, all_attempts)
-    aggregates_path = root / "aggregates.json"
-    _write_json(aggregates_path, aggregates)
-    tiers = build_tiers(protocol, aggregates, reference)
-    tiers_path = root / "tiers.json"
-    _write_json(tiers_path, tiers)
-    report_path = _write_validation_report(root, tiers)
-    scan_public_tree(root)
-    root_members = [
+    context = _StudyContext(
+        root,
+        protocol,
+        scenario,
+        task,
+        manifest,
+        participant_selection,
+        configuration,
+        runtime_driver,
+        checkpoint_stream,
+        restore_stream,
+        scenario_digest,
+        progress,
+    )
+    all_attempts, condition_inventories = _execute_study_schedule(context, selection)
+    root_members = (
         protocol_path,
         ledger_path,
         reference_path,
         environment_path,
-        aggregates_path,
-        tiers_path,
-        report_path,
         *plan_paths,
         *condition_inventories,
-    ]
-    _seal_inventory(root, root_members)
+    )
+    _finalize_study_bundle(root, protocol, reference, all_attempts, root_members)
     return root
+
+
+def _validated_evidence_index(run_root: Path) -> dict[str, object]:
+    """Load and validate the top-level evidence index shape."""
+
+    index = load_strict_json(run_root / _EVIDENCE_INDEX_FILE)
+    _require_exact_keys(index, {"record_count", "chunks", "episode_summary"}, "evidence index")
+    chunks = index["chunks"]
+    if not isinstance(chunks, list) or not chunks:
+        raise ValueError("evidence index is invalid")
+    return index
+
+
+def _evidence_chunk_mapping(chunk: object) -> dict[str, object]:
+    """Return one shape-validated evidence chunk entry."""
+
+    if not isinstance(chunk, dict):
+        raise ValueError("evidence index is invalid")
+    _require_exact_keys(
+        chunk,
+        {"path", "sha256", "record_count", "first_logical_step", "last_logical_step"},
+        "evidence chunk",
+    )
+    return chunk
+
+
+def _chunk_records(
+    run_root: Path, chunk: Mapping[str, object]
+) -> list[ExperimentEvidenceRecordModel]:
+    """Load and validate the contents of one evidence chunk."""
+
+    relative = chunk["path"]
+    if not isinstance(relative, str) or Path(relative).name != relative:
+        raise ValueError("evidence chunk path is invalid")
+    path = run_root / relative
+    if _sha256_file(path) != chunk["sha256"]:
+        raise ValueError("evidence chunk digest is invalid")
+    values = _load_strict_json_value(path)
+    if not isinstance(values, list) or len(values) != chunk["record_count"]:
+        raise ValueError("evidence chunk is invalid")
+    return [ExperimentEvidenceRecordModel.model_validate(item) for item in values]
+
+
+def _validate_chunk_order(
+    records: Sequence[ExperimentEvidenceRecordModel], chunk: Mapping[str, object]
+) -> None:
+    """Validate monotonic steps and the declared evidence-chunk bounds."""
+
+    steps = [_evidence_step(record) for record in records]
+    valid_order = (
+        bool(steps)
+        and steps == sorted(steps)
+        and min(steps) == chunk["first_logical_step"]
+        and max(steps) == chunk["last_logical_step"]
+    )
+    if not valid_order:
+        raise ValueError("evidence chunk ordering is invalid")
+
+
+def _validated_chunk_records(run_root: Path, chunk: object) -> list[ExperimentEvidenceRecordModel]:
+    """Load and validate one ordered evidence chunk."""
+
+    mapping = _evidence_chunk_mapping(chunk)
+    records = _chunk_records(run_root, mapping)
+    _validate_chunk_order(records, mapping)
+    return records
+
+
+def _validated_evidence_records(
+    run_root: Path, index: Mapping[str, object]
+) -> list[ExperimentEvidenceRecordModel]:
+    """Return the complete unique record sequence declared by an index."""
+
+    records = [
+        record
+        for chunk in cast(list[dict[str, object]], index["chunks"])
+        for record in _validated_chunk_records(run_root, chunk)
+    ]
+    record_ids = [record.evidence_record_id for record in records]
+    if len(record_ids) != index["record_count"] or len(record_ids) != len(set(record_ids)):
+        raise ValueError("evidence record closure is invalid")
+    return records
+
+
+def _validated_episode_summary(
+    run_root: Path, index: Mapping[str, object]
+) -> tuple[Path, dict[str, object], list[ExperimentDerivedMeasureModel]]:
+    """Load the digest-bound episode summary and its derived measures."""
+
+    summary_ref = index["episode_summary"]
+    if not isinstance(summary_ref, dict):
+        raise ValueError("episode summary reference is invalid")
+    _require_exact_keys(summary_ref, {"path", "sha256"}, "episode summary reference")
+    relative = summary_ref["path"]
+    if not isinstance(relative, str) or Path(relative).name != relative:
+        raise ValueError("episode summary path is invalid")
+    summary_path = run_root / relative
+    if _sha256_file(summary_path) != summary_ref["sha256"]:
+        raise ValueError("episode summary digest is invalid")
+    summary = load_strict_json(summary_path)
+    _require_exact_keys(
+        summary,
+        {"derived_measures", "proposition_truth", "objective_results", "diagnostics"},
+        "episode summary",
+    )
+    values = summary["derived_measures"]
+    if not isinstance(values, list) or not values:
+        raise ValueError("derived measures are invalid")
+    measures = [ExperimentDerivedMeasureModel.model_validate(item) for item in values]
+    return summary_path, summary, measures
+
+
+def _referenced_record_ids(
+    measures: Sequence[ExperimentDerivedMeasureModel],
+) -> set[str]:
+    """Return the exact record identifiers referenced by derived measures."""
+
+    return {ref.ref_id for measure in measures for ref in measure.source_evidence_refs}
+
+
+def _retained_evidence_records(
+    records: Sequence[ExperimentEvidenceRecordModel], referenced: set[str]
+) -> list[ExperimentEvidenceRecordModel]:
+    """Select and validate the exact referenced evidence closure."""
+
+    retained = [record for record in records if record.evidence_record_id in referenced]
+    if {record.evidence_record_id for record in retained} != referenced:
+        raise ValueError("derived-measure evidence closure is invalid")
+    return retained
+
+
+def _rewrite_compacted_index(
+    run_root: Path,
+    summary_path: Path,
+    retained: Sequence[ExperimentEvidenceRecordModel],
+) -> bytes:
+    """Replace evidence chunks and return the rewritten index bytes."""
+
+    for path in run_root.glob("evidence-*.json.gz"):
+        path.unlink()
+    chunks = _write_evidence_chunks(run_root, retained)
+    index_path = run_root / _EVIDENCE_INDEX_FILE
+    _write_json(
+        index_path,
+        {
+            "record_count": len(retained),
+            "chunks": chunks,
+            "episode_summary": {
+                "path": summary_path.relative_to(run_root).as_posix(),
+                "sha256": _sha256_file(summary_path),
+            },
+        },
+    )
+    return index_path.read_bytes()
+
+
+def _rewrite_compacted_run(
+    run_root: Path,
+    task: ExperimentTaskModel,
+    referenced: set[str],
+    index_bytes: bytes,
+) -> None:
+    """Rebind one run contract to its compacted evidence index and reseal it."""
+
+    run_payload = load_strict_json(run_root / _RUN_FILE)
+    artifacts = cast(list[dict[str, object]], run_payload["evidence_artifacts"])
+    if len(artifacts) != 1:
+        raise ValueError("run evidence artifacts are invalid")
+    artifacts[0]["checksum"] = {
+        "algorithm": "sha256",
+        "value": hashlib.sha256(index_bytes).hexdigest(),
+    }
+    artifacts[0]["size_bytes"] = len(index_bytes)
+    traceability = cast(dict[str, object], run_payload["traceability"])
+    traceability["evidence_record_refs"] = [
+        item
+        for item in cast(list[dict[str, object]], traceability["evidence_record_refs"])
+        if item["ref_id"] in referenced
+    ]
+    run = ExperimentRunModel.model_validate(run_payload)
+    validate_experiment_run_against_task(task, run)
+    _write_gzip_json(run_root / _RUN_FILE, run.model_dump(mode="json"))
+    members = [
+        path for path in run_root.iterdir() if path.is_file() and path.name != _INVENTORY_FILE
+    ]
+    _seal_inventory(run_root, members)
+
+
+def _compact_valid_run_evidence(run_root: Path, task: ExperimentTaskModel) -> None:
+    """Reduce one valid run to records referenced by retained measures."""
+
+    index = _validated_evidence_index(run_root)
+    summary_path, _, measures = _validated_episode_summary(run_root, index)
+    referenced = _referenced_record_ids(measures)
+    records = _validated_evidence_records(run_root, index)
+    retained = _retained_evidence_records(records, referenced)
+    index_bytes = _rewrite_compacted_index(run_root, summary_path, retained)
+    _rewrite_compacted_run(run_root, task, referenced, index_bytes)
+
+
+def _validated_attempt_from_root(
+    run_root: Path,
+    protocol: Mapping[str, object],
+    slots: Mapping[str, Mapping[str, object]],
+) -> dict[str, object]:
+    """Load and validate one attempt joined to a declared logical slot."""
+
+    attempt = load_strict_json(run_root / _ATTEMPT_FILE)
+    slot_id = attempt.get("slot_id")
+    if not isinstance(slot_id, str) or slot_id not in slots:
+        raise ValueError(_INVALID_ATTEMPT_SLOT_JOIN)
+    _validate_attempt(attempt, protocol, slots[slot_id])
+    return attempt
+
+
+def _condition_run_roots(condition_root: Path) -> list[Path]:
+    """Return the ordered direct run directories for one condition."""
+
+    return sorted(path for path in condition_root.iterdir() if path.is_dir())
+
+
+def _verify_condition_inventory(condition_root: Path, run_roots: Sequence[Path]) -> None:
+    """Verify one condition inventory against its direct run inventories."""
+
+    _verify_inventory(
+        condition_root,
+        expected_members={_CLEANUP_FILE}
+        | {f"{run_root.name}/{_INVENTORY_FILE}" for run_root in run_roots},
+    )
+
+
+def _refresh_bundle_projections(
+    bundle: Path,
+    protocol: Mapping[str, object],
+    attempts: Sequence[Mapping[str, object]],
+    root_members: Sequence[Path],
+) -> None:
+    """Recompute and reseal deterministic projections after compaction."""
+
+    aggregates = compute_aggregates(protocol, attempts)
+    _write_json(bundle / _AGGREGATES_FILE, aggregates)
+    reference = load_strict_json(bundle / _REFERENCE_FILE)
+    _validate_reference(reference)
+    tiers = build_tiers(protocol, aggregates, reference)
+    _write_json(bundle / _TIERS_FILE, tiers)
+    _write_validation_report(bundle, tiers)
+    _seal_inventory(bundle, root_members)
 
 
 def compact_bundle_evidence(
@@ -1949,7 +2585,7 @@ def compact_bundle_evidence(
     """
 
     bundle = root.resolve()
-    protocol = load_strict_json(bundle / "protocol.json")
+    protocol = load_strict_json(bundle / _PROTOCOL_FILE)
     selection = _selection_from_declaration(cast(dict[str, object], protocol["declaration"]))
     validate_protocol(protocol, selection=selection)
     _verify_inventory(bundle)
@@ -1958,130 +2594,39 @@ def compact_bundle_evidence(
     )
     task = ExperimentTaskModel.model_validate(contracts["experiment_task"])
     slots = _slot_index(protocol)
-    root_inventory = load_strict_json(bundle / "inventory.json")
+    root_inventory = load_strict_json(bundle / _INVENTORY_FILE)
     inventory_artifacts = cast(list[dict[str, object]], root_inventory["artifacts"])
     root_members = [bundle / cast(str, item["path"]) for item in inventory_artifacts]
     condition_roots = sorted(path for path in (bundle / "runs").iterdir() if path.is_dir())
     run_roots = [
         run_root
         for condition_root in condition_roots
-        for run_root in sorted(path for path in condition_root.iterdir() if path.is_dir())
+        for run_root in _condition_run_roots(condition_root)
     ]
     total = len(run_roots)
     completed = 0
     all_attempts: list[dict[str, object]] = []
     for condition_root in condition_roots:
-        condition_run_roots = sorted(path for path in condition_root.iterdir() if path.is_dir())
-        _verify_inventory(
-            condition_root,
-            expected_members={"cleanup.json"}
-            | {f"{run_root.name}/inventory.json" for run_root in condition_run_roots},
-        )
+        condition_run_roots = _condition_run_roots(condition_root)
+        _verify_condition_inventory(condition_root, condition_run_roots)
         for run_root in condition_run_roots:
             _verify_inventory(run_root)
-            attempt = load_strict_json(run_root / "attempt.json.gz")
-            slot_id = attempt.get("slot_id")
-            if not isinstance(slot_id, str) or slot_id not in slots:
-                raise ValueError("attempt slot join is invalid")
-            _validate_attempt(attempt, protocol, slots[slot_id])
+            attempt = _validated_attempt_from_root(run_root, protocol, slots)
             all_attempts.append(attempt)
             if attempt["disposition"] == "valid":
-                index = load_strict_json(run_root / "evidence-index.json")
-                summary_ref = cast(dict[str, object], index["episode_summary"])
-                summary_path = run_root / cast(str, summary_ref["path"])
-                if _sha256_file(summary_path) != summary_ref["sha256"]:
-                    raise ValueError("episode summary digest is invalid")
-                summary = load_strict_json(summary_path)
-                measures = [
-                    ExperimentDerivedMeasureModel.model_validate(item)
-                    for item in cast(list[dict[str, object]], summary["derived_measures"])
-                ]
-                referenced = {
-                    ref.ref_id for measure in measures for ref in measure.source_evidence_refs
-                }
-                records: list[ExperimentEvidenceRecordModel] = []
-                for chunk in cast(list[dict[str, object]], index["chunks"]):
-                    chunk_path = run_root / cast(str, chunk["path"])
-                    if _sha256_file(chunk_path) != chunk["sha256"]:
-                        raise ValueError("evidence chunk digest is invalid")
-                    values = _load_strict_json_value(chunk_path)
-                    if not isinstance(values, list) or len(values) != chunk["record_count"]:
-                        raise ValueError("evidence chunk is invalid")
-                    chunk_records = [
-                        ExperimentEvidenceRecordModel.model_validate(item) for item in values
-                    ]
-                    steps = [_evidence_step(record) for record in chunk_records]
-                    if (
-                        not steps
-                        or steps != sorted(steps)
-                        or min(steps) != chunk["first_logical_step"]
-                        or max(steps) != chunk["last_logical_step"]
-                    ):
-                        raise ValueError("evidence chunk ordering is invalid")
-                    records.extend(chunk_records)
-                if len(records) != index["record_count"]:
-                    raise ValueError("evidence record closure is invalid")
-                retained = [record for record in records if record.evidence_record_id in referenced]
-                if {record.evidence_record_id for record in retained} != referenced:
-                    raise ValueError("derived-measure evidence closure is invalid")
-                for path in run_root.glob("evidence-*.json.gz"):
-                    path.unlink()
-                chunks = _write_evidence_chunks(run_root, retained)
-                _write_json(
-                    run_root / "evidence-index.json",
-                    {
-                        "record_count": len(retained),
-                        "chunks": chunks,
-                        "episode_summary": {
-                            "path": summary_path.relative_to(run_root).as_posix(),
-                            "sha256": _sha256_file(summary_path),
-                        },
-                    },
-                )
-                index_bytes = (run_root / "evidence-index.json").read_bytes()
-                run_payload = load_strict_json(run_root / "run.json.gz")
-                artifacts = cast(list[dict[str, object]], run_payload["evidence_artifacts"])
-                if len(artifacts) != 1:
-                    raise ValueError("run evidence artifacts are invalid")
-                artifacts[0]["checksum"] = {
-                    "algorithm": "sha256",
-                    "value": hashlib.sha256(index_bytes).hexdigest(),
-                }
-                artifacts[0]["size_bytes"] = len(index_bytes)
-                traceability = cast(dict[str, object], run_payload["traceability"])
-                traceability["evidence_record_refs"] = [
-                    item
-                    for item in cast(list[dict[str, object]], traceability["evidence_record_refs"])
-                    if item["ref_id"] in referenced
-                ]
-                run = ExperimentRunModel.model_validate(run_payload)
-                validate_experiment_run_against_task(task, run)
-                _write_gzip_json(run_root / "run.json.gz", run.model_dump(mode="json"))
-                _seal_inventory(
-                    run_root,
-                    [
-                        path
-                        for path in run_root.iterdir()
-                        if path.is_file() and path.name != "inventory.json"
-                    ],
-                )
+                _compact_valid_run_evidence(run_root, task)
             completed += 1
             if progress is not None:
                 progress(completed, total)
         _condition_inventory(condition_root)
-    aggregates = compute_aggregates(protocol, all_attempts)
-    _write_json(bundle / "aggregates.json", aggregates)
-    reference = load_strict_json(bundle / "reference.json")
-    _validate_reference(reference)
-    tiers = build_tiers(protocol, aggregates, reference)
-    _write_json(bundle / "tiers.json", tiers)
-    _write_validation_report(bundle, tiers)
-    _seal_inventory(bundle, root_members)
+    _refresh_bundle_projections(bundle, protocol, all_attempts, root_members)
     verify_bundle(bundle, selection=selection)
     return bundle
 
 
 def _verify_schedule_partitions(root: Path, protocol: Mapping[str, object]) -> None:
+    """Verify every condition plan against the frozen declaration."""
+
     declaration = cast(dict[str, object], protocol["declaration"])
     expected = _slot_index(protocol)
     observed: list[dict[str, object]] = []
@@ -2107,84 +2652,12 @@ def _verify_schedule_partitions(root: Path, protocol: Mapping[str, object]) -> N
         raise ValueError("schedule partitions do not join the protocol")
 
 
-def _valid_run_evidence(
-    bundle: Path,
-    run_root: Path,
-    attempt: Mapping[str, object],
-    task: ExperimentTaskModel,
-) -> None:
-    """Validate the sealed portable evidence closure for one eligible attempt."""
+def _reported_score_measure(
+    measures: Sequence[ExperimentDerivedMeasureModel],
+) -> ExperimentDerivedMeasureModel | None:
+    """Return the retained reported score measure when present."""
 
-    index_path = run_root / "evidence-index.json"
-    index = load_strict_json(index_path)
-    _require_exact_keys(index, {"record_count", "chunks", "episode_summary"}, "evidence index")
-    chunks = index["chunks"]
-    if not isinstance(chunks, list) or not chunks:
-        raise ValueError("evidence index is invalid")
-    record_ids: list[str] = []
-    for chunk in chunks:
-        if not isinstance(chunk, dict):
-            raise ValueError("evidence index is invalid")
-        _require_exact_keys(
-            chunk,
-            {
-                "path",
-                "sha256",
-                "record_count",
-                "first_logical_step",
-                "last_logical_step",
-            },
-            "evidence chunk",
-        )
-        relative = chunk["path"]
-        if not isinstance(relative, str) or Path(relative).name != relative:
-            raise ValueError("evidence chunk path is invalid")
-        path = run_root / relative
-        if _sha256_file(path) != chunk["sha256"]:
-            raise ValueError("evidence chunk digest is invalid")
-        values = _load_strict_json_value(path)
-        if not isinstance(values, list) or len(values) != chunk["record_count"]:
-            raise ValueError("evidence chunk is invalid")
-        records = [ExperimentEvidenceRecordModel.model_validate(item) for item in values]
-        steps = [_evidence_step(record) for record in records]
-        if (
-            not steps
-            or steps != sorted(steps)
-            or min(steps) != chunk["first_logical_step"]
-            or max(steps) != chunk["last_logical_step"]
-        ):
-            raise ValueError("evidence chunk ordering is invalid")
-        record_ids.extend(record.evidence_record_id for record in records)
-    if len(record_ids) != index["record_count"] or len(record_ids) != len(set(record_ids)):
-        raise ValueError("evidence record closure is invalid")
-
-    summary_ref = index["episode_summary"]
-    if not isinstance(summary_ref, dict):
-        raise ValueError("episode summary reference is invalid")
-    _require_exact_keys(summary_ref, {"path", "sha256"}, "episode summary reference")
-    summary_relative = summary_ref["path"]
-    if not isinstance(summary_relative, str) or Path(summary_relative).name != summary_relative:
-        raise ValueError("episode summary path is invalid")
-    summary_path = run_root / summary_relative
-    if _sha256_file(summary_path) != summary_ref["sha256"]:
-        raise ValueError("episode summary digest is invalid")
-    summary = load_strict_json(summary_path)
-    _require_exact_keys(
-        summary,
-        {"derived_measures", "proposition_truth", "objective_results", "diagnostics"},
-        "episode summary",
-    )
-    measure_values = summary["derived_measures"]
-    if not isinstance(measure_values, list) or not measure_values:
-        raise ValueError("derived measures are invalid")
-    measures = [ExperimentDerivedMeasureModel.model_validate(item) for item in measure_values]
-    known_records = set(record_ids)
-    referenced_records = {
-        ref.ref_id for measure in measures for ref in measure.source_evidence_refs
-    }
-    if referenced_records != known_records:
-        raise ValueError("derived-measure evidence closure is invalid")
-    score = next(
+    return next(
         (
             item
             for item in measures
@@ -2194,40 +2667,150 @@ def _valid_run_evidence(
         ),
         None,
     )
-    if score is None or canonical_json_bytes(score.model_dump(mode="json")) != canonical_json_bytes(
-        attempt["score_measure"]
-    ):
+
+
+def _validate_attempt_episode_score(
+    attempt: Mapping[str, object], measures: Sequence[ExperimentDerivedMeasureModel]
+) -> None:
+    """Require an attempt score to equal its retained episode score measure."""
+
+    score = _reported_score_measure(measures)
+    if score is None:
+        raise ValueError("attempt score does not join the episode evidence")
+    observed = canonical_json_bytes(score.model_dump(mode="json"))
+    if observed != canonical_json_bytes(attempt["score_measure"]):
         raise ValueError("attempt score does not join the episode evidence")
 
-    run_path = run_root / "run.json.gz"
-    run_payload = load_strict_json(run_path)
-    run = ExperimentRunModel.model_validate(run_payload)
-    validate_experiment_run_against_task(task, run)
+
+def _validate_run_traceability(
+    run_payload: Mapping[str, object],
+    known_records: set[str],
+    measures: Sequence[ExperimentDerivedMeasureModel],
+) -> None:
+    """Validate the run's exact evidence-record and measure reference closure."""
+
     traceability = cast(dict[str, object], run_payload["traceability"])
-    trace_record_refs = cast(list[dict[str, object]], traceability["evidence_record_refs"])
-    trace_measure_refs = cast(list[dict[str, object]], traceability["derived_measure_refs"])
-    if {cast(str, item["ref_id"]) for item in trace_record_refs} != known_records:
+    record_refs = cast(list[dict[str, object]], traceability["evidence_record_refs"])
+    measure_refs = cast(list[dict[str, object]], traceability["derived_measure_refs"])
+    if {cast(str, item["ref_id"]) for item in record_refs} != known_records:
         raise ValueError("run evidence traceability is incomplete")
-    if {cast(str, item["ref_id"]) for item in trace_measure_refs} != {
-        item.derived_measure_id for item in measures
-    }:
+    expected_measures = {item.derived_measure_id for item in measures}
+    if {cast(str, item["ref_id"]) for item in measure_refs} != expected_measures:
         raise ValueError("run measure traceability is incomplete")
-    artifact_relative = index_path.relative_to(bundle).as_posix()
+
+
+def _validate_run_artifact(
+    bundle: Path,
+    run_payload: Mapping[str, object],
+    index_path: Path,
+) -> None:
+    """Validate the run's sole portable evidence artifact reference."""
+
+    relative = index_path.relative_to(bundle).as_posix()
     artifacts = cast(list[dict[str, object]], run_payload["evidence_artifacts"])
-    if len(artifacts) != 1 or artifacts[0].get("uri") != artifact_relative:
+    if len(artifacts) != 1 or artifacts[0].get("uri") != relative:
         raise ValueError("run evidence artifact path is invalid")
     checksum = artifacts[0].get("checksum")
     if not isinstance(checksum, dict) or checksum.get("value") != _sha256_file(index_path):
         raise ValueError("run evidence artifact digest is invalid")
-    result_summaries = cast(dict[str, dict[str, object]], run_payload["result_summaries"])
-    result = result_summaries.get("cage2-cumulative-blue-reward-result")
-    if result is None or float(cast(float, result.get("value"))) != _validate_score_measure(
-        attempt["score_measure"]
-    ):
+
+
+def _validate_run_score_summary(
+    run_payload: Mapping[str, object], attempt: Mapping[str, object]
+) -> None:
+    """Validate the archival run's primary score summary."""
+
+    summaries = cast(dict[str, dict[str, object]], run_payload["result_summaries"])
+    result = summaries.get("cage2-cumulative-blue-reward-result")
+    if result is None:
+        raise ValueError("run score summary is invalid")
+    expected = _validate_score_measure(attempt["score_measure"])
+    if float(cast(float, result.get("value"))) != expected:
         raise ValueError("run score summary is invalid")
 
 
+def _validate_run_evidence_contract(
+    bundle: Path,
+    run_root: Path,
+    attempt: Mapping[str, object],
+    task: ExperimentTaskModel,
+    known_records: set[str],
+    measures: Sequence[ExperimentDerivedMeasureModel],
+) -> None:
+    """Validate the RAES run and every retained evidence join."""
+
+    run_payload = load_strict_json(run_root / _RUN_FILE)
+    run = ExperimentRunModel.model_validate(run_payload)
+    validate_experiment_run_against_task(task, run)
+    _validate_run_traceability(run_payload, known_records, measures)
+    _validate_run_artifact(bundle, run_payload, run_root / _EVIDENCE_INDEX_FILE)
+    _validate_run_score_summary(run_payload, attempt)
+
+
+def _valid_run_evidence(
+    bundle: Path,
+    run_root: Path,
+    attempt: Mapping[str, object],
+    task: ExperimentTaskModel,
+) -> None:
+    """Validate the sealed portable evidence closure for one eligible attempt."""
+
+    index = _validated_evidence_index(run_root)
+    records = _validated_evidence_records(run_root, index)
+    _, _, measures = _validated_episode_summary(run_root, index)
+    known_records = {record.evidence_record_id for record in records}
+    if _referenced_record_ids(measures) != known_records:
+        raise ValueError("derived-measure evidence closure is invalid")
+    _validate_attempt_episode_score(attempt, measures)
+    _validate_run_evidence_contract(bundle, run_root, attempt, task, known_records, measures)
+
+
+def _validated_condition_roots(runs_root: Path, expected: set[str]) -> list[Path]:
+    """Return direct condition directories after exact membership validation."""
+
+    entries = list(runs_root.iterdir())
+    roots = sorted(path for path in entries if path.is_dir())
+    invalid_membership = (
+        any(path.is_symlink() or not path.is_dir() for path in entries)
+        or {path.name for path in roots} != expected
+    )
+    if invalid_membership:
+        raise ValueError("run condition membership is invalid")
+    return roots
+
+
+def _validate_run_root_membership(run_root: Path) -> None:
+    """Reject links and nested directories inside one sealed run."""
+
+    if run_root.is_symlink() or any(path.is_dir() for path in run_root.iterdir()):
+        raise ValueError("run artifact membership is invalid")
+
+
+def _load_condition_attempts(
+    bundle: Path,
+    condition_root: Path,
+    protocol: Mapping[str, object],
+    slots: Mapping[str, Mapping[str, object]],
+    task: ExperimentTaskModel,
+) -> list[dict[str, object]]:
+    """Load every sealed attempt under one condition."""
+
+    attempts: list[dict[str, object]] = []
+    run_roots = _condition_run_roots(condition_root)
+    _verify_condition_inventory(condition_root, run_roots)
+    for run_root in run_roots:
+        _validate_run_root_membership(run_root)
+        _verify_inventory(run_root)
+        attempt = _validated_attempt_from_root(run_root, protocol, slots)
+        if attempt["disposition"] == "valid":
+            _valid_run_evidence(bundle, run_root, attempt, task)
+        attempts.append(attempt)
+    return attempts
+
+
 def _load_attempts(root: Path, protocol: Mapping[str, object]) -> list[dict[str, object]]:
+    """Load and validate every sealed operational attempt."""
+
     attempts: list[dict[str, object]] = []
     slots = _slot_index(protocol)
     declaration = cast(dict[str, object], protocol["declaration"])
@@ -2235,31 +2818,12 @@ def _load_attempts(root: Path, protocol: Mapping[str, object]) -> list[dict[str,
     task = ExperimentTaskModel.model_validate(contracts["experiment_task"])
     runs_root = root / "runs"
     expected_conditions = {cast(str, slot["condition_id"]) for slot in slots.values()}
-    condition_roots = sorted(path for path in runs_root.iterdir() if path.is_dir())
-    if (
-        any(path.is_symlink() or not path.is_dir() for path in runs_root.iterdir())
-        or {path.name for path in condition_roots} != expected_conditions
-    ):
-        raise ValueError("run condition membership is invalid")
-    for condition_root in condition_roots:
-        run_roots = sorted(path for path in condition_root.iterdir() if path.is_dir())
-        _verify_inventory(
-            condition_root,
-            expected_members={"cleanup.json"}
-            | {f"{run_root.name}/inventory.json" for run_root in run_roots},
-        )
-        for run_root in run_roots:
-            if run_root.is_symlink() or any(path.is_dir() for path in run_root.iterdir()):
-                raise ValueError("run artifact membership is invalid")
-            _verify_inventory(run_root)
-            attempt = load_strict_json(run_root / "attempt.json.gz")
-            slot_id = attempt.get("slot_id")
-            if not isinstance(slot_id, str) or slot_id not in slots:
-                raise ValueError("attempt slot join is invalid")
-            _validate_attempt(attempt, protocol, slots[slot_id])
-            if attempt["disposition"] == "valid":
-                _valid_run_evidence(root, run_root, attempt, task)
-            attempts.append(attempt)
+    condition_roots = _validated_condition_roots(runs_root, expected_conditions)
+    attempts.extend(
+        attempt
+        for condition_root in condition_roots
+        for attempt in _load_condition_attempts(root, condition_root, protocol, slots, task)
+    )
     return attempts
 
 
@@ -2277,20 +2841,20 @@ def verify_bundle(
         or {path.name for path in bundle.iterdir() if path.is_dir()} != expected_root_directories
     ):
         raise ValueError("bundle directory membership is invalid")
-    protocol = load_strict_json(bundle / "protocol.json")
+    protocol = load_strict_json(bundle / _PROTOCOL_FILE)
     validate_protocol(protocol, selection=selection)
     declaration = cast(dict[str, object], protocol["declaration"])
     conditions = {cast(str, slot["condition_id"]) for slot in _slot_index(protocol).values()}
     _verify_inventory(
         bundle,
         expected_members={
-            "protocol.json",
-            "source-ledger.json",
-            "reference.json",
-            "environment.json",
-            "aggregates.json",
-            "tiers.json",
-            "validation-report.md",
+            _PROTOCOL_FILE,
+            _SOURCE_LEDGER_FILE,
+            _REFERENCE_FILE,
+            _ENVIRONMENT_FILE,
+            _AGGREGATES_FILE,
+            _TIERS_FILE,
+            _VALIDATION_REPORT_FILE,
             *{
                 cast(str, partition["path"])
                 for partition in cast(list[dict[str, object]], declaration["schedule_partitions"])
@@ -2298,23 +2862,23 @@ def verify_bundle(
             *{f"runs/{condition}/inventory.json" for condition in conditions},
         },
     )
-    ledger = load_strict_json(bundle / "source-ledger.json")
+    ledger = load_strict_json(bundle / _SOURCE_LEDGER_FILE)
     _validate_source_ledger(ledger, protocol)
-    _validate_environment(load_strict_json(bundle / "environment.json"), protocol)
+    _validate_environment(load_strict_json(bundle / _ENVIRONMENT_FILE), protocol)
     _verify_schedule_partitions(bundle, protocol)
     attempts = _load_attempts(bundle, protocol)
     aggregates = compute_aggregates(protocol, attempts)
     if canonical_json_bytes(aggregates) != canonical_json_bytes(
-        load_strict_json(bundle / "aggregates.json")
+        load_strict_json(bundle / _AGGREGATES_FILE)
     ):
         raise ValueError("aggregate recomputation does not match")
-    reference = load_strict_json(bundle / "reference.json")
+    reference = load_strict_json(bundle / _REFERENCE_FILE)
     _validate_reference(reference)
     tiers = build_tiers(protocol, aggregates, reference)
-    if canonical_json_bytes(tiers) != canonical_json_bytes(load_strict_json(bundle / "tiers.json")):
+    if canonical_json_bytes(tiers) != canonical_json_bytes(load_strict_json(bundle / _TIERS_FILE)):
         raise ValueError("tier recomputation does not match")
     try:
-        report = (bundle / "validation-report.md").read_text(encoding="utf-8")
+        report = (bundle / _VALIDATION_REPORT_FILE).read_text(encoding="utf-8")
     except (OSError, UnicodeError) as error:
         raise ValueError("validation report is invalid") from error
     if report != _validation_report_text(tiers):

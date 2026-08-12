@@ -160,6 +160,8 @@ EXIT_OUTPUT = 4
 EXIT_RUNTIME = 5
 EXIT_ARTIFACT = 6
 EXIT_INTERNAL = 70
+_OUTPUT_UNAVAILABLE_CODE = "researcher.output.unavailable"
+_OUTPUT_UNAVAILABLE_MESSAGE = "output root is unavailable"
 _INVENTORY_NAME = "inventory.json"
 _RUNTIME_FAILURE_CODE = "researcher.runtime.failure"
 _CONTROLS_INVALID_CODE = "researcher.validation.controls-invalid"
@@ -1349,7 +1351,7 @@ def _run_conformance(adapter: _BackendAdapter, args: argparse.Namespace) -> int:
         output = _reserve_output(args.output)
     except _OutputFailure:
         raise _CommandFailure(
-            EXIT_OUTPUT, "researcher.output.unavailable", "output root is unavailable"
+            EXIT_OUTPUT, _OUTPUT_UNAVAILABLE_CODE, _OUTPUT_UNAVAILABLE_MESSAGE
         ) from None
     try:
         conformance_args: dict[str, object] = {
@@ -1431,7 +1433,7 @@ def _native_environment(
         output = _reserve_output(args.output)
     except _OutputFailure:
         raise _CommandFailure(
-            EXIT_OUTPUT, "researcher.output.unavailable", "output root is unavailable"
+            EXIT_OUTPUT, _OUTPUT_UNAVAILABLE_CODE, _OUTPUT_UNAVAILABLE_MESSAGE
         ) from None
     return admitted, output
 
@@ -1691,14 +1693,18 @@ def _dispatch(args: argparse.Namespace) -> int:
     """Dispatch one parsed command through its closed execution path."""
 
     if args.command == "reproduce":
-        return _reproduce(args)
-    if args.command == "inspect":
+        result = _reproduce(args)
+    elif args.command == "inspect":
         print(json.dumps(_adapter(args).inspection_payload(), sort_keys=True))
-        return 0
-    adapter = _adapter(args)
-    if args.command == "validate":
-        return _validated_admission(adapter, args)
-    return _run_command(adapter, args)
+        result = 0
+    else:
+        adapter = _adapter(args)
+        result = (
+            _validated_admission(adapter, args)
+            if args.command == "validate"
+            else _run_command(adapter, args)
+        )
+    return result
 
 
 def _reproduce(args: argparse.Namespace) -> int:
@@ -1728,8 +1734,8 @@ def _reproduce(args: argparse.Namespace) -> int:
     if relative_output is None or not relative_output.parts:
         raise _CommandFailure(
             EXIT_OUTPUT,
-            "researcher.output.unavailable",
-            "output root is unavailable",
+            _OUTPUT_UNAVAILABLE_CODE,
+            _OUTPUT_UNAVAILABLE_MESSAGE,
         )
     result: dict[str, object]
     try:
@@ -1753,8 +1759,8 @@ def _reproduce(args: argparse.Namespace) -> int:
     except FileExistsError:
         raise _CommandFailure(
             EXIT_OUTPUT,
-            "researcher.output.unavailable",
-            "output root is unavailable",
+            _OUTPUT_UNAVAILABLE_CODE,
+            _OUTPUT_UNAVAILABLE_MESSAGE,
         ) from None
     except ValueError:
         raise _CommandFailure(

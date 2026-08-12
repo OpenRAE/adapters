@@ -483,6 +483,22 @@ def _begin_independent_run(
     return _initialize_participants(target, baseline, controls, diagnostics)
 
 
+def _validated_series_first(controls: Sequence[RunControls]) -> RunControls:
+    """Return the shared condition controls after consistency validation."""
+
+    if not controls:
+        raise ValueError("researcher condition series is empty")
+    first = controls[0]
+    if any(
+        item.seed != first.seed
+        or item.max_steps != first.max_steps
+        or item.red_variant != first.red_variant
+        for item in controls
+    ):
+        raise ValueError("researcher condition series controls are inconsistent")
+    return first
+
+
 def execute_episode_series(
     scenario: object,
     controls: Sequence[RunControls],
@@ -498,16 +514,7 @@ def execute_episode_series(
     resets continue, rather than restart, that stream.
     """
 
-    if not controls:
-        raise ValueError("researcher condition series is empty")
-    first = controls[0]
-    if any(
-        item.seed != first.seed
-        or item.max_steps != first.max_steps
-        or item.red_variant != first.red_variant
-        for item in controls
-    ):
-        raise ValueError("researcher condition series controls are inconsistent")
+    first = _validated_series_first(controls)
     target = create_cyborg_target(
         scenario=scenario,
         seed=None,
