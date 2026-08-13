@@ -39,7 +39,9 @@ def test_flat_bundle_and_all_renderers_are_deterministic(tmp_path: Path) -> None
     card = bundle_verifier.verify_bundle(tmp_path)
 
     assert card.status == "verified"
-    assert bundle_verifier.render_card(card, "json") == bundle_verifier.render_card(card, "json")
+    first_json = bundle_verifier.render_card(card, "json")
+    second_json = bundle_verifier.render_card(card, "json")
+    assert first_json == second_json
     assert "integrity-only" in bundle_verifier.render_card(card, "terminal")
     assert "Semantic fidelity: not assessed" in bundle_verifier.render_card(card, "markdown")
 

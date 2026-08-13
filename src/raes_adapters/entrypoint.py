@@ -7,6 +7,8 @@ from collections.abc import Sequence
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Dispatch the offline verifier without importing simulator adapters."""
+
     arguments = list(sys.argv[1:] if argv is None else argv)
     if arguments[:1] == ["verify-bundle"]:
         from raes_adapters.bundle_verifier import main as verify_main

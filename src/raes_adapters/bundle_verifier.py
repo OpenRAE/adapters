@@ -29,6 +29,11 @@ MAX_PATH_BYTES = 1_024
 
 _INVENTORY_NAME = "inventory.json"
 _ENTRY_KEYS = {"media_type", "path", "sha256", "size_bytes"}
+_CODE_ENTRY_MALFORMED = "bundle.inventory.entry-malformed"
+_CODE_FILESYSTEM_MUTATED = "bundle.filesystem.mutated"
+_CODE_FILESYSTEM_UNREADABLE = "bundle.filesystem.unreadable"
+_CODE_INVENTORY_MALFORMED = "bundle.inventory.malformed"
+_CODE_PATH_INVALID = "bundle.inventory.path-invalid"
 
 
 class BundleInvalid(ValueError):
@@ -40,17 +45,23 @@ class BundleInvalid(ValueError):
 
 
 class _UsageFailure(Exception):
-    pass
+    """An intentionally detail-free command-line usage failure."""
 
 
 class _Parser(argparse.ArgumentParser):
+    """Argument parser that maps usage errors to the documented exit code."""
+
     def error(self, message: str) -> NoReturn:
+        """Raise a private usage exception without echoing input paths."""
+
         del message
         raise _UsageFailure
 
 
 @dataclass(frozen=True)
-class VerificationCard:
+class VerificationCard(object):
+    """Deterministic integrity-only result safe for public rendering."""
+
     status: str
     code: str
     files: int = 0
@@ -59,6 +70,8 @@ class VerificationCard:
     unique_bytes: int = 0
 
     def payload(self) -> dict[str, object]:
+        """Return the stable machine-readable card payload."""
+
         return {
             "claim": "integrity-only",
             "code": self.code,
@@ -77,7 +90,9 @@ class VerificationCard:
 
 
 @dataclass(frozen=True)
-class _FileRecord:
+class _FileRecord(object):
+    """One content digest bound to a stable filesystem identity."""
+
     relative: str
     content: bytes
     size: int
@@ -86,10 +101,14 @@ class _FileRecord:
 
 
 def _invalid(code: str) -> NoReturn:
+    """Raise a redaction-safe bundle integrity failure."""
+
     raise BundleInvalid(code)
 
 
 def _json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    """Build a JSON object while rejecting duplicate member names."""
+
     result: dict[str, object] = {}
     for key, value in pairs:
         if key in result:
@@ -98,27 +117,87 @@ def _json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
     return result
 
 
-def _relative_path(value: object) -> str:
+def _path_text(value: object) -> str:
+    """Require a non-empty, NUL-free text path."""
+
     if not isinstance(value, str) or not value or "\x00" in value:
-        _invalid("bundle.inventory.path-invalid")
+        _invalid(_CODE_PATH_INVALID)
+    return value
+
+
+def _check_path_bytes(value: str) -> None:
+    """Enforce the UTF-8 path byte limit."""
+
     try:
         encoded = value.encode("utf-8")
     except UnicodeEncodeError:
-        _invalid("bundle.inventory.path-invalid")
+        _invalid(_CODE_PATH_INVALID)
     if len(encoded) > MAX_PATH_BYTES:
-        _invalid("bundle.inventory.path-invalid")
-    path = PurePosixPath(value)
+        _invalid(_CODE_PATH_INVALID)
+
+
+def _check_path_shape(value: str, path: PurePosixPath) -> None:
+    """Reject non-normal, escaping, or over-deep POSIX paths."""
+
     if path.is_absolute() or ".." in path.parts or "." in path.parts or "\\" in value:
-        _invalid("bundle.inventory.path-invalid")
+        _invalid(_CODE_PATH_INVALID)
     if len(path.parts) > MAX_DEPTH:
         _invalid("bundle.limit.depth")
-    normalized = path.as_posix()
-    if normalized != value:
-        _invalid("bundle.inventory.path-invalid")
-    return normalized
+    if path.as_posix() != value:
+        _invalid(_CODE_PATH_INVALID)
+
+
+def _relative_path(value: object) -> str:
+    """Validate and normalize a contained inventory-relative path."""
+
+    text = _path_text(value)
+    _check_path_bytes(text)
+    path = PurePosixPath(text)
+    _check_path_shape(text, path)
+    return path.as_posix()
+
+
+def _directory_entries(directory: Path, remaining: int) -> list[os.DirEntry[str]]:
+    """Read at most the remaining bounded number of directory entries."""
+
+    collected: list[os.DirEntry[str]] = []
+    try:
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                if len(collected) >= remaining:
+                    _invalid("bundle.limit.files")
+                collected.append(entry)
+    except BundleInvalid:
+        raise
+    except OSError:
+        _invalid(_CODE_FILESYSTEM_UNREADABLE)
+    return collected
+
+
+def _entry_mode(entry: os.DirEntry[str]) -> int:
+    """Read an entry mode without following symbolic links."""
+
+    try:
+        return entry.stat(follow_symlinks=False).st_mode
+    except OSError:
+        _invalid(_CODE_FILESYSTEM_UNREADABLE)
+
+
+def _entry_kind(mode: int) -> str:
+    """Classify an admitted regular file or directory."""
+
+    if stat.S_ISLNK(mode):
+        _invalid("bundle.filesystem.symlink")
+    if stat.S_ISDIR(mode):
+        return "directory"
+    if not stat.S_ISREG(mode):
+        _invalid("bundle.filesystem.special-file")
+    return "file"
 
 
 def _scan(root: Path) -> dict[str, Path]:
+    """Scan a bounded regular-file tree without following links."""
+
     files: dict[str, Path] = {}
     pending: list[tuple[Path, int]] = [(root, 0)]
     scanned_entries = 0
@@ -126,36 +205,22 @@ def _scan(root: Path) -> dict[str, Path]:
         directory, depth = pending.pop()
         if depth > MAX_DEPTH:
             _invalid("bundle.limit.depth")
-        try:
-            entries = os.scandir(directory)
-        except OSError:
-            _invalid("bundle.filesystem.unreadable")
-        try:
-            with entries:
-                for entry in entries:
-                    scanned_entries += 1
-                    if scanned_entries > MAX_FILES:
-                        _invalid("bundle.limit.files")
-                    relative = Path(entry.path).relative_to(root).as_posix()
-                    _relative_path(relative)
-                    try:
-                        mode = entry.stat(follow_symlinks=False).st_mode
-                    except OSError:
-                        _invalid("bundle.filesystem.unreadable")
-                    if stat.S_ISLNK(mode):
-                        _invalid("bundle.filesystem.symlink")
-                    if stat.S_ISDIR(mode):
-                        pending.append((Path(entry.path), depth + 1))
-                        continue
-                    if not stat.S_ISREG(mode):
-                        _invalid("bundle.filesystem.special-file")
-                    files[relative] = Path(entry.path)
-        except OSError:
-            _invalid("bundle.filesystem.unreadable")
+        entries = _directory_entries(directory, MAX_FILES - scanned_entries)
+        scanned_entries += len(entries)
+        for entry in entries:
+            relative = Path(entry.path).relative_to(root).as_posix()
+            _relative_path(relative)
+            kind = _entry_kind(_entry_mode(entry))
+            if kind == "directory":
+                pending.append((Path(entry.path), depth + 1))
+            else:
+                files[relative] = Path(entry.path)
     return files
 
 
 def _identity(info: os.stat_result) -> tuple[int, int, int, int, int, int]:
+    """Return the filesystem fields used to detect concurrent mutation."""
+
     return (
         info.st_dev,
         info.st_ino,
@@ -166,7 +231,27 @@ def _identity(info: os.stat_result) -> tuple[int, int, int, int, int, int]:
     )
 
 
+def _read_content(descriptor: int, *, inventory: bool) -> bytes:
+    """Read one descriptor while enforcing its class-specific byte limit."""
+
+    limit = MAX_INVENTORY_BYTES if inventory else MAX_ARTIFACT_BYTES
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = os.read(descriptor, min(1024 * 1024, limit + 1 - total))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        total += len(chunk)
+        if total > limit:
+            code = "bundle.limit.inventory-bytes" if inventory else "bundle.limit.artifact-bytes"
+            _invalid(code)
+    return b"".join(chunks)
+
+
 def _read_stable(root: Path, relative: str, *, inventory: bool) -> _FileRecord:
+    """Hash a contained regular file and reject identity changes during I/O."""
+
     candidate = root / relative
     flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
     try:
@@ -175,23 +260,8 @@ def _read_stable(root: Path, relative: str, *, inventory: bool) -> _FileRecord:
         try:
             before = os.fstat(descriptor)
             if not stat.S_ISREG(before.st_mode) or _identity(before_path) != _identity(before):
-                _invalid("bundle.filesystem.mutated")
-            limit = MAX_INVENTORY_BYTES if inventory else MAX_ARTIFACT_BYTES
-            chunks: list[bytes] = []
-            total = 0
-            while True:
-                chunk = os.read(descriptor, min(1024 * 1024, limit + 1 - total))
-                if not chunk:
-                    break
-                chunks.append(chunk)
-                total += len(chunk)
-                if total > limit:
-                    code = (
-                        "bundle.limit.inventory-bytes"
-                        if inventory
-                        else "bundle.limit.artifact-bytes"
-                    )
-                    _invalid(code)
+                _invalid(_CODE_FILESYSTEM_MUTATED)
+            content = _read_content(descriptor, inventory=inventory)
             after = os.fstat(descriptor)
         finally:
             os.close(descriptor)
@@ -199,10 +269,9 @@ def _read_stable(root: Path, relative: str, *, inventory: bool) -> _FileRecord:
     except BundleInvalid:
         raise
     except OSError:
-        _invalid("bundle.filesystem.mutated")
+        _invalid(_CODE_FILESYSTEM_MUTATED)
     if _identity(before) != _identity(after) or _identity(after) != _identity(after_path):
-        _invalid("bundle.filesystem.mutated")
-    content = b"".join(chunks)
+        _invalid(_CODE_FILESYSTEM_MUTATED)
     return _FileRecord(
         relative=relative,
         content=content,
@@ -213,42 +282,61 @@ def _read_stable(root: Path, relative: str, *, inventory: bool) -> _FileRecord:
 
 
 def _inventory_payload(record: _FileRecord) -> list[object]:
+    """Decode one exact-shape inventory object."""
+
     try:
         payload = json.loads(record.content, object_pairs_hook=_json_object)
     except BundleInvalid:
         raise
     except (UnicodeDecodeError, json.JSONDecodeError):
-        _invalid("bundle.inventory.malformed")
+        _invalid(_CODE_INVENTORY_MALFORMED)
     if not isinstance(payload, dict) or set(payload) != {"artifacts"}:
-        _invalid("bundle.inventory.malformed")
+        _invalid(_CODE_INVENTORY_MALFORMED)
     artifacts = payload["artifacts"]
     if not isinstance(artifacts, list):
-        _invalid("bundle.inventory.malformed")
+        _invalid(_CODE_INVENTORY_MALFORMED)
     return artifacts
 
 
+def _entry_size(value: object) -> int:
+    """Validate one non-negative, non-boolean byte count."""
+
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        _invalid(_CODE_ENTRY_MALFORMED)
+    return value
+
+
+def _entry_digest(value: object) -> str:
+    """Validate one lower-case SHA-256 hex digest."""
+
+    if not isinstance(value, str) or len(value) != 64:
+        _invalid(_CODE_ENTRY_MALFORMED)
+    if any(character not in "0123456789abcdef" for character in value):
+        _invalid(_CODE_ENTRY_MALFORMED)
+    return value
+
+
+def _check_media_type(value: object) -> None:
+    """Require a non-empty inventory media type label."""
+
+    if not isinstance(value, str) or not value:
+        _invalid(_CODE_ENTRY_MALFORMED)
+
+
 def _entry(item: object) -> tuple[str, int, str]:
+    """Validate and project one exact-shape inventory entry."""
+
     if not isinstance(item, dict) or set(item) != _ENTRY_KEYS:
-        _invalid("bundle.inventory.entry-malformed")
+        _invalid(_CODE_ENTRY_MALFORMED)
     relative = _relative_path(item["path"])
-    size = item["size_bytes"]
-    digest = item["sha256"]
-    media_type = item["media_type"]
-    if isinstance(size, bool) or not isinstance(size, int) or size < 0:
-        _invalid("bundle.inventory.entry-malformed")
-    if (
-        not isinstance(digest, str)
-        or len(digest) != 64
-        or any(character not in "0123456789abcdef" for character in digest)
-        or not isinstance(media_type, str)
-        or not media_type
-    ):
-        _invalid("bundle.inventory.entry-malformed")
+    size = _entry_size(item["size_bytes"])
+    digest = _entry_digest(item["sha256"])
+    _check_media_type(item["media_type"])
     return relative, size, digest
 
 
-def verify_bundle(bundle: Path) -> VerificationCard:
-    """Verify exact flat or transitive inventory closure without side effects."""
+def _root_details(bundle: Path) -> tuple[Path, tuple[int, int, int, int, int, int]]:
+    """Admit one real directory root and capture its identity."""
 
     try:
         root_stat = bundle.lstat()
@@ -256,92 +344,147 @@ def verify_bundle(bundle: Path) -> VerificationCard:
         _invalid("bundle.root.invalid")
     if stat.S_ISLNK(root_stat.st_mode) or not stat.S_ISDIR(root_stat.st_mode):
         _invalid("bundle.root.invalid")
-    root_identity = _identity(root_stat)
-    root = bundle.resolve()
-    files = _scan(root)
-    if _INVENTORY_NAME not in files:
-        _invalid("bundle.inventory.missing")
+    return bundle.resolve(), _identity(root_stat)
 
-    records: dict[str, _FileRecord] = {}
-    referenced: set[str] = set()
-    inventories_seen: set[str] = set()
-    inventory_queue = deque([_INVENTORY_NAME])
-    entries_count = 0
-    unique_bytes = 0
 
-    def record(relative: str, *, inventory: bool) -> _FileRecord:
-        nonlocal unique_bytes
-        existing = records.get(relative)
-        if existing is not None:
-            return existing
-        if relative not in files:
-            _invalid("bundle.inventory.member-missing")
-        loaded = _read_stable(root, relative, inventory=inventory)
-        records[relative] = loaded
-        unique_bytes += loaded.size
-        if unique_bytes > MAX_UNIQUE_BYTES:
-            _invalid("bundle.limit.unique-bytes")
-        return loaded
+def _assert_current_identity(
+    path: Path,
+    expected: tuple[int, int, int, int, int, int],
+    *,
+    regular: bool,
+) -> None:
+    """Require a path to retain its admitted filesystem identity."""
 
-    while inventory_queue:
-        inventory_path = inventory_queue.popleft()
-        if inventory_path in inventories_seen:
-            _invalid("bundle.inventory.duplicate")
-        inventories_seen.add(inventory_path)
-        if len(inventories_seen) > MAX_INVENTORIES:
-            _invalid("bundle.limit.inventories")
-        inventory_record = record(inventory_path, inventory=True)
-        base = PurePosixPath(inventory_path).parent
-        for item in _inventory_payload(inventory_record):
-            entries_count += 1
-            if entries_count > MAX_ENTRIES:
-                _invalid("bundle.limit.entries")
-            child, expected_size, expected_digest = _entry(item)
-            joined = (base / child).as_posix()
-            joined = _relative_path(joined)
-            if joined == _INVENTORY_NAME or joined in referenced:
-                _invalid("bundle.inventory.duplicate-path")
-            referenced.add(joined)
-            is_inventory = PurePosixPath(joined).name == _INVENTORY_NAME
-            actual = record(joined, inventory=is_inventory)
-            if actual.size != expected_size or actual.sha256 != expected_digest:
-                _invalid("bundle.inventory.member-mismatch")
-            if is_inventory:
-                inventory_queue.append(joined)
-
-    expected = set(files) - {_INVENTORY_NAME}
-    if referenced != expected:
-        _invalid("bundle.inventory.membership-mismatch")
-    final_files = _scan(root)
-    if set(final_files) != set(files):
-        _invalid("bundle.filesystem.mutated")
     try:
-        if _identity(bundle.lstat()) != root_identity:
-            _invalid("bundle.filesystem.mutated")
-        for relative, loaded in records.items():
-            current = (root / relative).lstat()
-            if not stat.S_ISREG(current.st_mode) or _identity(current) != loaded.identity:
-                _invalid("bundle.filesystem.mutated")
-    except BundleInvalid:
-        raise
+        current = path.lstat()
     except OSError:
-        _invalid("bundle.filesystem.mutated")
-    return VerificationCard(
-        status="verified",
-        code="bundle.integrity.verified",
-        files=len(files),
-        inventories=len(inventories_seen),
-        entries=entries_count,
-        unique_bytes=unique_bytes,
-    )
+        _invalid(_CODE_FILESYSTEM_MUTATED)
+    if regular and not stat.S_ISREG(current.st_mode):
+        _invalid(_CODE_FILESYSTEM_MUTATED)
+    if _identity(current) != expected:
+        _invalid(_CODE_FILESYSTEM_MUTATED)
+
+
+class _BundleVerifier(object):
+    """Stateful bounded walk over one bundle's transitive inventory closure."""
+
+    def __init__(self, bundle: Path) -> None:
+        """Capture the root and initialize bounded verification state."""
+
+        self.bundle = bundle
+        self.root, self.root_identity = _root_details(bundle)
+        self.files = _scan(self.root)
+        if _INVENTORY_NAME not in self.files:
+            _invalid("bundle.inventory.missing")
+        self.records: dict[str, _FileRecord] = {}
+        self.referenced: set[str] = set()
+        self.inventories_seen: set[str] = set()
+        self.inventory_queue = deque([_INVENTORY_NAME])
+        self.entries_count = 0
+        self.unique_bytes = 0
+
+    def _record(self, relative: str, *, inventory: bool) -> _FileRecord:
+        """Read each unique path once and charge it to the byte budget."""
+
+        existing = self.records.get(relative)
+        if existing is None:
+            if relative not in self.files:
+                _invalid("bundle.inventory.member-missing")
+            existing = _read_stable(self.root, relative, inventory=inventory)
+            self.records[relative] = existing
+            self.unique_bytes += existing.size
+            if self.unique_bytes > MAX_UNIQUE_BYTES:
+                _invalid("bundle.limit.unique-bytes")
+        return existing
+
+    def _start_inventory(self, inventory_path: str) -> tuple[PurePosixPath, list[object]]:
+        """Admit one not-yet-seen inventory and return its base and entries."""
+
+        if inventory_path in self.inventories_seen:
+            _invalid("bundle.inventory.duplicate")
+        self.inventories_seen.add(inventory_path)
+        if len(self.inventories_seen) > MAX_INVENTORIES:
+            _invalid("bundle.limit.inventories")
+        record = self._record(inventory_path, inventory=True)
+        return PurePosixPath(inventory_path).parent, _inventory_payload(record)
+
+    def _verify_item(self, base: PurePosixPath, item: object) -> None:
+        """Verify one inventory member and enqueue nested inventories."""
+
+        self.entries_count += 1
+        if self.entries_count > MAX_ENTRIES:
+            _invalid("bundle.limit.entries")
+        child, expected_size, expected_digest = _entry(item)
+        joined = _relative_path((base / child).as_posix())
+        if joined == _INVENTORY_NAME or joined in self.referenced:
+            _invalid("bundle.inventory.duplicate-path")
+        self.referenced.add(joined)
+        is_inventory = PurePosixPath(joined).name == _INVENTORY_NAME
+        actual = self._record(joined, inventory=is_inventory)
+        if actual.size != expected_size or actual.sha256 != expected_digest:
+            _invalid("bundle.inventory.member-mismatch")
+        if is_inventory:
+            self.inventory_queue.append(joined)
+
+    def _verify_closure(self) -> None:
+        """Walk all flat or transitive inventory entries breadth-first."""
+
+        while self.inventory_queue:
+            inventory_path = self.inventory_queue.popleft()
+            base, items = self._start_inventory(inventory_path)
+            for item in items:
+                self._verify_item(base, item)
+
+    def _verify_membership(self) -> None:
+        """Require exact membership beyond the root inventory itself."""
+
+        expected = set(self.files) - {_INVENTORY_NAME}
+        if self.referenced != expected:
+            _invalid("bundle.inventory.membership-mismatch")
+
+    def _verify_unchanged(self) -> None:
+        """Re-scan and re-stat all read paths to reject concurrent mutation."""
+
+        final_files = _scan(self.root)
+        if set(final_files) != set(self.files):
+            _invalid(_CODE_FILESYSTEM_MUTATED)
+        _assert_current_identity(self.bundle, self.root_identity, regular=False)
+        for relative, loaded in self.records.items():
+            _assert_current_identity(self.root / relative, loaded.identity, regular=True)
+
+    def verify(self) -> VerificationCard:
+        """Run closure, membership, and final identity verification."""
+
+        self._verify_closure()
+        self._verify_membership()
+        self._verify_unchanged()
+        return VerificationCard(
+            status="verified",
+            code="bundle.integrity.verified",
+            files=len(self.files),
+            inventories=len(self.inventories_seen),
+            entries=self.entries_count,
+            unique_bytes=self.unique_bytes,
+        )
+
+
+def verify_bundle(bundle: Path) -> VerificationCard:
+    """Verify exact flat or transitive inventory closure without side effects."""
+
+    return _BundleVerifier(bundle).verify()
 
 
 def render_card(card: VerificationCard, output_format: str) -> str:
-    payload = card.payload()
+    """Render one deterministic JSON, terminal, or Markdown integrity card."""
+
     if output_format == "json":
-        return json.dumps(payload, sort_keys=True, separators=(",", ":"))
-    counts = payload["counts"]
-    assert isinstance(counts, dict)
+        return json.dumps(card.payload(), sort_keys=True, separators=(",", ":"))
+    counts = {
+        "entries": card.entries,
+        "files": card.files,
+        "inventories": card.inventories,
+        "unique_bytes": card.unique_bytes,
+    }
     if output_format == "markdown":
         return "\n".join(
             (
@@ -374,6 +517,8 @@ def render_card(card: VerificationCard, output_format: str) -> str:
 
 
 def _parser() -> _Parser:
+    """Build the isolated verifier command-line parser."""
+
     parser = _Parser(prog="raes-adapters verify-bundle")
     parser.add_argument("--bundle", type=Path, required=True)
     parser.add_argument("--format", choices=("json", "terminal", "markdown"), default="terminal")
@@ -381,6 +526,8 @@ def _parser() -> _Parser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the verifier with its stable 0, 2, 3, and 70 exit contract."""
+
     try:
         args = _parser().parse_args(argv)
         try:
