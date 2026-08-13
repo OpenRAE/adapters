@@ -186,6 +186,18 @@ def test_canonical_scenario_reaches_driver_with_exact_scenario2_projection() -> 
         "in": "None",
         "out": "all",
     }
+    assert driver.native["Subnets"]["Enterprise"]["Hosts"] == [
+        "Enterprise0",
+        "Enterprise1",
+        "Enterprise2",
+        "Defender",
+    ]
+    assert driver.native["Subnets"]["Operational"]["Hosts"] == [
+        "Op_Server0",
+        "Op_Host0",
+        "Op_Host1",
+        "Op_Host2",
+    ]
     assert set(driver.native["Agents"]) == {"Blue", "Green", "Red"}
     assert driver.native["Agents"]["Blue"]["actions"] == [
         "Sleep",
@@ -214,9 +226,9 @@ def test_canonical_scenario_reaches_driver_with_exact_scenario2_projection() -> 
         "HTTPRFI",
         "HTTPSRFI",
         "SQLInjection",
-        "SSHBruteForce",
         "PrivilegeEscalate",
         "Impact",
+        "SSHBruteForce",
     ]
     assert driver.native["Agents"]["Red"]["INT"] == {
         "Hosts": {"User0": {"Interfaces": "All", "System info": "All"}}
@@ -235,6 +247,23 @@ def test_canonical_scenario_reaches_driver_with_exact_scenario2_projection() -> 
         item["hostname"] == "Defender" and item["name"] == "VeloServer"
         for item in driver.native["Agents"]["Blue"]["starting_sessions"]
     )
+    assert [
+        item["hostname"] for item in driver.native["Agents"]["Blue"]["starting_sessions"][:-1]
+    ] == [
+        "User0",
+        "User1",
+        "User2",
+        "User3",
+        "User4",
+        "Enterprise0",
+        "Enterprise1",
+        "Enterprise2",
+        "Defender",
+        "Op_Server0",
+        "Op_Host0",
+        "Op_Host1",
+        "Op_Host2",
+    ]
     assert driver.native["Hosts"]["Enterprise2"]["info"]["Op_Server0"] == {
         "Interfaces": "IP Address"
     }

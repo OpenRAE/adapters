@@ -44,6 +44,42 @@ _SCENARIO2_NATIVE_HOSTS = {
     "user-3": ("User3", "linux_user_host1"),
     "user-4": ("User4", "linux_user_host2"),
 }
+_SCENARIO2_NATIVE_SUBNET_HOST_ORDER = {
+    "Enterprise": ("Enterprise0", "Enterprise1", "Enterprise2", "Defender"),
+    "Operational": ("Op_Server0", "Op_Host0", "Op_Host1", "Op_Host2"),
+    "User": ("User0", "User1", "User2", "User3", "User4"),
+}
+_SCENARIO2_BLUE_SESSION_HOST_ORDER = (
+    "User0",
+    "User1",
+    "User2",
+    "User3",
+    "User4",
+    "Enterprise0",
+    "Enterprise1",
+    "Enterprise2",
+    "Defender",
+    "Op_Server0",
+    "Op_Host0",
+    "Op_Host1",
+    "Op_Host2",
+)
+_SCENARIO2_RED_NATIVE_ACTION_ORDER = (
+    "Sleep",
+    "DiscoverRemoteSystems",
+    "DiscoverNetworkServices",
+    "ExploitRemoteService",
+    "BlueKeep",
+    "EternalBlue",
+    "FTPDirectoryTraversal",
+    "HarakaRCE",
+    "HTTPRFI",
+    "HTTPSRFI",
+    "SQLInjection",
+    "PrivilegeEscalate",
+    "Impact",
+    "SSHBruteForce",
+)
 _SCENARIO2_BLUE_PARTICIPANT = "participant.behavior.blue"
 _SCENARIO2_GREEN_PARTICIPANT = "participant.behavior.green"
 _SCENARIO2_RED_PARTICIPANT = "participant.behavior.red"
@@ -661,6 +697,14 @@ def _translate_scenario2(
             members = subnet["Hosts"]
             assert isinstance(members, list)
             members.append(native_name)
+    for subnet_name, source_order in _SCENARIO2_NATIVE_SUBNET_HOST_ORDER.items():
+        subnet = subnets[subnet_name]
+        assert isinstance(subnet, dict)
+        members = subnet["Hosts"]
+        assert isinstance(members, list)
+        if set(members) != set(source_order):
+            raise ValueError("CybORG Scenario2 subnet membership is invalid.")
+        subnet["Hosts"] = list(source_order)
     return {
         "Agents": _scenario2_agent_declarations(scenario_binding),
         "Subnets": subnets,
@@ -749,11 +793,16 @@ def _scenario2_native_actions(
 
     participants = {participant.address: participant for participant in binding.participants}
     participant = participants[participant_address]
-    return [
+    actions = [
         native
         for contract in participant.action_contract_addresses
         for native in _SCENARIO2_NATIVE_ACTIONS_BY_CONTRACT[contract]
     ]
+    if participant_address == _SCENARIO2_RED_PARTICIPANT:
+        if set(actions) != set(_SCENARIO2_RED_NATIVE_ACTION_ORDER):
+            raise ValueError("CybORG Scenario2 Red action closure is invalid.")
+        return list(_SCENARIO2_RED_NATIVE_ACTION_ORDER)
+    return actions
 
 
 def _scenario2_participant(
@@ -829,6 +878,13 @@ def _scenario2_agent_declarations(
         for hostname in green_known_hosts
     }
     blue_accounts = _scenario2_account_sessions(binding, _SCENARIO2_BLUE_PARTICIPANT)
+    blue_account_by_host = dict(blue_accounts)
+    if set(blue_account_by_host) != set(_SCENARIO2_BLUE_SESSION_HOST_ORDER):
+        raise ValueError("CybORG Scenario2 Blue session closure is invalid.")
+    blue_accounts = [
+        (hostname, blue_account_by_host[hostname])
+        for hostname in _SCENARIO2_BLUE_SESSION_HOST_ORDER
+    ]
     blue_clients: list[dict[str, object]] = [
         {
             "hostname": native,

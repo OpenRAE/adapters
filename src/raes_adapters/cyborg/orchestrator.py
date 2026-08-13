@@ -62,6 +62,7 @@ class CyborgExecutionControl(object):
         self._lock = threading.RLock()
         self._policy: _ExecutionPolicy | None = None
         self._source_terminal = False
+        self._run_id: str | None = None
 
     def activate(self, policy: _ExecutionPolicy) -> None:
         """Activate one admitted execution policy."""
@@ -69,6 +70,7 @@ class CyborgExecutionControl(object):
         with self._lock:
             self._policy = policy
             self._source_terminal = False
+            self._run_id = None
 
     def clear(self) -> None:
         """Clear all active execution controls."""
@@ -76,6 +78,7 @@ class CyborgExecutionControl(object):
         with self._lock:
             self._policy = None
             self._source_terminal = False
+            self._run_id = None
 
     def policy(self) -> _ExecutionPolicy | None:
         """Return the currently admitted policy, if any."""
@@ -100,6 +103,22 @@ class CyborgExecutionControl(object):
 
         with self._lock:
             self._source_terminal = False
+
+    def begin_run(self, run_id: str) -> None:
+        """Bind one safe portable run identity to the active logical episode."""
+
+        if not 1 <= len(run_id) <= 64 or not run_id.replace("-", "").isalnum():
+            raise ValueError("run id is not a safe label")
+        with self._lock:
+            if self._policy is None:
+                raise RuntimeError("execution policy is unavailable")
+            self._run_id = run_id
+
+    def run_id(self) -> str | None:
+        """Return the currently bound portable run identity."""
+
+        with self._lock:
+            return self._run_id
 
 
 class CyborgOrchestrator(object):
@@ -208,6 +227,11 @@ class CyborgOrchestrator(object):
         """Return a bounded status summary without native state."""
 
         return {"running": self._control.policy() is not None, "results": len(self._results)}
+
+    def begin_run(self, run_id: str) -> None:
+        """Bind the next episode's portable run identity without native effects."""
+
+        self._control.begin_run(run_id)
 
     def results(self) -> dict[str, dict[str, object]]:
         """Return defensive copies of portable workflow results."""

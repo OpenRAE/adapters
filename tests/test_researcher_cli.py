@@ -28,7 +28,11 @@ from raes_adapters.cyborg.driver import (
     _NativeRewardComponent,
     _NativeTurnResult,
 )
-from raes_adapters.cyborg.researcher import RunControls, execute_episode
+from raes_adapters.cyborg.researcher import (
+    RunControls,
+    execute_episode,
+    execute_episode_series,
+)
 
 _SDL = """
 name: researcher-cage2
@@ -139,6 +143,7 @@ class FakeResearchDriver:
     handles: list[object] = field(default_factory=list)
     selections: list[ParticipantValidatedActionSelection] = field(default_factory=list)
     cleanup_calls: int = 0
+    reset_calls: int = 0
 
     def construct(self, descriptor: object, *, seed: int | None) -> object:
         del descriptor, seed
@@ -158,6 +163,7 @@ class FakeResearchDriver:
 
     def reset(self, handle: object, *, seed: int | None) -> bool:
         del seed
+        self.reset_calls += 1
         return handle in self.handles
 
     def step(
@@ -501,6 +507,42 @@ def test_native_episode_binds_real_blue_selection_and_retains_raes_evidence() ->
     # bound; the selected execution session is cleaned at final teardown.
     assert driver.cleanup_calls == 2
     assert driver.selections[0].action_contract_address == "participant.action-contract.sleep"
+
+
+def test_condition_series_reuses_native_session_and_binds_unique_run_evidence() -> None:
+    driver = FakeResearchDriver()
+    manifest, selection, configuration = _participant_artifacts()
+    controls = tuple(
+        RunControls(
+            run_id=f"cage2-slot-{index:05d}-attempt-01",
+            seed=153,
+            max_steps=1,
+            red_variant="sleep",
+            blue_manifest=manifest,
+            blue_selection=selection,
+            blue_configuration=configuration,
+        )
+        for index in (1, 2)
+    )
+
+    episodes = execute_episode_series(
+        parse_sdl(textwrap.dedent(_SDL)),
+        controls,
+        driver=driver,
+    )
+
+    assert len(episodes) == 2
+    assert driver.cleanup_calls == 2
+    assert driver.reset_calls == 1
+    assert len(driver.selections) == 2
+    assert [episode.evidence_records[0].run_ref.ref_id for episode in episodes] == [
+        item.run_id for item in controls
+    ]
+    assert len(episodes[0].evidence_records) == len(episodes[1].evidence_records)
+    assert [
+        {record.run_ref.ref_id for record in episode.evidence_records} for episode in episodes
+    ] == [{item.run_id} for item in controls]
+    assert all(episode.cleanup_verified for episode in episodes)
 
 
 def test_full_scenario_episode_consumes_authored_evaluation_plan(

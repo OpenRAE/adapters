@@ -109,6 +109,71 @@ records, bounded diagnostics, summaries, machine/software inventory, and the
 final relative inventory. Study mode also retains a validated RAES collection
 record; it adds no scientific or equivalence claim.
 
+## Reproduce the public CAGE-2 evaluation protocol
+
+The frozen issue-22 path is separate from the two-seed example above. It
+predeclares and executes the complete 3 trial-length × 3 Red-policy × 1,000
+episode matrix, using one study-scoped Python random stream initialized with
+seed 153. It compares the observed RAES-mediated cumulative Blue reward against
+the published CCS Sleeper table and retains every scheduled slot, terminal
+disposition, confidence-interval input, and evidence join:
+
+```shell
+raes-adapters reproduce \
+  --phase declare \
+  --source-root <raes-adapters-checkout> \
+  --output cage2-reproduction-declaration
+
+raes-adapters reproduce \
+  --phase run \
+  --source-root <raes-adapters-checkout> \
+  --output cage2-study-output
+```
+
+The run phase requires the separately installed qualified CybORG source and
+does not fetch it. The declaration freezes source disagreements as losses: the
+checked-in evaluator says 100 episodes and binds no seed, whereas the public
+validation description says 1,000 episodes and `random.seed(153)`. The observed
+Blue implementation is a public Sleep-policy behavioral reconstruction; it is
+not represented as the unavailable submitted-agent artifact.
+
+Each valid run contains compressed, deterministic JSON with the complete
+referenced RAES evidence records, derived measures, objective and proposition
+results, and archival run record. Compression changes storage only. Every file
+and transitive inventory is SHA-256 sealed, every compressed record is parsed
+and model-validated offline, and no native observations, state, reward vectors,
+logs, or random state are published.
+
+Within a condition, the source-native session is retained and reset so the
+single seeded stream continues exactly as declared. Portable RAES snapshots are
+not retained across those resets: each scheduled slot starts a fresh archival
+run and cannot inherit another slot's action or evidence history.
+
+Recompute the aggregates and six separately-subjected evidence tiers in an
+installed environment that has no CybORG source and needs no network access:
+
+```shell
+raes-adapters reproduce \
+  --phase verify \
+  --bundle <exported-study-output> \
+  --output cage2-recomputed
+```
+
+The result supports an exact, bounded, or failed outcome-reproduction finding
+according to the predeclared method. It deliberately does not infer state or
+observation equivalence, backend identity, deterministic replay, conformance,
+or submitted-agent identity from score similarity. Those limits make the
+export usable as honest apparatus and outcome-reproduction evidence rather
+than a proof-of-concept smoke run. The adapter does not prescribe where a
+research project retains or publishes that export.
+
+Because the public submitted CCS Sleeper artifact is unavailable, a matching
+result is specifically a behavioral-baseline outcome reproduction: it shows
+that the RAES-mediated Scenario 2 apparatus reproduces the published sleeping
+baseline distribution within the frozen rule. It is not a replication of an
+unavailable submitted implementation, and `tiers.json` keeps that distinction
+in the strongest supported claim.
+
 ## Exit status
 
 | Exit | Meaning |

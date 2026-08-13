@@ -401,6 +401,30 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
         self._observations = {}
         self._pending_observations = {}
 
+    def begin_independent_run(self) -> bool:
+        """Reset the retained native session at a new experiment-run boundary.
+
+        A reproduction condition intentionally reuses one native CybORG session
+        so its study-scoped random stream continues across source resets.  RAES
+        experiment runs are nevertheless independent archival units: carrying
+        the preceding run's portable lifecycle and action history into the next
+        run would both contaminate its evidence and make validation quadratic.
+
+        The caller therefore resumes from the pristine, already-realized
+        snapshot captured before participant initialization.  This method owns
+        only the corresponding backend-private reset and mirror cleanup.
+        """
+
+        with self._provisioner.execution_transaction():
+            if not self._provisioner.reset_execution():
+                return False
+            self._results = {}
+            self._history = {}
+            self._episode_counter = {}
+            self._clear_observations()
+            self._control.reset_terminal()
+            return True
+
     @staticmethod
     def _reset_failure(snapshot: RuntimeSnapshot) -> ApplyResult:
         """Return the bounded aggregate-reset failure."""
@@ -566,7 +590,7 @@ class CyborgParticipantRuntime(BaseParticipantRuntime):  # type: ignore[misc]
         try:
             projected = self._provisioner.execute_turn(
                 request.validated_selection,
-                run_id=f"{policy.workflow_address}-run",
+                run_id=self._control.run_id() or f"{policy.workflow_address}-run",
                 episode_id=episode_id,
                 action_instance_id=request.action_instance_id,
                 logical_step=tick + 1,
