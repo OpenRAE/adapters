@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from raes_adapters import cli
+from raes_adapters.bundle_verifier import BundleInvalid
 from raes_adapters.cyborg import reproduction
 from raes_adapters.cyborg.driver import (
     _NativeEvaluationContext,
@@ -18,6 +19,25 @@ from raes_adapters.cyborg.driver import (
 )
 
 PROJECT_ROOT = Path(__file__).parents[1]
+
+
+def test_generic_integrity_precedes_backend_semantic_verification(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    (bundle / "inventory.json").write_text('{"artifacts":[]}\n', encoding="utf-8")
+    (bundle / "protocol.json").write_text("{}\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        reproduction,
+        "load_strict_json",
+        lambda _path: pytest.fail("backend semantic checks ran before generic integrity"),
+    )
+
+    with pytest.raises(BundleInvalid, match="bundle.inventory.membership-mismatch"):
+        reproduction.verify_bundle(bundle)
 
 
 class StudyDriver:
@@ -560,5 +580,5 @@ def test_offline_verifier_requires_complete_transitive_inventories(tmp_path: Pat
     root_members = [bundle / item["path"] for item in root_inventory["artifacts"]]
     reproduction._seal_inventory(bundle, root_members)
 
-    with pytest.raises(ValueError, match="inventory membership is incomplete"):
+    with pytest.raises(BundleInvalid, match="bundle.inventory.membership-mismatch"):
         reproduction.verify_bundle(bundle, selection=selection)

@@ -42,6 +42,9 @@ from raes_operations.run_artifacts import (  # type: ignore[import-untyped]
     atomic_write_json_artifact,
 )
 
+from raes_adapters._inventory import inventory_entry
+from raes_adapters.bundle_verifier import verify_bundle as verify_integrity_bundle
+
 from .driver import CyborgDriver, SourceInstalledCyborgDriver
 from .researcher import (
     EpisodeEvidence,
@@ -1393,17 +1396,14 @@ def _media_type(path: Path) -> str:
 def _inventory_entry(root: Path, path: Path) -> dict[str, object]:
     """Build one bounded relative inventory entry."""
 
-    if path.is_symlink() or not path.is_file() or not path.resolve().is_relative_to(root.resolve()):
-        raise ValueError("inventory member is invalid")
-    content = path.read_bytes()
-    if len(content) >= _MAX_PUBLIC_FILE_BYTES:
+    try:
+        entry = inventory_entry(root, path, type_name=_media_type(path))
+    except ValueError as error:
+        raise ValueError("inventory member is invalid") from error
+    size = entry["size_bytes"]
+    if not isinstance(size, int) or size >= _MAX_PUBLIC_FILE_BYTES:
         raise ValueError("public artifact exceeds the file-size limit")
-    return {
-        "path": path.relative_to(root).as_posix(),
-        "media_type": _media_type(path),
-        "sha256": hashlib.sha256(content).hexdigest(),
-        "size_bytes": len(content),
-    }
+    return entry
 
 
 def _seal_inventory(root: Path, members: Sequence[Path]) -> dict[str, object]:
@@ -2836,6 +2836,7 @@ def verify_bundle(
     """Offline-verify every transitive inventory and recompute the frozen result."""
 
     bundle = root.resolve()
+    verify_integrity_bundle(bundle)
     expected_root_directories = {"plans", "runs"}
     if (
         bundle.is_symlink()
