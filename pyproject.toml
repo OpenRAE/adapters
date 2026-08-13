@@ -67,7 +67,7 @@ cyborg = ["raes-env-packs==3.6.2"]
 nasim = ["nasim==0.12.0", "gymnasium==0.26.3", "numpy==1.26.4", "raes-env-packs==3.6.2"]
 
 [project.scripts]
-raes-adapters = "raes_adapters.cli:main"
+raes-adapters = "raes_adapters.entrypoint:main"
 
 [project.urls]
 Homepage = "https://github.com/OpenRAE/adapters"
