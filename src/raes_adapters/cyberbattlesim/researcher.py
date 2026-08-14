@@ -53,6 +53,7 @@ from raes_operations.realization_conformance import (  # type: ignore[import-unt
 from raes_runtime.manager import RuntimeManager  # type: ignore[import-untyped]
 from raes_runtime.registry import RuntimeTarget  # type: ignore[import-untyped]
 
+from raes_adapters._experiment_evidence import SupplementalJsonArtifact
 from raes_adapters._manifest_support import read_source_revision
 from raes_adapters._researcher_support import (
     ApparatusContextSpec,
@@ -80,6 +81,7 @@ from raes_adapters.cyberbattlesim.backend.driver import (
     CyberBattleSimDriverProtocol,
     verify_selected_cyberbattlesim_source,
 )
+from raes_adapters.cyberbattlesim.backend.evaluator import CyberBattleSimEvaluator
 from raes_adapters.cyberbattlesim.backend.manifest import create_cyberbattlesim_manifest
 from raes_adapters.cyberbattlesim.backend.target import create_cyberbattlesim_target
 from raes_adapters.cyberbattlesim.runtime_plans import (
@@ -110,11 +112,15 @@ class RunControls(RedParticipantRunControls):
     Bound to the single qualified credential-cache attacker and source controls.
     """
 
+    epsilon_step_offset: int = 0
+
     def __post_init__(self) -> None:
         """Reject controls not bound to the selected published contracts."""
 
         self.validate_common(_RED)
         _red_policy_identity(self.red_configuration)
+        if type(self.epsilon_step_offset) is not int or self.epsilon_step_offset < 0:
+            raise ValueError("epsilon step offset is outside the supported range")
 
 
 def red_implementation_provenance(
@@ -208,6 +214,11 @@ def archival_run(
                     "value_kind": "apparatus",
                 },
                 {"name": "trial-length", "value": controls.max_steps, "value_kind": "protocol"},
+                {
+                    "name": "epsilon-step-offset",
+                    "value": controls.epsilon_step_offset,
+                    "value_kind": "protocol",
+                },
             ],
             seed=controls.seed,
             stochastic_seed_control_id="cyberbattlesim-gym-reset-seed",
@@ -331,7 +342,7 @@ def _execute_steps(
         raise RuntimeError("researcher execution runtime is unavailable")
     completed_steps = 0
     for step in range(1, controls.max_steps + 1):
-        epsilon = _epsilon_for_step(step - 1)
+        epsilon = _epsilon_for_step(controls.epsilon_step_offset + step - 1)
         proposal = driver.propose_autonomous_action(epsilon=epsilon)
         action = target.participant_runtime.admit_action(
             _red_action_request(f"{controls.run_id}-red-action-{step}", controls, proposal),
@@ -365,10 +376,11 @@ def _evaluate_episode(
     RuntimeSnapshot,
     tuple[ExperimentEvidenceRecordModel, ...],
     tuple[ExperimentDerivedMeasureModel, ...],
+    tuple[SupplementalJsonArtifact, ...],
 ]:
     """Evaluate the final portable snapshot and return published evidence."""
 
-    if target.evaluator is None:
+    if not isinstance(target.evaluator, CyberBattleSimEvaluator):
         raise RuntimeError("researcher evaluator is unavailable")
     evaluated = target.evaluator.start(cyberbattlesim_evaluation_plan(), snapshot)
     diagnostics.extend(diagnostic_model(item) for item in evaluated.diagnostics)
@@ -378,6 +390,7 @@ def _evaluate_episode(
         evaluated.snapshot,
         target.evaluator.evidence_records(),
         target.evaluator.derived_measures(),
+        target.evaluator.supplemental_artifacts(),
     )
 
 
@@ -403,6 +416,7 @@ def execute_episode(
     cleanup_verified = False
     evidence_records: tuple[ExperimentEvidenceRecordModel, ...] = ()
     derived_measures: tuple[ExperimentDerivedMeasureModel, ...] = ()
+    supplemental_artifacts: tuple[SupplementalJsonArtifact, ...] = ()
     try:
         # Startup (provisioning + orchestration) runs inside the cleanup-protected
         # region: a partial start that allocates the target and then fails must
@@ -413,7 +427,7 @@ def execute_episode(
         snapshot, completed_steps = _execute_steps(
             target, snapshot, controls, diagnostics, selected_driver
         )
-        snapshot, evidence_records, derived_measures = _evaluate_episode(
+        snapshot, evidence_records, derived_measures, supplemental_artifacts = _evaluate_episode(
             target, snapshot, diagnostics
         )
     finally:
@@ -439,6 +453,7 @@ def execute_episode(
         derived_measures=derived_measures,
         diagnostics=tuple(diagnostics),
         cleanup_verified=cleanup_verified,
+        supplemental_artifacts=tuple(supplemental_artifacts),
     )
 
 

@@ -85,7 +85,7 @@ def test_external_pack_content_manifest_is_exact_and_immutable() -> None:
     derived = derive_pack_content_manifest(pack).model_dump(mode="json")
     assert recorded == derived
     assert recorded["set_digest"] == (
-        "sha256:08ae7e997b50bb396c290c4a5537a65e9e7d8b8e6abc97d1ff65022c4258e417"
+        "sha256:66493882579d5cba87248c5722782ff5ded5f0d7423f4e559f15bfb61712a905"
     )
 
 
@@ -173,6 +173,10 @@ def test_protocol_fixes_every_identity_and_discloses_random_streams() -> None:
         "epsilon": 0.90,
         "epsilon_exponential_decay": 10000,
         "epsilon_minimum": 0.10,
+        "environment_bounds": {
+            "maximum_total_credentials": 22,
+            "maximum_node_count": 22,
+        },
     }
     assert selection["defender"] == {
         "policy": "ScanAndReimageCompromisedMachines",

@@ -1,0 +1,59 @@
+[
+  {
+    "apparatus_context_ref": null,
+    "capture_requirement_ref": "cyberbattlesim-evaluator-summary.d60d9f9c96354972ada424f62e23546de444a921962010632149728df7f4977d",
+    "capture_spec_ref": {
+      "ref_id": "cyberbattlesim-evaluator-capture.d60d9f9c96354972ada424f62e23546de444a921962010632149728df7f4977d",
+      "ref_kind": "capture-spec",
+      "ref_version": "1.0.0"
+    },
+    "capture_window_ref": "cyberbattlesim-selected-episode.d60d9f9c96354972ada424f62e23546de444a921962010632149728df7f4977d",
+    "captured_at": "2026-08-10T03:58:59.051201Z",
+    "evidence_kind": "telemetry",
+    "evidence_record_id": "evidence-record.cyberbattlesim.evaluator-summary.d60d9f9c96354972ada424f62e23546de444a921962010632149728df7f4977d",
+    "provenance_refs": [
+      {
+        "ref_digest": null,
+        "ref_id": "qualification.cyberbattlesim.selected-source",
+        "ref_kind": "other",
+        "ref_path": null,
+        "ref_version": "854d6966607fb68645651f55b0f97221bd293e0d"
+      }
+    ],
+    "raw_content": {
+      "artifact_ref": null,
+      "content_checksum": {
+        "algorithm": "sha256",
+        "value": "0997ee55595b24b3a9470a00c89d0dcef11042e8b8463abebe2d8a8b4ffec274"
+      },
+      "content_uri": "urn:raes:evidence-record.cyberbattlesim.evaluator-summary.d60d9f9c96354972ada424f62e23546de444a921962010632149728df7f4977d:payload-summary",
+      "loss_disclosure": "Source-native observations, action availability, credentials, reward components, hidden state, and info are withheld.",
+      "payload_summary": "Sanitized evaluator summary: 191 source transitions and cumulative reward 5534; terminated=True truncated=False terminal_cause=source-terminated."
+    },
+    "record_version": "1.0.0",
+    "redaction_state": "redacted",
+    "run_ref": {
+      "ref_digest": null,
+      "ref_id": "driver.reset.1",
+      "ref_kind": "run",
+      "ref_path": null,
+      "ref_version": "1.0.0"
+    },
+    "schema_version": "experiment-evidence-record/v1",
+    "sensitivity": "redacted",
+    "source_refs": [
+      {
+        "ref_digest": null,
+        "ref_id": "cyberbattlesim-chain-public",
+        "ref_kind": "protocol",
+        "ref_path": null,
+        "ref_version": "854d6966607fb68645651f55b0f97221bd293e0d"
+      }
+    ],
+    "task_ref": {
+      "ref_id": "cyberbattlesim-chain-task",
+      "ref_kind": "task",
+      "ref_version": "1.0.0"
+    }
+  }
+]

@@ -22,6 +22,7 @@ semantic and protocol authority.
 - [Offline bundle verifier](bundle-verifier.md)
 - [NASim researcher command](nasim-researcher-command.md)
 - [CyberBattleSim researcher command](cyberbattlesim-researcher-command.md)
+- [CyberBattleSim baseline reproduction](cyberbattlesim-baseline-reproduction.md)
 - [Contribution guide](https://github.com/OpenRAE/adapters/blob/dev/CONTRIBUTING.md)
 - [Architecture decisions](decisions/adrs/README.md)
 - [CybORG/CAGE-2 backend qualification guardrails](decisions/cyborg-cage2-runtime-qualification-guardrails.md)
@@ -47,6 +48,7 @@ semantic and protocol authority.
 - [CyberBattleSim backend architecture guardrails](decisions/cyberbattlesim-backend-guardrails.md)
 - [CyberBattleSim conformance-composition guardrails](decisions/cyberbattlesim-conformance-guardrails.md)
 - [CyberBattleSim environment-pack and researcher-command guardrails](decisions/cyberbattlesim-researcher-command-guardrails.md)
+- [CyberBattleSim baseline-reproduction guardrails](decisions/cyberbattlesim-baseline-reproduction-guardrails.md)
 - [CyberBattleSim chain native-readiness record](decisions/cyberbattlesim-native-readiness-record.md)
 - [Project services](maintainers/project-services.md)
 

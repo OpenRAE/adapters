@@ -1,0 +1,15 @@
+{
+  "disposition": "succeeded",
+  "mode": "smoke",
+  "run_count": 1,
+  "runs": [
+    {
+      "cleanup_verified": true,
+      "completed_steps": 136,
+      "derived_measure_count": 1,
+      "evidence_record_count": 2,
+      "run_id": "cbs-r3-mediated-10-1",
+      "seed": 20260729
+    }
+  ]
+}
