@@ -18,11 +18,11 @@ import os
 import platform
 import sys
 import tempfile
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from importlib import import_module, metadata, resources, util
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from types import ModuleType
 from typing import NoReturn, Protocol, cast
 
@@ -239,6 +239,16 @@ class _EpisodeEvidence(Protocol):
     def cleanup_verified(self) -> bool: ...
 
 
+class _SupplementalJsonArtifact(Protocol):
+    """One sanitized JSON member already referenced by evaluator evidence."""
+
+    @property
+    def relative_path(self) -> str: ...
+
+    @property
+    def payload(self) -> Mapping[str, object]: ...
+
+
 @dataclass(frozen=True)
 class _BackendAdapter(object):
     """Closed per-backend resolution of every backend-local semantic."""
@@ -355,6 +365,7 @@ def _add_admission_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--participant-selection", type=Path)
     parser.add_argument("--participant-configuration", type=Path)
     parser.add_argument("--trial-length", type=int)
+    parser.add_argument("--epsilon-step-offset", type=int)
     parser.add_argument("--seed", type=int, action="append")
     parser.add_argument("--run-id")
 
@@ -441,6 +452,7 @@ def _cyborg_native_args_complete(args: argparse.Namespace) -> bool:
         args.participant_manifest,
         args.participant_selection,
         args.participant_configuration,
+        args.epsilon_step_offset,
     )
     return all(value is not None for value in required) and all(value is None for value in foreign)
 
@@ -612,7 +624,7 @@ _NASIM_EXAMPLE_MEMBERS = (
 def _nasim_native_args_complete(args: argparse.Namespace) -> bool:
     """Return whether every NASim native admission argument was supplied."""
 
-    return _single_participant_native_args_complete(args)
+    return _single_participant_native_args_complete(args) and args.epsilon_step_offset is None
 
 
 def _nasim_participant_paths(args: argparse.Namespace) -> tuple[str, Path, Path, Path]:
@@ -782,14 +794,17 @@ _CYBERBATTLESIM_EXAMPLE_MEMBERS = (
     "sdl/cyberbattlesim-chain.sdl.yaml",
 )
 _CYBERBATTLESIM_PACK_DIGEST = (
-    "sha256:08ae7e997b50bb396c290c4a5537a65e9e7d8b8e6abc97d1ff65022c4258e417"
+    "sha256:66493882579d5cba87248c5722782ff5ded5f0d7423f4e559f15bfb61712a905"
 )
 
 
 def _cyberbattlesim_native_args_complete(args: argparse.Namespace) -> bool:
     """Require the complete chain pack surface and reject foreign arguments."""
 
-    return _single_participant_native_args_complete(args)
+    offset = args.epsilon_step_offset
+    return _single_participant_native_args_complete(args) and (
+        offset is None or type(offset) is int and offset >= 0
+    )
 
 
 def _cyberbattlesim_participant_paths(
@@ -892,6 +907,7 @@ def _cyberbattlesim_build_controls(
         red_manifest=admitted.participant_manifest,
         red_selection=admitted.participant_selection,
         red_configuration=admitted.participant_configuration,
+        epsilon_step_offset=args.epsilon_step_offset or 0,
     )
 
 
@@ -919,6 +935,7 @@ def _cyberbattlesim_provenance_payload(
             "run_id": args.run_id,
             "seeds": list(admitted.seeds),
             "trial_length": args.trial_length,
+            "epsilon_step_offset": args.epsilon_step_offset or 0,
         },
         "environment_pack": {
             "digest": admitted.pack_digest,
@@ -1529,6 +1546,7 @@ def _write_episode_evidence(
             result.evidence_records[0].run_ref.ref_id, admitted.participant_selection
         ).model_dump(mode="json"),
     )
+    _write_supplemental_artifacts(run_output, result)
     return ExperimentArtifactRefModel(
         artifact_id=f"portable-evidence-{index}",
         role="observation",
@@ -1540,6 +1558,59 @@ def _write_episode_evidence(
         source=adapter.evidence_source_label,
         sensitivity="redacted",
     )
+
+
+def _write_supplemental_artifacts(run_output: Path, result: _EpisodeEvidence) -> None:
+    """Write sanitized JSON members and verify their evidence-record bindings."""
+
+    seen: set[str] = set()
+    artifacts = cast(
+        tuple[_SupplementalJsonArtifact, ...],
+        getattr(result, "supplemental_artifacts", ()),
+    )
+    for artifact in artifacts:
+        relative = _validated_supplemental_path(artifact, seen)
+        seen.add(artifact.relative_path)
+        path = run_output.joinpath(*relative.parts)
+        atomic_write_json_artifact(path, dict(artifact.payload))
+        _verify_supplemental_binding(path, artifact, result)
+
+
+def _validated_supplemental_path(
+    artifact: _SupplementalJsonArtifact, seen: set[str]
+) -> PurePosixPath:
+    """Return one safe, unique supplemental-artifact path."""
+
+    relative = PurePosixPath(artifact.relative_path)
+    if (
+        relative.is_absolute()
+        or not relative.parts
+        or ".." in relative.parts
+        or relative.as_posix() != artifact.relative_path
+        or artifact.relative_path in seen
+    ):
+        raise ValueError("supplemental evidence path is invalid")
+    return relative
+
+
+def _verify_supplemental_binding(
+    path: Path, artifact: _SupplementalJsonArtifact, result: _EpisodeEvidence
+) -> None:
+    """Verify that one supplemental artifact is bound by exactly one record."""
+
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    matching = [
+        record.raw_content
+        for record in result.evidence_records
+        if record.raw_content.content_uri == artifact.relative_path
+    ]
+    if (
+        len(matching) != 1
+        or matching[0].content_checksum is None
+        or matching[0].content_checksum.algorithm != "sha256"
+        or matching[0].content_checksum.value != digest
+    ):
+        raise ValueError("supplemental evidence binding is invalid")
 
 
 def _complete_native_run(
@@ -1719,6 +1790,7 @@ def _conformance_controls_absent(args: argparse.Namespace) -> bool:
         args.participant_selection,
         args.participant_configuration,
         args.trial_length,
+        args.epsilon_step_offset,
         args.seed,
         args.run_id,
     )

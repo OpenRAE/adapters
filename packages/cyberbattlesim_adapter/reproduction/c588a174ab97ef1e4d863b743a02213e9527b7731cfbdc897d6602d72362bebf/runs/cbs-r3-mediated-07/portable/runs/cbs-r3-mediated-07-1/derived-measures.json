@@ -1,0 +1,46 @@
+[
+  {
+    "derived_measure_id": "measure.cyberbattlesim.cumulative-attacker-reward.d60d9f9c96354972ada424f62e23546de444a921962010632149728df7f4977d",
+    "generated_at": "2026-08-11T05:45:53.245658Z",
+    "limitations": [
+      "Single-run cumulative source reward; no deterministic replay or outcome equivalence is claimed.",
+      "Python-global and NumPy-global random streams remain unbound by the selected reset protocol."
+    ],
+    "measure_kind": "score",
+    "measure_version": "1.0.0",
+    "method": {
+      "description": "Report the sanitized cumulative reward maintained by the serialized source driver.",
+      "method_id": "cyberbattlesim-cumulative-reward",
+      "method_version": "1.0.0",
+      "name": "Source cumulative attacker reward",
+      "parameters": []
+    },
+    "metric_ref": {
+      "ref_digest": null,
+      "ref_id": "cumulative_attacker_reward",
+      "ref_kind": "metric-definition",
+      "ref_path": null,
+      "ref_version": "1.0.0"
+    },
+    "provenance_refs": [
+      {
+        "ref_digest": null,
+        "ref_id": "cyberbattlesim-chain-task",
+        "ref_kind": "task",
+        "ref_path": null,
+        "ref_version": "1.0.0"
+      }
+    ],
+    "schema_version": "experiment-derived-measure/v1",
+    "source_evidence_refs": [
+      {
+        "ref_id": "evidence-record.cyberbattlesim.evaluator-summary.d60d9f9c96354972ada424f62e23546de444a921962010632149728df7f4977d",
+        "ref_kind": "evidence-record",
+        "ref_version": "1.0.0"
+      }
+    ],
+    "uncertainty": "No statistical uncertainty is estimated from this single run.",
+    "value": 5624.0,
+    "value_status": "reported"
+  }
+]

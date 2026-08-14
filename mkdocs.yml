@@ -33,6 +33,7 @@ nav:
   - Researcher command: researcher-command.md
   - NASim researcher command: nasim-researcher-command.md
   - CyberBattleSim researcher command: cyberbattlesim-researcher-command.md
+  - CyberBattleSim baseline reproduction: cyberbattlesim-baseline-reproduction.md
   - Maintainers:
       - Continuous integration: maintainers/ci.md
       - Project services: maintainers/project-services.md
@@ -66,6 +67,7 @@ nav:
       - CyberBattleSim backend architecture guardrails: decisions/cyberbattlesim-backend-guardrails.md
       - CyberBattleSim conformance-composition guardrails: decisions/cyberbattlesim-conformance-guardrails.md
       - CyberBattleSim environment-pack and researcher-command guardrails: decisions/cyberbattlesim-researcher-command-guardrails.md
+      - CyberBattleSim baseline-reproduction guardrails: decisions/cyberbattlesim-baseline-reproduction-guardrails.md
       - CyberBattleSim chain native-readiness record: decisions/cyberbattlesim-native-readiness-record.md
       - ADR 003 — Single distribution and Trusted Publishing: decisions/adrs/adr-003-single-distribution-and-trusted-publishing.md
       - ADR 002 — RAES authority and adapter boundaries: decisions/adrs/adr-002-raes-authority-and-adapter-boundaries.md

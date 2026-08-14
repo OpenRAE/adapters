@@ -1,0 +1,30 @@
+[
+  {
+    "address": "/participant/behavior/red",
+    "code": "cyberbattlesim.seed.applied",
+    "domain": "participant",
+    "message": "The adapter bound a selected random stream; binding is not a deterministic-replay claim.",
+    "severity": "info"
+  },
+  {
+    "address": "/participant/behavior/red",
+    "code": "cyberbattlesim.seed.applied",
+    "domain": "participant",
+    "message": "The adapter bound a selected random stream; binding is not a deterministic-replay claim.",
+    "severity": "info"
+  },
+  {
+    "address": "/participant/behavior/red",
+    "code": "cyberbattlesim.seed.unbound",
+    "domain": "participant",
+    "message": "A selected random stream remains unbound this reset.",
+    "severity": "warning"
+  },
+  {
+    "address": "/participant/behavior/red",
+    "code": "cyberbattlesim.seed.unbound",
+    "domain": "participant",
+    "message": "A selected random stream remains unbound this reset.",
+    "severity": "warning"
+  }
+]

@@ -1,0 +1,344 @@
+{
+  "declaration_sha256": "825dde3b4cd66f228e0f93157a2add35e3c9a822a7adac1d8ffd322b32116232",
+  "notes": [
+    {
+      "disposition": "observed",
+      "event_code": "mediated-collection-started",
+      "evidence_refs": [
+        {
+          "path": "protocol.json"
+        },
+        {
+          "path": "environment.json"
+        }
+      ],
+      "note_id": "mediated-001",
+      "phase": "mediated",
+      "recorded_at": "2026-08-10T03:58:46.141Z",
+      "severity": "info",
+      "summary": "The ten preallocated RAES-mediated attempts were started with zero retries."
+    },
+    {
+      "disposition": "observed",
+      "event_code": "mediated-attempt-started",
+      "evidence_refs": [
+        {
+          "path": "protocol.json"
+        }
+      ],
+      "note_id": "mediated-002",
+      "phase": "mediated",
+      "recorded_at": "2026-08-10T03:58:46.141Z",
+      "severity": "info",
+      "summary": "Scheduled RAES-mediated attempt cbs-mediated-01 was started."
+    },
+    {
+      "disposition": "passed",
+      "event_code": "mediated-attempt-terminalized",
+      "evidence_refs": [
+        {
+          "path": "runs/cbs-mediated-01/record.json"
+        }
+      ],
+      "note_id": "mediated-003",
+      "phase": "mediated",
+      "recorded_at": "2026-08-10T03:58:50.964Z",
+      "severity": "info",
+      "summary": "Scheduled RAES-mediated attempt cbs-mediated-01 was terminalized as valid."
+    },
+    {
+      "disposition": "observed",
+      "event_code": "mediated-attempt-started",
+      "evidence_refs": [
+        {
+          "path": "protocol.json"
+        }
+      ],
+      "note_id": "mediated-004",
+      "phase": "mediated",
+      "recorded_at": "2026-08-10T03:58:50.965Z",
+      "severity": "info",
+      "summary": "Scheduled RAES-mediated attempt cbs-mediated-02 was started."
+    },
+    {
+      "disposition": "passed",
+      "event_code": "mediated-attempt-terminalized",
+      "evidence_refs": [
+        {
+          "path": "runs/cbs-mediated-02/record.json"
+        }
+      ],
+      "note_id": "mediated-005",
+      "phase": "mediated",
+      "recorded_at": "2026-08-10T03:58:55.538Z",
+      "severity": "info",
+      "summary": "Scheduled RAES-mediated attempt cbs-mediated-02 was terminalized as valid."
+    },
+    {
+      "disposition": "observed",
+      "event_code": "mediated-attempt-started",
+      "evidence_refs": [
+        {
+          "path": "protocol.json"
+        }
+      ],
+      "note_id": "mediated-006",
+      "phase": "mediated",
+      "recorded_at": "2026-08-10T03:58:55.538Z",
+      "severity": "info",
+      "summary": "Scheduled RAES-mediated attempt cbs-mediated-03 was started."
+    },
+    {
+      "disposition": "passed",
+      "event_code": "mediated-attempt-terminalized",
+      "evidence_refs": [
+        {
+          "path": "runs/cbs-mediated-03/record.json"
+        }
+      ],
+      "note_id": "mediated-007",
+      "phase": "mediated",
+      "recorded_at": "2026-08-10T03:58:59.661Z",
+      "severity": "info",
+      "summary": "Scheduled RAES-mediated attempt cbs-mediated-03 was terminalized as valid."
+    },
+    {
+      "disposition": "observed",
+      "event_code": "mediated-attempt-started",
+      "evidence_refs": [
+        {
+          "path": "protocol.json"
+        }
+      ],
+      "note_id": "mediated-008",
+      "phase": "mediated",
+      "recorded_at": "2026-08-10T03:58:59.661Z",
+      "severity": "info",
+      "summary": "Scheduled RAES-mediated attempt cbs-mediated-04 was started."
+    },
+    {
+      "disposition": "passed",
+      "event_code": "mediated-attempt-terminalized",
+      "evidence_refs": [
+        {
+          "path": "runs/cbs-mediated-04/record.json"
+        }
+      ],
+      "note_id": "mediated-009",
+      "phase": "mediated",
+      "recorded_at": "2026-08-10T03:59:04.334Z",
+      "severity": "info",
+      "summary": "Scheduled RAES-mediated attempt cbs-mediated-04 was terminalized as valid."
+    },
+    {
+      "disposition": "observed",
+      "event_code": "mediated-attempt-started",
+      "evidence_refs": [
+        {
+          "path": "protocol.json"
+        }
+      ],
+      "note_id": "mediated-010",
+      "phase": "mediated",
+      "recorded_at": "2026-08-10T03:59:04.335Z",
+      "severity": "info",
+      "summary": "Scheduled RAES-mediated attempt cbs-mediated-05 was started."
+    },
+    {
+      "disposition": "passed",
+      "event_code": "mediated-attempt-terminalized",
+      "evidence_refs": [
+        {
+          "path": "runs/cbs-mediated-05/record.json"
+        }
+      ],
+      "note_id": "mediated-011",
+      "phase": "mediated",
+      "recorded_at": "2026-08-10T03:59:08.958Z",
+      "severity": "info",
+      "summary": "Scheduled RAES-mediated attempt cbs-mediated-05 was terminalized as valid."
+    },
+    {
+      "disposition": "observed",
+      "event_code": "mediated-attempt-started",
+      "evidence_refs": [
+        {
+          "path": "protocol.json"
+        }
+      ],
+      "note_id": "mediated-012",
+      "phase": "mediated",
+      "recorded_at": "2026-08-10T03:59:08.959Z",
+      "severity": "info",
+      "summary": "Scheduled RAES-mediated attempt cbs-mediated-06 was started."
+    },
+    {
+      "disposition": "passed",
+      "event_code": "mediated-attempt-terminalized",
+      "evidence_refs": [
+        {
+          "path": "runs/cbs-mediated-06/record.json"
+        }
+      ],
+      "note_id": "mediated-013",
+      "phase": "mediated",
+      "recorded_at": "2026-08-10T03:59:13.532Z",
+      "severity": "info",
+      "summary": "Scheduled RAES-mediated attempt cbs-mediated-06 was terminalized as valid."
+    },
+    {
+      "disposition": "observed",
+      "event_code": "mediated-attempt-started",
+      "evidence_refs": [
+        {
+          "path": "protocol.json"
+        }
+      ],
+      "note_id": "mediated-014",
+      "phase": "mediated",
+      "recorded_at": "2026-08-10T03:59:13.532Z",
+      "severity": "info",
+      "summary": "Scheduled RAES-mediated attempt cbs-mediated-07 was started."
+    },
+    {
+      "disposition": "passed",
+      "event_code": "mediated-attempt-terminalized",
+      "evidence_refs": [
+        {
+          "path": "runs/cbs-mediated-07/record.json"
+        }
+      ],
+      "note_id": "mediated-015",
+      "phase": "mediated",
+      "recorded_at": "2026-08-10T03:59:18.456Z",
+      "severity": "info",
+      "summary": "Scheduled RAES-mediated attempt cbs-mediated-07 was terminalized as valid."
+    },
+    {
+      "disposition": "observed",
+      "event_code": "mediated-attempt-started",
+      "evidence_refs": [
+        {
+          "path": "protocol.json"
+        }
+      ],
+      "note_id": "mediated-016",
+      "phase": "mediated",
+      "recorded_at": "2026-08-10T03:59:18.457Z",
+      "severity": "info",
+      "summary": "Scheduled RAES-mediated attempt cbs-mediated-08 was started."
+    },
+    {
+      "disposition": "passed",
+      "event_code": "mediated-attempt-terminalized",
+      "evidence_refs": [
+        {
+          "path": "runs/cbs-mediated-08/record.json"
+        }
+      ],
+      "note_id": "mediated-017",
+      "phase": "mediated",
+      "recorded_at": "2026-08-10T03:59:22.579Z",
+      "severity": "info",
+      "summary": "Scheduled RAES-mediated attempt cbs-mediated-08 was terminalized as valid."
+    },
+    {
+      "disposition": "observed",
+      "event_code": "mediated-attempt-started",
+      "evidence_refs": [
+        {
+          "path": "protocol.json"
+        }
+      ],
+      "note_id": "mediated-018",
+      "phase": "mediated",
+      "recorded_at": "2026-08-10T03:59:22.580Z",
+      "severity": "info",
+      "summary": "Scheduled RAES-mediated attempt cbs-mediated-09 was started."
+    },
+    {
+      "disposition": "passed",
+      "event_code": "mediated-attempt-terminalized",
+      "evidence_refs": [
+        {
+          "path": "runs/cbs-mediated-09/record.json"
+        }
+      ],
+      "note_id": "mediated-019",
+      "phase": "mediated",
+      "recorded_at": "2026-08-10T03:59:27.003Z",
+      "severity": "info",
+      "summary": "Scheduled RAES-mediated attempt cbs-mediated-09 was terminalized as valid."
+    },
+    {
+      "disposition": "observed",
+      "event_code": "mediated-attempt-started",
+      "evidence_refs": [
+        {
+          "path": "protocol.json"
+        }
+      ],
+      "note_id": "mediated-020",
+      "phase": "mediated",
+      "recorded_at": "2026-08-10T03:59:27.003Z",
+      "severity": "info",
+      "summary": "Scheduled RAES-mediated attempt cbs-mediated-10 was started."
+    },
+    {
+      "disposition": "passed",
+      "event_code": "mediated-attempt-terminalized",
+      "evidence_refs": [
+        {
+          "path": "runs/cbs-mediated-10/record.json"
+        }
+      ],
+      "note_id": "mediated-021",
+      "phase": "mediated",
+      "recorded_at": "2026-08-10T03:59:31.176Z",
+      "severity": "info",
+      "summary": "Scheduled RAES-mediated attempt cbs-mediated-10 was terminalized as valid."
+    },
+    {
+      "disposition": "passed",
+      "event_code": "mediated-collection-completed",
+      "evidence_refs": [
+        {
+          "path": "runs/cbs-mediated-01/record.json"
+        },
+        {
+          "path": "runs/cbs-mediated-02/record.json"
+        },
+        {
+          "path": "runs/cbs-mediated-03/record.json"
+        },
+        {
+          "path": "runs/cbs-mediated-04/record.json"
+        },
+        {
+          "path": "runs/cbs-mediated-05/record.json"
+        },
+        {
+          "path": "runs/cbs-mediated-06/record.json"
+        },
+        {
+          "path": "runs/cbs-mediated-07/record.json"
+        },
+        {
+          "path": "runs/cbs-mediated-08/record.json"
+        },
+        {
+          "path": "runs/cbs-mediated-09/record.json"
+        },
+        {
+          "path": "runs/cbs-mediated-10/record.json"
+        }
+      ],
+      "note_id": "mediated-022",
+      "phase": "mediated",
+      "recorded_at": "2026-08-10T03:59:31.177Z",
+      "severity": "info",
+      "summary": "The RAES-mediated lane terminalized all ten attempts; 10 were valid and 0 failed."
+    }
+  ],
+  "schema_version": "cyberbattlesim-baseline-bench-notes/v1"
+}

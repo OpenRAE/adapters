@@ -1,0 +1,94 @@
+{
+  "artifacts": [
+    {
+      "media_type": "application/json",
+      "path": "bench-notes.json",
+      "sha256": "7eef98b91b375add73a620f08a668de93f237e1e3a344e695cd02c00dd1252f8",
+      "size_bytes": 5816
+    },
+    {
+      "media_type": "application/json",
+      "path": "collection.json",
+      "sha256": "454b5e7d5b4c61970ae60f2d7dc96abc304d7eb35755f0d08df11b5034faf92d",
+      "size_bytes": 173
+    },
+    {
+      "media_type": "application/json",
+      "path": "environment.json",
+      "sha256": "5f8c84124202daeaacdd35cc02fef89d16d4a0c741fdf923e6dbe3f9ceeda26a",
+      "size_bytes": 1378
+    },
+    {
+      "media_type": "application/json",
+      "path": "protocol.json",
+      "sha256": "93d79b72c9e26af2be1365e094e04ac0fff0fa884a7afdb8650e7e52a90418c4",
+      "size_bytes": 93420
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-native-01/record.json",
+      "sha256": "c784297c8b2f382ef2316ca5388238c4198af93dd5b14df99d2c313c3428f0a3",
+      "size_bytes": 5912
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-native-02/record.json",
+      "sha256": "63db6375b0e3eac6122329ba83817a1fbaa1c8c0d2a17b77d2674fe360a7f0be",
+      "size_bytes": 8727
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-native-03/record.json",
+      "sha256": "d552cdd6d4da35c03544b129e9fe3eda618f1bf3f14df473c143ffcc5da7f0ea",
+      "size_bytes": 7357
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-native-04/record.json",
+      "sha256": "285523f5bbfb2b6290c979734983a886f3092ad2ab17180c74284e29a986ad2a",
+      "size_bytes": 5447
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-native-05/record.json",
+      "sha256": "6bd195b1f8d14928becf60f90b0dfd04c5c2e7a89af24e6a3c295acfcf6a4db2",
+      "size_bytes": 4811
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-native-06/record.json",
+      "sha256": "44d7d1cef89ac44689d93410cec8fbd92cc56e5263488d11f6600466cd9883b8",
+      "size_bytes": 6412
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-native-07/record.json",
+      "sha256": "c5756e73068cf151e41ba38bb08e7fffba68f89f33d2c78dfe36a35c16db768d",
+      "size_bytes": 3917
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-native-08/record.json",
+      "sha256": "1934334f5bb4f1cb3ebefbf5376fdcfdb82789e7dd5ef696eb78736234de2357",
+      "size_bytes": 7537
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-native-09/record.json",
+      "sha256": "778dc6d4869dacf19349857336e633d8bcc38c38bd90a7ae5d98078b110887ba",
+      "size_bytes": 7902
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-native-10/record.json",
+      "sha256": "5952644249dabab43133666552d38381798a3547696787022bd9968a06e554fa",
+      "size_bytes": 7633
+    },
+    {
+      "media_type": "application/json",
+      "path": "source-ledger.json",
+      "sha256": "01c8dee3298778bdf537281b128b39c8030f134fe7492fabe4577d62ed370598",
+      "size_bytes": 4338
+    }
+  ]
+}

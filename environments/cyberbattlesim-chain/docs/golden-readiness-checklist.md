@@ -34,3 +34,31 @@ pack may move beyond its evidence-backed status. It is not participant content.
       before a source transition and that the evaluator remains a separate view.
 - [ ] Confirm the scenario objective and experiment controls agree with the
       canonical installed mirrors and the recorded native rehearsal.
+
+## Baseline-reproduction readiness lane
+
+This lane is separate from golden promotion. Completing it does not change the
+pack status from `built` to `golden`.
+
+- [ ] Build and install CyberBattleSim from the exact qualified commit as a
+      non-editable wheel, then pass pre-import source admission.
+- [ ] Freeze the issue-30 declaration with 20 unique run/attempt IDs, zero
+      retries, exact task/spec/pack/participant/runner digests, actual
+      stochastic dispositions, missingness policy, bootstrap method,
+      tolerances, and six tier criteria.
+- [ ] Execute the exact upstream ten-episode `epsilon_greedy_search` batch and
+      commit the completed native oracle before the first mediated attempt.
+- [ ] Execute all ten mediated attempts through RAES participant admission,
+      evaluator projection, sealed evidence, and verified cleanup; retain every
+      failed, invalid, or excluded attempt without replacement.
+- [ ] Recompute `aggregates.json` and `tiers.json` offline from the retained run
+      rows; verify all digest-bound citations and the final inventory.
+- [ ] Scan the complete bundle for native observations, action coordinates,
+      credentials, reward vectors, hidden state, random state, host paths,
+      argument/environment dumps, provider logs, exceptions, and tracebacks.
+- [ ] Record the exact source/adapter/pack/software/hardware identities and all
+      unsupported controls or metrics in the readiness record.
+- [ ] Confirm the report makes no deterministic-replay, exact state or
+      observation equivalence, cross-simulator equality, agent-ranking,
+      benchmark-comparability, outcome-equivalence, or general scientific
+      reproducibility claim.

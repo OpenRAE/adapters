@@ -3,14 +3,25 @@
 from __future__ import annotations
 
 import importlib
+import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from importlib.metadata import Distribution
+from numbers import Real
 from threading import RLock
 from typing import Protocol, TypedDict, cast
 
 from raes_adapters import _source_admission
 from raes_adapters.cyberbattlesim import load_qualification
+from raes_adapters.cyberbattlesim.backend.source import (
+    construct_selected_environment,
+    resolve_and_verify_selected_source,
+    verify_selected_source_identity,
+)
+from raes_adapters.cyberbattlesim.termination import (
+    DEFENDER_SLA_FLOOR,
+    classify_terminal_cause,
+)
 
 _SUPPORTED_ACTION_KINDS = frozenset(
     {
@@ -32,16 +43,6 @@ _PORTABLE_TARGET_BY_ACTION_KIND = {
 _CREDENTIAL_CACHE_SOURCE_PATH = "cyberbattle/agents/baseline/agent_randomcredlookup.py"
 _CREDENTIAL_CACHE_MODULE = "cyberbattle.agents.baseline.agent_randomcredlookup"
 _AGENT_WRAPPER_MODULE = "cyberbattle.agents.baseline.agent_wrapper"
-_RUNTIME_SOURCE_PATHS = (
-    "cyberbattle/__init__.py",
-    _CREDENTIAL_CACHE_SOURCE_PATH,
-    "cyberbattle/agents/baseline/learner.py",
-    "cyberbattle/_env/cyberbattle_env.py",
-    "cyberbattle/_env/defender.py",
-    "cyberbattle/_env/cyberbattle_chain.py",
-    "cyberbattle/samples/chainpattern/chainpattern.py",
-)
-_RUNTIME_ARTIFACT_NAMES = frozenset({"cyberbattlesim", "gymnasium", "numpy"})
 _QUALIFICATION_INVALID = _source_admission.QUALIFICATION_INVALID
 
 
@@ -49,51 +50,9 @@ def _verify_selected_source_identity(
     qualification: dict[str, object],
     selected_distribution: Distribution,
 ) -> dict[str, Distribution]:
-    """Verify the complete pinned runtime without constructing an environment."""
+    """Compatibility wrapper around the backend-local shared verifier."""
 
-    distributions = _source_admission.verify_runtime_artifacts(
-        qualification,
-        selected_distribution,
-        expected_names=_RUNTIME_ARTIFACT_NAMES,
-        primary_name="cyberbattlesim",
-    )
-    _source_admission.verify_runtime_source_tree(
-        qualification,
-        selected_distribution,
-        import_root="cyberbattle",
-    )
-    _source_admission.verify_selected_source_files(
-        qualification,
-        selected_distribution,
-        source_paths=_RUNTIME_SOURCE_PATHS,
-    )
-    for module_name, path in (
-        ("cyberbattle", "cyberbattle/__init__.py"),
-        (
-            _CREDENTIAL_CACHE_MODULE,
-            _CREDENTIAL_CACHE_SOURCE_PATH,
-        ),
-        (
-            _AGENT_WRAPPER_MODULE,
-            "cyberbattle/agents/baseline/agent_wrapper.py",
-        ),
-    ):
-        _source_admission.verify_package_origin(
-            module_name,
-            selected_distribution,
-            path,
-        )
-    _source_admission.verify_package_origin(
-        "gymnasium",
-        distributions["gymnasium"],
-        "gymnasium/__init__.py",
-    )
-    _source_admission.verify_package_origin(
-        "numpy",
-        distributions["numpy"],
-        "numpy/__init__.py",
-    )
-    return distributions
+    return verify_selected_source_identity(qualification, selected_distribution)
 
 
 class _ActionSpace(Protocol):
@@ -263,6 +222,7 @@ class DriverEvaluation(object):
     terminated: bool
     truncated: bool
     terminal_cause: str | None
+    network_availability: tuple[float, ...] = ()
     execution_ref: str = "driver.reset.injected"
     projection_ref: str = "driver.reset.injected.evaluation.1"
 
@@ -340,6 +300,8 @@ class CyberBattleSimDriver(object):
         self._terminated = False
         self._truncated = False
         self._terminal_cause: str | None = None
+        self._network_availability: list[float] = []
+        self._defender_sla_floor = DEFENDER_SLA_FLOOR
         self._closed = True
         self._artifacts_verified = False
         self._selected_distribution: Distribution | None = None
@@ -351,61 +313,18 @@ class CyberBattleSimDriver(object):
             if self._environment is not None and not self._closed:
                 return
             qualification, source, selection = self._selected_configuration()
-            selected_distribution = _source_admission.resolve_selected_distribution(
-                source["package"],
-                source["version"],
+            runtime = construct_selected_environment(
+                qualification,
+                source,
+                selection,
+                module_loader=importlib.import_module,
             )
-
-            if not self._artifacts_verified:
-                _verify_selected_source_identity(qualification, selected_distribution)
-            self._selected_distribution = selected_distribution
-            # Importing ``cyberbattle`` registers CyberBattleChain-v0.
-            importlib.import_module("cyberbattle")
-            gymnasium = cast(_GymnasiumModule, importlib.import_module("gymnasium"))
-            numpy = cast(_NumpyModule, importlib.import_module("numpy"))
-            _source_admission.verify_package_origin(
-                "cyberbattle._env.cyberbattle_env",
-                selected_distribution,
-                "cyberbattle/_env/cyberbattle_env.py",
-            )
-            _source_admission.verify_package_origin(
-                "cyberbattle._env.defender",
-                selected_distribution,
-                "cyberbattle/_env/defender.py",
-            )
+            self._selected_distribution = runtime.selected_distribution
             self._artifacts_verified = True
-            source_environment = cast(
-                _SourceEnvironmentModule,
-                importlib.import_module("cyberbattle._env.cyberbattle_env"),
-            )
-            defender = cast(
-                _DefenderModule,
-                importlib.import_module("cyberbattle._env.defender"),
-            )
-            termination = selection["termination"]
-            defender_selection = selection["defender"]
-            attacker_goal = source_environment.AttackerGoal(
-                own_atleast=termination["attacker_own_atleast"],
-                own_atleast_percent=termination["attacker_own_atleast_percent"],
-            )
-            defender_constraint = source_environment.DefenderConstraint(
-                maintain_sla=termination["defender_maintain_sla"]
-            )
-            defender_agent = defender.ScanAndReimageCompromisedMachines(
-                probability=defender_selection["probability"],
-                scan_capacity=defender_selection["scan_capacity"],
-                scan_frequency=defender_selection["scan_frequency"],
-            )
-            environment = gymnasium.make(
-                selection["scenario"]["gym_id"],
-                size=selection["scenario"]["size"],
-                attacker_goal=attacker_goal,
-                defender_constraint=defender_constraint,
-                defender_agent=defender_agent,
-            ).unwrapped
-            self._environment = environment
-            self._numpy = numpy
-            self._max_steps = termination["evaluator_cutoff_steps"]
+            self._environment = cast(_NativeEnvironment, runtime.environment)
+            self._numpy = cast(_NumpyModule, runtime.numpy)
+            self._max_steps = selection["termination"]["evaluator_cutoff_steps"]
+            self._defender_sla_floor = float(selection["termination"]["defender_maintain_sla"])
             self._closed = False
 
     def reset(self, seed: int | None) -> DriverResetReport:
@@ -437,6 +356,7 @@ class CyberBattleSimDriver(object):
             self._terminated = False
             self._truncated = False
             self._terminal_cause = None
+            self._network_availability = []
             self._autonomous_policy = None
             self._autonomous_wrapper = None
             self._clear_pending_action()
@@ -521,6 +441,14 @@ class CyberBattleSimDriver(object):
                 self._clear_pending_action()
                 raise RuntimeError("selected simulator step returned an unsupported shape")
             observation, reward, terminated, truncated, source_info = step_result
+            try:
+                availability = self._source_availability(source_info)
+                numeric_reward = float(reward)
+                if not math.isfinite(numeric_reward):
+                    raise RuntimeError("selected simulator reward is unavailable")
+            except Exception:
+                self._clear_pending_action()
+                raise
             if autonomous:
                 policy, wrapper = self._require_autonomous_policy()
                 policy.on_step(
@@ -535,17 +463,19 @@ class CyberBattleSimDriver(object):
             self._clear_pending_action()
             self._last_observation = observation
             self._step_count += 1
-            self._cumulative_reward += float(reward)
+            self._cumulative_reward += numeric_reward
+            self._network_availability.append(availability)
             self._terminated = bool(terminated)
             self._truncated = bool(truncated)
-            if self._terminated:
-                self._terminal_cause = "source-terminated"
-            elif self._truncated:
-                self._terminal_cause = "source-truncated"
-            elif self._step_count >= self._require_max_steps():
-                self._terminal_cause = "evaluator-cutoff"
-            else:
-                self._terminal_cause = None
+            self._terminal_cause = classify_terminal_cause(
+                last_reward=numeric_reward,
+                network_availability=availability,
+                step_count=self._step_count,
+                maximum_steps=self._require_max_steps(),
+                terminated=self._terminated,
+                truncated=self._truncated,
+                defender_sla_floor=self._defender_sla_floor,
+            )
             return DriverStep(
                 operation_ref=operation_ref,
                 step_number=self._step_count,
@@ -579,6 +509,22 @@ class CyberBattleSimDriver(object):
             raise ValueError("autonomous proposal does not match admitted authorization")
         return self._pending_native_action, True
 
+    @staticmethod
+    def _source_availability(source_info: object) -> float:
+        """Return the sole allowlisted source-info scalar for public evidence."""
+
+        if not isinstance(source_info, Mapping):
+            raise RuntimeError("selected simulator network availability is unavailable")
+        value = source_info.get("network_availability")
+        if (
+            not isinstance(value, Real)
+            or isinstance(value, bool)
+            or not math.isfinite(float(value))
+            or not 0.0 <= float(value) <= 1.0
+        ):
+            raise RuntimeError("selected simulator network availability is unavailable")
+        return float(value)
+
     def evaluate(self) -> DriverEvaluation:
         """Return evaluator-only facts without advancing the simulator."""
 
@@ -596,6 +542,7 @@ class CyberBattleSimDriver(object):
                 terminated=self._terminated,
                 truncated=self._truncated,
                 terminal_cause=self._terminal_cause,
+                network_availability=tuple(self._network_availability),
             )
 
     def close(self) -> DriverCleanupReport:
@@ -608,6 +555,7 @@ class CyberBattleSimDriver(object):
             self._environment = None
             self._last_observation = None
             self._execution_ref = None
+            self._network_availability = []
             self._autonomous_policy = None
             self._autonomous_wrapper = None
             self._clear_pending_action()
@@ -807,10 +755,19 @@ def verify_selected_cyberbattlesim_source() -> None:
     """Verify the complete pinned source without importing or constructing it."""
 
     qualification, source, _selection = CyberBattleSimDriver._selected_configuration()
-    selected_distribution = _source_admission.resolve_selected_distribution(
-        source["package"], source["version"]
-    )
-    _verify_selected_source_identity(qualification, selected_distribution)
+    resolve_and_verify_selected_source(qualification, source)
+
+
+def construct_selected_cyberbattlesim_environment() -> object:
+    """Construct the exact admitted environment for the source-native evaluator."""
+
+    qualification, source, selection = CyberBattleSimDriver._selected_configuration()
+    return construct_selected_environment(
+        qualification,
+        source,
+        selection,
+        module_loader=importlib.import_module,
+    ).environment
 
 
 __all__ = [
@@ -821,5 +778,6 @@ __all__ = [
     "DriverEvaluation",
     "DriverResetReport",
     "DriverStep",
+    "construct_selected_cyberbattlesim_environment",
     "verify_selected_cyberbattlesim_source",
 ]
