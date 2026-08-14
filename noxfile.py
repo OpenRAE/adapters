@@ -618,7 +618,7 @@ def _distributions(session: nox.Session) -> None:
             "--pack",
             str(REPO_ROOT / "environments" / "cyberbattlesim-chain"),
             "--pack-digest",
-            "sha256:08ae7e997b50bb396c290c4a5537a65e9e7d8b8e6abc97d1ff65022c4258e417",
+            "sha256:66493882579d5cba87248c5722782ff5ded5f0d7423f4e559f15bfb61712a905",
             "--scenario",
             "sdl/cyberbattlesim-chain.sdl.yaml",
             "--scenario-digest",

@@ -54,7 +54,7 @@ raes-pack-release check --pack cyberbattlesim-chain
 The admitted pack content digest is:
 
 ```text
-sha256:08ae7e997b50bb396c290c4a5537a65e9e7d8b8e6abc97d1ff65022c4258e417
+sha256:66493882579d5cba87248c5722782ff5ded5f0d7423f4e559f15bfb61712a905
 ```
 
 An asset with different bytes is rejected even if it is otherwise a valid
@@ -67,7 +67,7 @@ From the directory containing the extracted pack:
 ```bash
 raes-adapters validate --backend cyberbattlesim-chain --mode smoke \
   --pack cyberbattlesim-chain \
-  --pack-digest sha256:08ae7e997b50bb396c290c4a5537a65e9e7d8b8e6abc97d1ff65022c4258e417 \
+  --pack-digest sha256:66493882579d5cba87248c5722782ff5ded5f0d7423f4e559f15bfb61712a905 \
   --scenario sdl/cyberbattlesim-chain.sdl.yaml \
   --scenario-digest sha256:9d696ea7fa23a1e7cf4c1cbc145a7989370dc4e9afff2cd5a17d6d1af887b528 \
   --experiment experiment/cyberbattlesim-chain.spec.exp.json \
@@ -90,7 +90,7 @@ Use the same arguments with `run`, plus an unused invocation-relative output:
 ```bash
 raes-adapters run --backend cyberbattlesim-chain --mode smoke \
   --pack cyberbattlesim-chain \
-  --pack-digest sha256:08ae7e997b50bb396c290c4a5537a65e9e7d8b8e6abc97d1ff65022c4258e417 \
+  --pack-digest sha256:66493882579d5cba87248c5722782ff5ded5f0d7423f4e559f15bfb61712a905 \
   --scenario sdl/cyberbattlesim-chain.sdl.yaml \
   --scenario-digest sha256:9d696ea7fa23a1e7cf4c1cbc145a7989370dc4e9afff2cd5a17d6d1af887b528 \
   --experiment experiment/cyberbattlesim-chain.spec.exp.json \
@@ -106,7 +106,14 @@ raes-adapters run --backend cyberbattlesim-chain --mode smoke \
 The exact upstream `CredentialCacheExploiter` proposes each native action. A
 proposal does not mutate the simulator: its semantic action must first cross the
 RAES participant admission boundary. The existing adapter evaluator projects
-the result, and cleanup is always attempted and verified.
+the result, including a checksum-bound sanitized availability/cause artifact,
+and cleanup is always attempted and verified.
+
+An individual run starts epsilon decay at step offset zero. The baseline
+reproduction collector supplies `--epsilon-step-offset` internally so ten
+process-isolated episodes follow the upstream evaluator's cumulative batch
+schedule. The value is non-negative, recorded in participant provenance, and is
+rejected for other backends; it is not a seed or replay control.
 
 Study mode requires ten `--seed 20260729` occurrences, matching the selected
 source episode count. Repeated seed labels do not establish deterministic

@@ -1,0 +1,116 @@
+[
+  {
+    "apparatus_context_ref": null,
+    "capture_requirement_ref": "cyberbattlesim-evaluator-summary.d60d9f9c96354972ada424f62e23546de444a921962010632149728df7f4977d",
+    "capture_spec_ref": {
+      "ref_id": "cyberbattlesim-evaluator-capture.d60d9f9c96354972ada424f62e23546de444a921962010632149728df7f4977d",
+      "ref_kind": "capture-spec",
+      "ref_version": "1.0.0"
+    },
+    "capture_window_ref": "cyberbattlesim-selected-episode.d60d9f9c96354972ada424f62e23546de444a921962010632149728df7f4977d",
+    "captured_at": "2026-08-11T05:45:57.527829Z",
+    "evidence_kind": "telemetry",
+    "evidence_record_id": "evidence-record.cyberbattlesim.evaluator-summary.d60d9f9c96354972ada424f62e23546de444a921962010632149728df7f4977d",
+    "provenance_refs": [
+      {
+        "ref_digest": null,
+        "ref_id": "qualification.cyberbattlesim.selected-source",
+        "ref_kind": "other",
+        "ref_path": null,
+        "ref_version": "854d6966607fb68645651f55b0f97221bd293e0d"
+      }
+    ],
+    "raw_content": {
+      "artifact_ref": null,
+      "content_checksum": {
+        "algorithm": "sha256",
+        "value": "18b9f1423b3aedad4473de0d09bc6b6a2a905374f0ee3149bc3e0751f6074f9f"
+      },
+      "content_uri": "urn:raes:evidence-record.cyberbattlesim.evaluator-summary.d60d9f9c96354972ada424f62e23546de444a921962010632149728df7f4977d:payload-summary",
+      "loss_disclosure": "Source-native observations, action availability, credentials, reward components, hidden state, and all source info except network availability are withheld.",
+      "payload_summary": "Sanitized evaluator summary: 326 source transitions and cumulative reward 5663; terminated=True truncated=False terminal_cause=defender-sla."
+    },
+    "record_version": "1.0.0",
+    "redaction_state": "redacted",
+    "run_ref": {
+      "ref_digest": null,
+      "ref_id": "driver.reset.1",
+      "ref_kind": "run",
+      "ref_path": null,
+      "ref_version": "1.0.0"
+    },
+    "schema_version": "experiment-evidence-record/v1",
+    "sensitivity": "redacted",
+    "source_refs": [
+      {
+        "ref_digest": null,
+        "ref_id": "cyberbattlesim-chain-public",
+        "ref_kind": "protocol",
+        "ref_path": null,
+        "ref_version": "854d6966607fb68645651f55b0f97221bd293e0d"
+      }
+    ],
+    "task_ref": {
+      "ref_id": "cyberbattlesim-chain-task",
+      "ref_kind": "task",
+      "ref_version": "1.0.0"
+    }
+  },
+  {
+    "apparatus_context_ref": null,
+    "capture_requirement_ref": "cyberbattlesim-evaluator-summary.d60d9f9c96354972ada424f62e23546de444a921962010632149728df7f4977d",
+    "capture_spec_ref": {
+      "ref_id": "cyberbattlesim-evaluator-capture.d60d9f9c96354972ada424f62e23546de444a921962010632149728df7f4977d",
+      "ref_kind": "capture-spec",
+      "ref_version": "1.0.0"
+    },
+    "capture_window_ref": "cyberbattlesim-selected-episode.d60d9f9c96354972ada424f62e23546de444a921962010632149728df7f4977d",
+    "captured_at": "2026-08-11T05:45:57.527829Z",
+    "evidence_kind": "telemetry",
+    "evidence_record_id": "evidence-record.cyberbattlesim.sanitized-episode-outcome.d60d9f9c96354972ada424f62e23546de444a921962010632149728df7f4977d",
+    "provenance_refs": [
+      {
+        "ref_digest": null,
+        "ref_id": "qualification.cyberbattlesim.selected-source",
+        "ref_kind": "other",
+        "ref_path": null,
+        "ref_version": "854d6966607fb68645651f55b0f97221bd293e0d"
+      }
+    ],
+    "raw_content": {
+      "artifact_ref": null,
+      "content_checksum": {
+        "algorithm": "sha256",
+        "value": "d9f6cb3e1194853c7279b8a0943b832ddb2601403ad5c4597c426317e11c7542"
+      },
+      "content_uri": "episode-outcome.json",
+      "loss_disclosure": "Only per-step network availability and the reconstructed terminal cause are retained; all other source info and native state are withheld.",
+      "payload_summary": "Sanitized per-step network availability and reconstructed terminal cause are retained in episode-outcome.json."
+    },
+    "record_version": "1.0.0",
+    "redaction_state": "redacted",
+    "run_ref": {
+      "ref_digest": null,
+      "ref_id": "driver.reset.1",
+      "ref_kind": "run",
+      "ref_path": null,
+      "ref_version": "1.0.0"
+    },
+    "schema_version": "experiment-evidence-record/v1",
+    "sensitivity": "redacted",
+    "source_refs": [
+      {
+        "ref_digest": null,
+        "ref_id": "cyberbattlesim-chain-public",
+        "ref_kind": "protocol",
+        "ref_path": null,
+        "ref_version": "854d6966607fb68645651f55b0f97221bd293e0d"
+      }
+    ],
+    "task_ref": {
+      "ref_id": "cyberbattlesim-chain-task",
+      "ref_kind": "task",
+      "ref_version": "1.0.0"
+    }
+  }
+]

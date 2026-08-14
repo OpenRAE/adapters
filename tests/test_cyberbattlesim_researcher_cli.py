@@ -28,7 +28,7 @@ from raes_adapters.cyberbattlesim.backend.driver import (
 pytest.importorskip("raes_env_packs")
 
 PACK_ROOT = Path(__file__).parents[1] / "environments" / "cyberbattlesim-chain"
-PACK_DIGEST = "sha256:08ae7e997b50bb396c290c4a5537a65e9e7d8b8e6abc97d1ff65022c4258e417"
+PACK_DIGEST = "sha256:66493882579d5cba87248c5722782ff5ded5f0d7423f4e559f15bfb61712a905"
 SCENARIO_DIGEST = "sha256:9d696ea7fa23a1e7cf4c1cbc145a7989370dc4e9afff2cd5a17d6d1af887b528"
 SEED = 20260729
 
@@ -148,6 +148,7 @@ class FakeDriver:
             terminated=True,
             truncated=False,
             terminal_cause="attacker-ownership",
+            network_availability=(0.93,),
         )
 
     def close(self) -> DriverCleanupReport:
@@ -221,9 +222,32 @@ def test_episode_uses_source_policy_proposal_then_raes_admission() -> None:
     assert result.completed_steps == 1
     assert result.cleanup_verified
     assert result.evidence_records
+    assert result.supplemental_artifacts[0].payload["network_availability"] == [0.93]
     assert driver.proposal_epsilons == [0.9]
     assert driver.step_calls == ["connect"]
     assert driver.closed
+
+
+def test_episode_applies_declared_cumulative_epsilon_step_offset() -> None:
+    manifest, selection, configuration = _participant_artifacts()
+    scenario = raes.parse_sdl_file(PACK_ROOT / "sdl" / "cyberbattlesim-chain.sdl.yaml")
+    driver = FakeDriver()
+
+    researcher.execute_episode(
+        scenario,
+        researcher.RunControls(
+            run_id="policy-offset",
+            seed=SEED,
+            max_steps=600,
+            red_manifest=manifest,
+            red_selection=selection,
+            red_configuration=configuration,
+            epsilon_step_offset=141,
+        ),
+        driver=driver,
+    )
+
+    assert driver.proposal_epsilons == [researcher._epsilon_for_step(141)]
 
 
 def test_run_rejects_unverifiable_evidence_before_execution_or_output(

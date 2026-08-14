@@ -1,0 +1,706 @@
+{
+  "artifacts": [
+    {
+      "media_type": "application/json",
+      "path": "aggregates.json",
+      "sha256": "02126fb51d671c2716829c5c9f1ae7eef420d657df5f8ddcafae8e918321e785",
+      "size_bytes": 3827
+    },
+    {
+      "media_type": "application/json",
+      "path": "bench-notes.json",
+      "sha256": "6d0c4db5777f748640614379ab79eb1cefb4b550c90828ccc9d895a38e291000",
+      "size_bytes": 17826
+    },
+    {
+      "media_type": "application/json",
+      "path": "environment.json",
+      "sha256": "a837628ecc627a791e9b1bdcc8396e68b0eb80b826ca5ac9c7481be8a5c0ee7c",
+      "size_bytes": 4314
+    },
+    {
+      "media_type": "application/json",
+      "path": "protocol.json",
+      "sha256": "db43d8e165c5ff9e027a63590811b594e5db552615053f1613839027ef5ef592",
+      "size_bytes": 84738
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-01/portable/machine-inventory.json",
+      "sha256": "ad489e5c927c7356c8716b5276cc47cc764233e7cefb802ce8b85913a5b90eae",
+      "size_bytes": 370
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-01/portable/provenance.json",
+      "sha256": "44d0427fd0f0a5764cd66266ec60926c0f9682d2c51218a4d2728f68faed1211",
+      "size_bytes": 14053
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-01/portable/runs/cbs-r2-mediated-01-1/derived-measures.json",
+      "sha256": "c49ee838ac6879cceade48517ffd7eeb1e3497cb4e9cae283d96a9572803d1b8",
+      "size_bytes": 1642
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-01/portable/runs/cbs-r2-mediated-01-1/diagnostics.json",
+      "sha256": "5c8608e37ae160bd6e20c2b492c0ad45c2ca19797dd843f020c9e4e2f43b1258",
+      "size_bytes": 957
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-01/portable/runs/cbs-r2-mediated-01-1/evidence-records.json",
+      "sha256": "1fdb3e0e7378884bff9c811cd9d7100f1550ee1459467e052fdfcc9d623b5701",
+      "size_bytes": 2380
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-01/portable/runs/cbs-r2-mediated-01-1/participant-provenance.json",
+      "sha256": "d7ec55c3983741a9f05979540b526b2dc4ce3133bf1842d0d2f91aceb8815d2c",
+      "size_bytes": 1956
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-01/portable/runs/cbs-r2-mediated-01-1/run.json",
+      "sha256": "6a6fd23b8bc11d59a04cf71ca1d6eb06c715cd91b7c67882edfd70d3218ba160",
+      "size_bytes": 11918
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-01/portable/runs/cbs-r2-mediated-01-1/summary.json",
+      "sha256": "756cd9f49b7a19a76a2257c640f24879704475bde72589fea755111434195fdd",
+      "size_bytes": 172
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-01/portable/summary.json",
+      "sha256": "c94ae6b4004d63cd6ae65f4b50ebfcd8f9c06670addecb81606c5ade7cfe477e",
+      "size_bytes": 291
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-01/record.json",
+      "sha256": "9044e2c664ec2307ea8b798668d41d1cfaada3f6cf56ae66319c03253da0e8e0",
+      "size_bytes": 1743
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-02/portable/machine-inventory.json",
+      "sha256": "ad489e5c927c7356c8716b5276cc47cc764233e7cefb802ce8b85913a5b90eae",
+      "size_bytes": 370
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-02/portable/provenance.json",
+      "sha256": "7f63c4e4facb7b47fa61786a7574108d61202bd1f4acedf17c5b7b8fc25d7a5d",
+      "size_bytes": 14053
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-02/portable/runs/cbs-r2-mediated-02-1/derived-measures.json",
+      "sha256": "d9201b05d41e69f52f4c657dc3223f7e9715082c46a54581cf1a4e279636bf84",
+      "size_bytes": 1642
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-02/portable/runs/cbs-r2-mediated-02-1/diagnostics.json",
+      "sha256": "5c8608e37ae160bd6e20c2b492c0ad45c2ca19797dd843f020c9e4e2f43b1258",
+      "size_bytes": 957
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-02/portable/runs/cbs-r2-mediated-02-1/evidence-records.json",
+      "sha256": "3584922f9fbdc5182c2b00496711ccb392a3202f576512615de0257c217c31fc",
+      "size_bytes": 2381
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-02/portable/runs/cbs-r2-mediated-02-1/participant-provenance.json",
+      "sha256": "d7ec55c3983741a9f05979540b526b2dc4ce3133bf1842d0d2f91aceb8815d2c",
+      "size_bytes": 1956
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-02/portable/runs/cbs-r2-mediated-02-1/run.json",
+      "sha256": "4a2ec5bedca15db48c638f620756a01207da1f29a1df5e2ccac1d1e76532c2c8",
+      "size_bytes": 11918
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-02/portable/runs/cbs-r2-mediated-02-1/summary.json",
+      "sha256": "dcd698fa3a6962df5ea206c85864e142e863de30aadf8f67c302d8edfd0fa70b",
+      "size_bytes": 173
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-02/portable/summary.json",
+      "sha256": "3cdd8b6b5cd2129e6e19fe73f6b5fa0769e96dcab1574f95f9629a9529a4a0a8",
+      "size_bytes": 292
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-02/record.json",
+      "sha256": "f50e98a5be3f84882ae0825e133b2ebdfc108f14e9ea43035c23c8c965d2596c",
+      "size_bytes": 1744
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-03/portable/machine-inventory.json",
+      "sha256": "ad489e5c927c7356c8716b5276cc47cc764233e7cefb802ce8b85913a5b90eae",
+      "size_bytes": 370
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-03/portable/provenance.json",
+      "sha256": "e3c79d229a97a938b0d238890ae347901b0900abe7e8303c67d5ce42602bf27c",
+      "size_bytes": 14053
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-03/portable/runs/cbs-r2-mediated-03-1/derived-measures.json",
+      "sha256": "623ebd4cae25093a105292924f767ae1fe21e2d7912abb63bcacf62fba0d5d4f",
+      "size_bytes": 1642
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-03/portable/runs/cbs-r2-mediated-03-1/diagnostics.json",
+      "sha256": "5c8608e37ae160bd6e20c2b492c0ad45c2ca19797dd843f020c9e4e2f43b1258",
+      "size_bytes": 957
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-03/portable/runs/cbs-r2-mediated-03-1/evidence-records.json",
+      "sha256": "af891f3932024a989651f86bf5a66bec7799797630eb94e6cd3115a0beb1acef",
+      "size_bytes": 2381
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-03/portable/runs/cbs-r2-mediated-03-1/participant-provenance.json",
+      "sha256": "d7ec55c3983741a9f05979540b526b2dc4ce3133bf1842d0d2f91aceb8815d2c",
+      "size_bytes": 1956
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-03/portable/runs/cbs-r2-mediated-03-1/run.json",
+      "sha256": "9af2d047cbc722eaa0165670896018f3f07cd930b97ef568ffc31079b05ecb2f",
+      "size_bytes": 11918
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-03/portable/runs/cbs-r2-mediated-03-1/summary.json",
+      "sha256": "4af7c5e1481b7684a4b1ad03fdd80e253d6a9ef52819d4b472168895ea4b5dcd",
+      "size_bytes": 173
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-03/portable/summary.json",
+      "sha256": "d1f6ee2ed55b63118a351207af0d0f3a079e8393d22a8733c65a56819b905ab9",
+      "size_bytes": 292
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-03/record.json",
+      "sha256": "ca3a35d8a292ff694f7bca345924c3aa073d07a67878cf0170184e9a003208ac",
+      "size_bytes": 1744
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-04/portable/machine-inventory.json",
+      "sha256": "ad489e5c927c7356c8716b5276cc47cc764233e7cefb802ce8b85913a5b90eae",
+      "size_bytes": 370
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-04/portable/provenance.json",
+      "sha256": "4a06a8006bb70d58ab1347dc0a1130dad2385d8886b897bb8d688eb290da65b0",
+      "size_bytes": 14053
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-04/portable/runs/cbs-r2-mediated-04-1/derived-measures.json",
+      "sha256": "55bb20d1603aca8667fb53abb812cd631730f4ca267c45bd33b7fd43fb5d2ac9",
+      "size_bytes": 1642
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-04/portable/runs/cbs-r2-mediated-04-1/diagnostics.json",
+      "sha256": "5c8608e37ae160bd6e20c2b492c0ad45c2ca19797dd843f020c9e4e2f43b1258",
+      "size_bytes": 957
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-04/portable/runs/cbs-r2-mediated-04-1/evidence-records.json",
+      "sha256": "7e44a96f5fd8b08be3afc3db757b6feb0fc7d71bac08e9ab009f0be6a415a4ef",
+      "size_bytes": 2381
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-04/portable/runs/cbs-r2-mediated-04-1/participant-provenance.json",
+      "sha256": "d7ec55c3983741a9f05979540b526b2dc4ce3133bf1842d0d2f91aceb8815d2c",
+      "size_bytes": 1956
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-04/portable/runs/cbs-r2-mediated-04-1/run.json",
+      "sha256": "8a5d493c66d62613a9823acf98761ef35183e5bd21f6928421bea4913a5d09a3",
+      "size_bytes": 11918
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-04/portable/runs/cbs-r2-mediated-04-1/summary.json",
+      "sha256": "f19981fca5fd882a1bfc61cd33cca8df3fa87a9b1124a132e02976e9d4bf70d5",
+      "size_bytes": 173
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-04/portable/summary.json",
+      "sha256": "734e8679f9f92d3c48d6e717142005edde545f271e8aa07d497a840e3d2c6993",
+      "size_bytes": 292
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-04/record.json",
+      "sha256": "905da8fbbddc96f8fac946b70421031c78b6a35a43ae5d7aa0ab0f178dfd063c",
+      "size_bytes": 1744
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-05/portable/machine-inventory.json",
+      "sha256": "ad489e5c927c7356c8716b5276cc47cc764233e7cefb802ce8b85913a5b90eae",
+      "size_bytes": 370
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-05/portable/provenance.json",
+      "sha256": "30f343aca667bd364c72e3b54a0f1dcce096d7fa9dad9c8a86b005ea6409f3c6",
+      "size_bytes": 14053
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-05/portable/runs/cbs-r2-mediated-05-1/derived-measures.json",
+      "sha256": "b729e6a5ef2c681bc169f731d3fa525f590fd91b5e003c0af2b99b7866362fb3",
+      "size_bytes": 1642
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-05/portable/runs/cbs-r2-mediated-05-1/diagnostics.json",
+      "sha256": "5c8608e37ae160bd6e20c2b492c0ad45c2ca19797dd843f020c9e4e2f43b1258",
+      "size_bytes": 957
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-05/portable/runs/cbs-r2-mediated-05-1/evidence-records.json",
+      "sha256": "883a37f5dac6e2c76cd3bc73cf87d138e8eaef8f14c713cd80f7284208a37d61",
+      "size_bytes": 2381
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-05/portable/runs/cbs-r2-mediated-05-1/participant-provenance.json",
+      "sha256": "d7ec55c3983741a9f05979540b526b2dc4ce3133bf1842d0d2f91aceb8815d2c",
+      "size_bytes": 1956
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-05/portable/runs/cbs-r2-mediated-05-1/run.json",
+      "sha256": "762f0a96de98e985bbe5fceac2416d5892f3ae27043c3eb4ce2e3ff216d16782",
+      "size_bytes": 11918
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-05/portable/runs/cbs-r2-mediated-05-1/summary.json",
+      "sha256": "d20bad06bded8b860f377995158db7a52edaac341c19574e3360e495bcca585f",
+      "size_bytes": 173
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-05/portable/summary.json",
+      "sha256": "cbe096e6de7224f8883143a07bd5539f1f59d306c4b737d7bebfc1c7e8c5530f",
+      "size_bytes": 292
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-05/record.json",
+      "sha256": "1c83c1a3b3e47609c20d361af55fe984c2f0ab75b16889aac17cec75d973114b",
+      "size_bytes": 1744
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-06/portable/machine-inventory.json",
+      "sha256": "ad489e5c927c7356c8716b5276cc47cc764233e7cefb802ce8b85913a5b90eae",
+      "size_bytes": 370
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-06/portable/provenance.json",
+      "sha256": "e37b0f27abef586e8a0f225da55084eb7e156f95b0048004d74c844d6683cacf",
+      "size_bytes": 14053
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-06/portable/runs/cbs-r2-mediated-06-1/derived-measures.json",
+      "sha256": "b949746c8100fba6927e4636c89960097765f021ed30ccd5155e935b1f3fb130",
+      "size_bytes": 1642
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-06/portable/runs/cbs-r2-mediated-06-1/diagnostics.json",
+      "sha256": "5c8608e37ae160bd6e20c2b492c0ad45c2ca19797dd843f020c9e4e2f43b1258",
+      "size_bytes": 957
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-06/portable/runs/cbs-r2-mediated-06-1/evidence-records.json",
+      "sha256": "472dc636a27def8b2a8696c4ace8c24b6db8bf8c78dbc5f4e69459d8ed3a4309",
+      "size_bytes": 2381
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-06/portable/runs/cbs-r2-mediated-06-1/participant-provenance.json",
+      "sha256": "d7ec55c3983741a9f05979540b526b2dc4ce3133bf1842d0d2f91aceb8815d2c",
+      "size_bytes": 1956
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-06/portable/runs/cbs-r2-mediated-06-1/run.json",
+      "sha256": "af2b5899074831d21bc67ae8c6ca5bb2cd537e607e0cfb0ce9368c2b696954ed",
+      "size_bytes": 11918
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-06/portable/runs/cbs-r2-mediated-06-1/summary.json",
+      "sha256": "f7bb2b450005b956a83077ca8fadca271000d000bc5d06c2a970fd7caedcf66d",
+      "size_bytes": 173
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-06/portable/summary.json",
+      "sha256": "ac127551402753bc12a3ce2c80f7b5d109744d65fbabe3bfe371990f556e3785",
+      "size_bytes": 292
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-06/record.json",
+      "sha256": "39a2783a92e464f570d94eec58716ac0be9b6c647f1bc1a20ae68d296298fb6f",
+      "size_bytes": 1744
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-07/portable/machine-inventory.json",
+      "sha256": "ad489e5c927c7356c8716b5276cc47cc764233e7cefb802ce8b85913a5b90eae",
+      "size_bytes": 370
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-07/portable/provenance.json",
+      "sha256": "1a8ba493301632a6f3ccf3e7a8367b2efbfd77edd07d294c28c474a2c2d1bc8c",
+      "size_bytes": 14053
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-07/portable/runs/cbs-r2-mediated-07-1/derived-measures.json",
+      "sha256": "740f6d0f6a1385afe37d00e37746172dfba45a75c0e3d9b4bbc485505f123c3f",
+      "size_bytes": 1642
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-07/portable/runs/cbs-r2-mediated-07-1/diagnostics.json",
+      "sha256": "5c8608e37ae160bd6e20c2b492c0ad45c2ca19797dd843f020c9e4e2f43b1258",
+      "size_bytes": 957
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-07/portable/runs/cbs-r2-mediated-07-1/evidence-records.json",
+      "sha256": "c0f2db7d1a90d614188a6638b6166491f87267b49cb46d41fed5408cf96df966",
+      "size_bytes": 2381
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-07/portable/runs/cbs-r2-mediated-07-1/participant-provenance.json",
+      "sha256": "d7ec55c3983741a9f05979540b526b2dc4ce3133bf1842d0d2f91aceb8815d2c",
+      "size_bytes": 1956
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-07/portable/runs/cbs-r2-mediated-07-1/run.json",
+      "sha256": "5453439e20c14aefd7490ce40973b4e3a30e3a5ca22f00c000a24aef35044aa7",
+      "size_bytes": 11918
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-07/portable/runs/cbs-r2-mediated-07-1/summary.json",
+      "sha256": "75b179e1bc4fc18dfba503d9362df7c0b2429486b3490b46e22dfe2d71af4266",
+      "size_bytes": 173
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-07/portable/summary.json",
+      "sha256": "3a58540c893836811d3552d576ee2f75383f33f962c2967a034d13f3d82e4ce0",
+      "size_bytes": 292
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-07/record.json",
+      "sha256": "496a6e0f4658c6b7e6a548d521b165d19cd097105557dcb90edb1acb747c9a51",
+      "size_bytes": 1744
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-08/portable/machine-inventory.json",
+      "sha256": "ad489e5c927c7356c8716b5276cc47cc764233e7cefb802ce8b85913a5b90eae",
+      "size_bytes": 370
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-08/portable/provenance.json",
+      "sha256": "f805869b63addacbca2e93f74230eb263841aa68449cde4bd236c77b4089d9fe",
+      "size_bytes": 14053
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-08/portable/runs/cbs-r2-mediated-08-1/derived-measures.json",
+      "sha256": "88cc924d88c7a3df23a4cdd5a193872acff1e525c2da2dc639b53245f23c1f38",
+      "size_bytes": 1642
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-08/portable/runs/cbs-r2-mediated-08-1/diagnostics.json",
+      "sha256": "5c8608e37ae160bd6e20c2b492c0ad45c2ca19797dd843f020c9e4e2f43b1258",
+      "size_bytes": 957
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-08/portable/runs/cbs-r2-mediated-08-1/evidence-records.json",
+      "sha256": "0060032c1f1d40dadd62eba297e1ec0b3902ecdada2bb10433ebd4dee64a7da0",
+      "size_bytes": 2381
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-08/portable/runs/cbs-r2-mediated-08-1/participant-provenance.json",
+      "sha256": "d7ec55c3983741a9f05979540b526b2dc4ce3133bf1842d0d2f91aceb8815d2c",
+      "size_bytes": 1956
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-08/portable/runs/cbs-r2-mediated-08-1/run.json",
+      "sha256": "27445a121b8aa0b8e5438a652e095b4e0d2560f6f4de2430345422747eef754c",
+      "size_bytes": 11918
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-08/portable/runs/cbs-r2-mediated-08-1/summary.json",
+      "sha256": "f786244c843edaa9decde198d5ec7d6f339152e985b2f122ab0a5631e0266a5e",
+      "size_bytes": 173
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-08/portable/summary.json",
+      "sha256": "e27cc5226c3372f19690ddfe397be1cc3427a1353cf4317b51b51f31e573b1c8",
+      "size_bytes": 292
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-08/record.json",
+      "sha256": "03d17eb5da239bc572ecb856848c88f579415d83a732c92aa70cbe4c47da23c5",
+      "size_bytes": 1744
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-09/portable/machine-inventory.json",
+      "sha256": "ad489e5c927c7356c8716b5276cc47cc764233e7cefb802ce8b85913a5b90eae",
+      "size_bytes": 370
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-09/portable/provenance.json",
+      "sha256": "5ae6e73c50da9eea28b12c0a02030fc6c1a4ffbe8bbbb00c9b08c9e0f7495dbd",
+      "size_bytes": 14053
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-09/portable/runs/cbs-r2-mediated-09-1/derived-measures.json",
+      "sha256": "1f1ebaf75d506dfe110d2f8c2c9e4cd4e55ff58f76780e75c5fa6219a782dd98",
+      "size_bytes": 1642
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-09/portable/runs/cbs-r2-mediated-09-1/diagnostics.json",
+      "sha256": "5c8608e37ae160bd6e20c2b492c0ad45c2ca19797dd843f020c9e4e2f43b1258",
+      "size_bytes": 957
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-09/portable/runs/cbs-r2-mediated-09-1/evidence-records.json",
+      "sha256": "8f0a49602e42f3f48d4c1dfa45eca16dfd2ca4679c76ca5fe2fa84661cbe8154",
+      "size_bytes": 2381
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-09/portable/runs/cbs-r2-mediated-09-1/participant-provenance.json",
+      "sha256": "d7ec55c3983741a9f05979540b526b2dc4ce3133bf1842d0d2f91aceb8815d2c",
+      "size_bytes": 1956
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-09/portable/runs/cbs-r2-mediated-09-1/run.json",
+      "sha256": "5e318ad3603c365f067b6c67ec3a0a4392efa85926d99efdd1eebf051b33f307",
+      "size_bytes": 11918
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-09/portable/runs/cbs-r2-mediated-09-1/summary.json",
+      "sha256": "768047f5a9204a88c337ef82fd70100a78bcab115706c8caa0429695183c16a0",
+      "size_bytes": 173
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-09/portable/summary.json",
+      "sha256": "c5072de448e712603f7a0ae524fe3986d4d7bc8f3435bbb33aadcccf4a50ac85",
+      "size_bytes": 292
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-09/record.json",
+      "sha256": "ed1891f89eac7a83f6097266c3cdda1e4ce900fbc0139e921668ffb1094962f1",
+      "size_bytes": 1744
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-10/portable/machine-inventory.json",
+      "sha256": "ad489e5c927c7356c8716b5276cc47cc764233e7cefb802ce8b85913a5b90eae",
+      "size_bytes": 370
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-10/portable/provenance.json",
+      "sha256": "96ab396ab82034fed8461589bec8e7a077e08de9aa2b9560d4693084a875c22c",
+      "size_bytes": 14053
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-10/portable/runs/cbs-r2-mediated-10-1/derived-measures.json",
+      "sha256": "d53f1baa7df6b9dc70bce6d046a8d89acac27e4592c8d8a1d0dc2d376a594725",
+      "size_bytes": 1642
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-10/portable/runs/cbs-r2-mediated-10-1/diagnostics.json",
+      "sha256": "5c8608e37ae160bd6e20c2b492c0ad45c2ca19797dd843f020c9e4e2f43b1258",
+      "size_bytes": 957
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-10/portable/runs/cbs-r2-mediated-10-1/evidence-records.json",
+      "sha256": "513cac9ed0b99c66994dd0fc08a33b7b99fd67411010e06547803e591ec0b3a0",
+      "size_bytes": 2381
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-10/portable/runs/cbs-r2-mediated-10-1/participant-provenance.json",
+      "sha256": "d7ec55c3983741a9f05979540b526b2dc4ce3133bf1842d0d2f91aceb8815d2c",
+      "size_bytes": 1956
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-10/portable/runs/cbs-r2-mediated-10-1/run.json",
+      "sha256": "9862e42b07e373195b85147cb1cc861f522efa7f58779050d9e57add5d8b969b",
+      "size_bytes": 11918
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-10/portable/runs/cbs-r2-mediated-10-1/summary.json",
+      "sha256": "a2585d13d59ef9923a507c330ebef75c48d491b6c9ae106b2e585bb3860e1e5a",
+      "size_bytes": 173
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-10/portable/summary.json",
+      "sha256": "7ba724e1ed82781cea3c2f533e8fb07874dde43ab3127a009c675507611a7c31",
+      "size_bytes": 292
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-mediated-10/record.json",
+      "sha256": "54f893708732ba1df52f969e7d4e7e14b4e5c91889b9835acb9fffdb64553200",
+      "size_bytes": 1745
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-native-01/record.json",
+      "sha256": "3340fe57fee010ba6cd39dc070be9ebc46006971811c87839adb436d91ea494d",
+      "size_bytes": 3121
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-native-02/record.json",
+      "sha256": "f9905054978aa127fcf0c8f26f5daefca7d15280f09e1baeea1a8d3dae0e14cd",
+      "size_bytes": 9136
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-native-03/record.json",
+      "sha256": "1524ad2bb1b0331fb81d9eafdb6828663468d5bf14a42e698e4fb585c69fd87f",
+      "size_bytes": 4626
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-native-04/record.json",
+      "sha256": "22d30d7db1a9cd53321b2d40f477df7e902792cbf12a9c571335a9207942c1dd",
+      "size_bytes": 7081
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-native-05/record.json",
+      "sha256": "f94cd61e77eb0afc9450f27ba14e0bfd4dfdfa675035dc84f1eebd4f733a14a8",
+      "size_bytes": 5056
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-native-06/record.json",
+      "sha256": "cf41723577d0111213ee8808df23db1949e6b5256d5e2607ab92d83e0b94a916",
+      "size_bytes": 6996
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-native-07/record.json",
+      "sha256": "f8d8bff549cab68e955c16620ef64829ce3bdddb3db09641b7b45f58eb83a9e2",
+      "size_bytes": 4511
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-native-08/record.json",
+      "sha256": "e30291a55cf2cd2a4a8b1ef7acc0b138eab04b0d46d08b34bd799afb85699257",
+      "size_bytes": 6031
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-native-09/record.json",
+      "sha256": "89ad0747374f2f38ff18e3e053445ae55535ea94e6b2aa817bce01fe0b20e0b8",
+      "size_bytes": 4811
+    },
+    {
+      "media_type": "application/json",
+      "path": "runs/cbs-r2-native-10/record.json",
+      "sha256": "b5f5535dd7e0c854dcdfbfa6db91b910867240162cb1433783da1b5ce98e8731",
+      "size_bytes": 5947
+    },
+    {
+      "media_type": "application/json",
+      "path": "source-ledger.json",
+      "sha256": "81bf3c562e16b8c6564be8f5cac49cd6ba363b4095a375fb14020a99932b7b1c",
+      "size_bytes": 4338
+    },
+    {
+      "media_type": "application/json",
+      "path": "tiers.json",
+      "sha256": "ad33c066313cd8d20b3e6a4a558413364243fffce6af440e563b2851041a1c8a",
+      "size_bytes": 3105
+    },
+    {
+      "media_type": "text/markdown",
+      "path": "validation-report.md",
+      "sha256": "bc80668570ea1a13d3196ac2c0b850a1fbb00966339d59f49a7944dcaf7dd103",
+      "size_bytes": 943
+    }
+  ]
+}
