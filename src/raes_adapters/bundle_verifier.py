@@ -7,6 +7,7 @@ import json
 import os
 import stat
 from collections import deque
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import NoReturn
@@ -32,6 +33,7 @@ _CODE_FILESYSTEM_MUTATED = "bundle.filesystem.mutated"
 _CODE_FILESYSTEM_UNREADABLE = "bundle.filesystem.unreadable"
 _CODE_INVENTORY_MALFORMED = "bundle.inventory.malformed"
 _CODE_PATH_INVALID = "bundle.inventory.path-invalid"
+_CODE_ROOT_INVALID = "bundle.root.invalid"
 
 _PATH_ADMISSION_ERRORS = (OSError, ValueError, UnicodeError)
 
@@ -105,6 +107,15 @@ class _ScanState(object):
     directories: dict[str, _Identity]
     file_count: int = 0
     directory_count: int = 0
+
+
+@dataclass(frozen=True)
+class _ScanContext(object):
+    """Immutable filesystem boundary shared through one tree traversal."""
+
+    root_device: int
+    root_mount_id: int
+    error_code: str
 
 
 def _invalid(code: str) -> NoReturn:
@@ -222,25 +233,33 @@ def _mount_id(descriptor: int) -> int | None:
 
     path = f"/proc/self/fdinfo/{descriptor}"
     flags = os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+    mount_id: int | None = None
     try:
         fdinfo = os.open(path, flags)
     except OSError:
-        return None
-    try:
-        content = os.read(fdinfo, _FDINFO_MAX_BYTES + 1)
-    except OSError:
-        return None
-    finally:
-        os.close(fdinfo)
-    if len(content) > _FDINFO_MAX_BYTES:
-        return None
+        fdinfo = None
+    if fdinfo is not None:
+        try:
+            content = os.read(fdinfo, _FDINFO_MAX_BYTES + 1)
+        except OSError:
+            content = None
+        finally:
+            os.close(fdinfo)
+        if content is not None and len(content) <= _FDINFO_MAX_BYTES:
+            mount_id = _parse_mount_id(content)
+    return mount_id
+
+
+def _parse_mount_id(content: bytes) -> int | None:
+    """Parse one bounded fdinfo payload without exposing parser failures."""
+
+    mount_id: int | None = None
     for line in content.splitlines():
         if line.startswith(b"mnt_id:"):
-            try:
-                return int(line.partition(b":")[2].strip())
-            except ValueError:
-                return None
-    return None
+            with suppress(ValueError):
+                mount_id = int(line.partition(b":")[2].strip())
+            break
+    return mount_id
 
 
 def _descriptor_stat(descriptor: int, code: str) -> os.stat_result:
@@ -307,9 +326,7 @@ def _scan_child_directory(
     state: _ScanState,
     *,
     depth: int,
-    root_device: int,
-    root_mount_id: int,
-    error_code: str,
+    context: _ScanContext,
 ) -> None:
     """Open, scan, and close one identity-pinned descendant directory."""
 
@@ -322,8 +339,8 @@ def _scan_child_directory(
         descriptor,
         entry.name,
         expected,
-        root_device=root_device,
-        root_mount_id=root_mount_id,
+        root_device=context.root_device,
+        root_mount_id=context.root_mount_id,
     )
     try:
         _scan_directory(
@@ -331,9 +348,7 @@ def _scan_child_directory(
             relative,
             state,
             depth=depth + 1,
-            root_device=root_device,
-            root_mount_id=root_mount_id,
-            error_code=error_code,
+            context=context,
         )
     finally:
         os.close(child)
@@ -346,17 +361,15 @@ def _scan_entry(
     state: _ScanState,
     *,
     depth: int,
-    root_device: int,
-    root_mount_id: int,
-    error_code: str,
+    context: _ScanContext,
 ) -> None:
     """Classify and charge one descriptor-relative directory entry."""
 
     relative = entry.name if not base else f"{base}/{entry.name}"
     _relative_path(relative)
-    info = _entry_stat(entry, error_code)
+    info = _entry_stat(entry, context.error_code)
     kind = _entry_kind(info.st_mode)
-    if info.st_dev != root_device:
+    if info.st_dev != context.root_device:
         _invalid("bundle.filesystem.mount")
     if kind == "directory":
         _scan_child_directory(
@@ -366,9 +379,7 @@ def _scan_entry(
             info,
             state,
             depth=depth,
-            root_device=root_device,
-            root_mount_id=root_mount_id,
-            error_code=error_code,
+            context=context,
         )
     else:
         _scan_file(relative, info, state)
@@ -380,15 +391,13 @@ def _scan_directory(
     state: _ScanState,
     *,
     depth: int,
-    root_device: int,
-    root_mount_id: int,
-    error_code: str,
+    context: _ScanContext,
 ) -> None:
     """Enumerate one pinned directory while bounding depth and mutation."""
 
     if depth > MAX_DEPTH:
         _invalid("bundle.limit.depth")
-    before = _descriptor_stat(descriptor, error_code)
+    before = _descriptor_stat(descriptor, context.error_code)
     try:
         with os.scandir(descriptor) as entries:
             for entry in entries:
@@ -398,15 +407,13 @@ def _scan_directory(
                     base,
                     state,
                     depth=depth,
-                    root_device=root_device,
-                    root_mount_id=root_mount_id,
-                    error_code=error_code,
+                    context=context,
                 )
     except BundleInvalid:
         raise
     except OSError:
-        _invalid(error_code)
-    after = _descriptor_stat(descriptor, error_code)
+        _invalid(context.error_code)
+    after = _descriptor_stat(descriptor, context.error_code)
     if _identity(before) != _identity(after):
         _invalid(_CODE_FILESYSTEM_MUTATED)
 
@@ -428,15 +435,18 @@ def _scan(
         root_mount_id=root_mount_id,
     )
     state = _ScanState(files={}, directories={})
+    context = _ScanContext(
+        root_device=root_identity[0],
+        root_mount_id=root_mount_id,
+        error_code=error_code,
+    )
     try:
         _scan_directory(
             scan_root,
             "",
             state,
             depth=0,
-            root_device=root_identity[0],
-            root_mount_id=root_mount_id,
-            error_code=error_code,
+            context=context,
         )
     finally:
         os.close(scan_root)
@@ -751,9 +761,9 @@ def _root_path_stat(bundle: Path) -> os.stat_result:
     try:
         root_stat = bundle.lstat()
     except _PATH_ADMISSION_ERRORS:
-        _invalid("bundle.root.invalid")
+        _invalid(_CODE_ROOT_INVALID)
     if stat.S_ISLNK(root_stat.st_mode) or not stat.S_ISDIR(root_stat.st_mode):
-        _invalid("bundle.root.invalid")
+        _invalid(_CODE_ROOT_INVALID)
     return root_stat
 
 
@@ -761,9 +771,12 @@ def _open_root_descriptor(bundle: Path) -> int:
     """Open the selected root with directory and no-follow guarantees."""
 
     try:
-        return os.open(bundle, _directory_flags())
+        # The explicit local CLI path selects the trust root; descriptor-relative
+        # admission enforces containment beneath it. There is no ambient sandbox
+        # root against which this user-selected directory could be constrained.
+        return os.open(bundle, _directory_flags())  # NOSONAR
     except _PATH_ADMISSION_ERRORS:
-        _invalid("bundle.root.invalid")
+        _invalid(_CODE_ROOT_INVALID)
 
 
 def _admit_open_root(
