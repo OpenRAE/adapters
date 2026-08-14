@@ -27,6 +27,8 @@ Sessions:
 
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 import shutil
 import sys
@@ -570,6 +572,50 @@ def _distributions(session: nox.Session) -> None:
             str(venv / "bin" / "python"),
             str(REPO_ROOT / "tools" / "probe_installed_identity.py"),
             IMPORT_PACKAGE,
+            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+        )
+        verifier_bundle = workdir / "verifier-bundle"
+        if verifier_bundle.exists():
+            shutil.rmtree(verifier_bundle)
+        verifier_bundle.mkdir()
+        verifier_payload = b"installed verifier probe\n"
+        (verifier_bundle / "evidence.bin").write_bytes(verifier_payload)
+        (verifier_bundle / "inventory.json").write_text(
+            json.dumps(
+                {
+                    "artifacts": [
+                        {
+                            "media_type": "application/octet-stream",
+                            "path": "evidence.bin",
+                            "sha256": hashlib.sha256(verifier_payload).hexdigest(),
+                            "size_bytes": len(verifier_payload),
+                        }
+                    ]
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        _run(
+            session,
+            str(venv / "bin" / "raes-adapters"),
+            "verify-bundle",
+            "--bundle",
+            str(verifier_bundle),
+            "--format",
+            "json",
+            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+        )
+        (verifier_bundle / "evidence.bin").write_bytes(b"tampered\n")
+        _run(
+            session,
+            str(venv / "bin" / "raes-adapters"),
+            "verify-bundle",
+            "--bundle",
+            str(verifier_bundle),
+            success_codes=[3],
             env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
         )
 

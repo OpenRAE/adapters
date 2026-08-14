@@ -67,7 +67,7 @@ cyborg = ["raes-env-packs==3.6.2"]
 nasim = ["nasim==0.12.0", "gymnasium==0.26.3", "numpy==1.26.4", "raes-env-packs==3.6.2"]
 
 [project.scripts]
-raes-adapters = "raes_adapters.cli:main"
+raes-adapters = "raes_adapters.entrypoint:main"
 
 [project.urls]
 Homepage = "https://github.com/OpenRAE/adapters"
@@ -124,6 +124,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "C4"]
 "src/raes_adapters/_gym_backend/provisioner.py" = ["UP004"]
 "src/raes_adapters/_gym_backend/evaluator.py" = ["UP004"]
 "src/raes_adapters/_gym_backend/participant_runtime.py" = ["UP004"]
+"src/raes_adapters/bundle_verifier.py" = ["UP004"]
 "src/raes_adapters/cyberbattlesim/backend/driver.py" = ["UP004"]
 "src/raes_adapters/cyberbattlesim/backend/evaluator.py" = ["UP004"]
 "src/raes_adapters/cyberbattlesim/backend/orchestrator.py" = ["UP004"]
