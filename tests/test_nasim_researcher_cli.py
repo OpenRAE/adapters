@@ -14,7 +14,6 @@ import json
 import os
 import shutil
 import sys
-from collections.abc import Iterator
 from dataclasses import dataclass, field
 from importlib import resources, util
 from pathlib import Path
@@ -22,8 +21,6 @@ from pathlib import Path
 import pytest
 import raes
 from raes_contracts.contracts import (
-    ExperimentRunModel,
-    ExperimentStudyModel,
     ParticipantConfigurationResultModel,
     ParticipantImplementationManifestModel,
     ParticipantImplementationSelectionModel,
@@ -46,9 +43,6 @@ _SEED = 20260802
 _RUN_ID = "nasim-research-example"
 _PACK_VALIDATOR_AVAILABLE = util.find_spec("raes_env_packs") is not None
 _EXAMPLE_ROOT = resources.files("raes_adapters.nasim") / "examples" / "nasim-tiny"
-# The authored selection's default-deny exposure list legitimately names native
-# NASim symbols; every other projection must withhold them.
-_NATIVE_SYMBOLS = ("flatactionspace", "servicescan", "subnetscan", "osscan", "processscan")
 
 
 def _native_run_args(
@@ -162,21 +156,6 @@ def _bypass_native(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(nasim_driver, "_verify_pre_import_source", lambda *args, **kwargs: None)
-
-
-def _leaf_strings(payload: object, skip: frozenset[str]) -> Iterator[str]:
-    """Yield every string leaf except values nested under a skipped key."""
-
-    if isinstance(payload, dict):
-        for key, value in payload.items():
-            if key in skip:
-                continue
-            yield from _leaf_strings(value, skip)
-    elif isinstance(payload, list):
-        for value in payload:
-            yield from _leaf_strings(value, skip)
-    elif isinstance(payload, str):
-        yield payload
 
 
 @dataclass
@@ -305,15 +284,13 @@ def test_validate_rejects_invalid_pack_with_bounded_code_only(
 
 
 @pytest.mark.skipif(not _PACK_VALIDATOR_AVAILABLE, reason="requires the nasim extra")
-def test_validate_admits_packaged_example(capsys: pytest.CaptureFixture[str]) -> None:
-    assert cli.main(_validate_args()) == 0
-    assert json.loads(capsys.readouterr().out) == {
-        "disposition": "validated",
-        "pack": "admitted",
-        "participant": "nasim-red-bruteforce",
-        "run_count": 1,
-        "scope": "run-admission",
-    }
+def test_validate_rejects_task_with_unverifiable_semantic_evidence(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert cli.main(_validate_args()) == cli.EXIT_VALIDATION
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "researcher.validation.evidence-unverifiable" in captured.err
 
 
 def test_existing_output_is_never_reused(
@@ -627,36 +604,38 @@ def test_native_output_and_exception_details_are_suppressed(
         print("native secret error", file=sys.stderr)
         raise HostileFailure()
 
-    _bypass_native(monkeypatch)
     monkeypatch.setattr(nasim_researcher, "execute_episode", fail_after_native_output)
-    previous = Path.cwd()
-    try:
-        os.chdir(tmp_path)
-        assert cli.main(_native_run_args("failed-evidence")) == cli.EXIT_RUNTIME
-    finally:
-        os.chdir(previous)
+    output = tmp_path / "failed-evidence"
+    output.mkdir()
+    adapter = cli._BACKENDS["nasim-tiny"]
+    with pytest.raises(cli._CommandFailure) as failure:
+        cli._execute_quietly(adapter, object(), object(), output)
 
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert captured.err.strip() == "researcher.runtime.failure: native execution or cleanup failed"
-    failure = json.loads((tmp_path / "failed-evidence" / "failure.json").read_text())
-    assert failure["code"] == "researcher.runtime.failure"
-    assert "native secret" not in json.dumps(failure)
+    assert captured.err == ""
+    assert failure.value.exit_code == cli.EXIT_RUNTIME
+    retained = json.loads((output / "failure.json").read_text())
+    assert retained["code"] == "researcher.runtime.failure"
+    assert "native secret" not in json.dumps(retained)
 
 
 @pytest.mark.skipif(not _PACK_VALIDATOR_AVAILABLE, reason="requires the nasim extra")
-def test_inventory_failure_uses_artifact_exit_without_traceback(
+def test_capture_admission_preempts_execution_and_inventory_writes(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def run_with_fake_driver(scenario: object, controls: object) -> object:
-        return execute_episode(scenario, controls, driver=FakeNasimDriver())  # type: ignore[arg-type]
-
-    _bypass_native(monkeypatch)
-    monkeypatch.setattr(nasim_researcher, "execute_episode", run_with_fake_driver)
+    monkeypatch.setattr(cli.util, "find_spec", lambda name: object())
     monkeypatch.setattr(
-        cli, "_seal_inventory", lambda output: (_ for _ in ()).throw(HostileFailure())
+        nasim_researcher,
+        "execute_episode",
+        lambda *args, **kwargs: pytest.fail("execution must not start"),
+    )
+    monkeypatch.setattr(
+        cli,
+        "_seal_inventory",
+        lambda output: pytest.fail("inventory must not be written"),
     )
     previous = Path.cwd()
     try:
@@ -665,59 +644,36 @@ def test_inventory_failure_uses_artifact_exit_without_traceback(
     finally:
         os.chdir(previous)
 
-    assert result == cli.EXIT_ARTIFACT
+    assert result == cli.EXIT_VALIDATION
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert (
-        captured.err.strip() == "researcher.artifact.failure: portable evidence could not be sealed"
-    )
+    assert "researcher.validation.evidence-unverifiable" in captured.err
+    assert not (tmp_path / "unsealed").exists()
 
 
 @pytest.mark.skipif(not _PACK_VALIDATOR_AVAILABLE, reason="requires the nasim extra")
-def test_study_run_seals_portable_raes_evidence_and_exact_inventory(
+def test_study_run_rejects_unverifiable_evidence_before_execution_or_output(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def run_with_fake_driver(scenario: object, controls: object) -> object:
-        return execute_episode(scenario, controls, driver=FakeNasimDriver())  # type: ignore[arg-type]
+    def reject_execution(scenario: object, controls: object) -> object:
+        del scenario, controls
+        pytest.fail("unverifiable evidence must be rejected before execution")
 
-    _bypass_native(monkeypatch)
-    monkeypatch.setattr(nasim_researcher, "execute_episode", run_with_fake_driver)
+    monkeypatch.setattr(cli.util, "find_spec", lambda name: object())
+    monkeypatch.setattr(nasim_researcher, "execute_episode", reject_execution)
     previous = Path.cwd()
     try:
         os.chdir(tmp_path)
-        assert cli.main(_native_run_args("evidence", mode="study", seeds=(_SEED,))) == 0
+        assert (
+            cli.main(_native_run_args("evidence", mode="study", seeds=(_SEED,)))
+            == cli.EXIT_VALIDATION
+        )
     finally:
         os.chdir(previous)
 
     captured = capsys.readouterr()
-    assert json.loads(captured.out)["run_count"] == 1
-    output = tmp_path / "evidence"
-    inventory = json.loads((output / "inventory.json").read_text())
-    paths = {item["path"] for item in inventory["artifacts"]}
-    assert {"machine-inventory.json", "provenance.json", "summary.json"} <= paths
-    assert f"runs/{_RUN_ID}-1/evidence-records.json" in paths
-    assert f"runs/{_RUN_ID}-1/derived-measures.json" in paths
-    assert f"runs/{_RUN_ID}-1/run.json" in paths
-    assert "study.json" in paths
-    assert not any(Path(path).is_absolute() for path in paths)
-    assert all(len(item["sha256"]) == 64 for item in inventory["artifacts"])
-    ExperimentRunModel.model_validate_json((output / f"runs/{_RUN_ID}-1/run.json").read_text())
-    ExperimentStudyModel.model_validate_json((output / "study.json").read_text())
-
-    serialized = "\n".join(path.read_text() for path in output.rglob("*.json"))
-    assert "RESEARCHER_SECRET_SENTINEL" not in serialized
-    assert "must-not-cross" not in serialized
-    assert str(tmp_path) not in serialized
-    assert "Traceback" not in serialized
-    # Native NASim symbols may appear only in the authored selection's
-    # ``withheld_refs`` default-deny list; nowhere else in the projections.
-    projected = "\n".join(
-        leaf
-        for path in output.rglob("*.json")
-        for leaf in _leaf_strings(json.loads(path.read_text()), frozenset({"withheld_refs"}))
-    )
-    for symbol in _NATIVE_SYMBOLS:
-        assert symbol not in projected
-    assert captured.err == ""
+    assert captured.out == ""
+    assert "researcher.validation.evidence-unverifiable" in captured.err
+    assert not (tmp_path / "evidence").exists()

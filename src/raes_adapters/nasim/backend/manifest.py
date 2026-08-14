@@ -13,9 +13,13 @@ from raes_backend_protocols.backend_manifest import (  # type: ignore[import-unt
     BackendManifest,
 )
 from raes_backend_protocols.capabilities import (  # type: ignore[import-untyped]
-    BackendCapabilitySet,
+    CLEANUP_CAPABILITY_REQUIRED_CONTRACTS,
+    CleanupCapabilities,
+    EvaluatorCapabilities,
+    OrchestratorCapabilities,
     ParticipantRuntimeCapabilities,
     ProvisionerCapabilities,
+    WorkflowFeature,
 )
 from raes_contracts.apparatus import (  # type: ignore[import-untyped]
     RealizationSupportDeclaration,
@@ -26,10 +30,9 @@ from raes_contracts.vocabulary import (  # type: ignore[import-untyped]
 
 from raes_adapters._manifest_support import (
     assemble_manifest,
+    compose_capability_set,
+    declared_cleanup_capabilities,
     read_source_revision,
-    standard_cleanup_capabilities,
-    standard_evaluator_capabilities,
-    standard_orchestrator_capabilities,
 )
 from raes_adapters.nasim import load_qualification
 
@@ -108,34 +111,61 @@ def _participant_capabilities() -> ParticipantRuntimeCapabilities:
     )
 
 
-def _capabilities() -> BackendCapabilitySet:
-    """Compose the complete selected backend capability declaration."""
+def _orchestrator_capabilities() -> OrchestratorCapabilities:
+    """Declare the NASim orchestration surface."""
 
-    return BackendCapabilitySet(
-        provisioner=_provisioner_capabilities(),
-        orchestrator=standard_orchestrator_capabilities(
-            "nasim",
-            {
-                "native_transition_owner": "participant-runtime",
-                "workflow_scope": "episode lifecycle and serialized participant steps",
-            },
-        ),
-        evaluator=standard_evaluator_capabilities(
-            "nasim",
-            {
-                "reward_owner": "evaluator",
-                "outcome_reproduction": "stochastic-bounded",
-                "goal_truth": (
-                    "goal attainment is evaluator-only truth, separate from reward and "
-                    "from the participant observation boundary"
-                ),
-                "objective_terminal_state": (
-                    "running until a distinct mapped terminal cause is available"
-                ),
-            },
-        ),
-        participant_runtime=_participant_capabilities(),
-        cleanup=standard_cleanup_capabilities("nasim"),
+    return OrchestratorCapabilities(
+        name="nasim-orchestrator",
+        supported_sections=frozenset({"events", "workflows"}),
+        supports_workflows=True,
+        supports_assertion_refs=False,
+        supports_inject_bindings=False,
+        supported_workflow_features=frozenset({WorkflowFeature.CALL}),
+        constraints={
+            "native_transition_owner": "participant-runtime",
+            "workflow_scope": "episode lifecycle and serialized participant steps",
+        },
+    )
+
+
+def _evaluator_capabilities() -> EvaluatorCapabilities:
+    """Declare the NASim evaluator surface."""
+
+    return EvaluatorCapabilities(
+        name="nasim-evaluator",
+        supported_sections=frozenset({"conditions", "propositions", "assertions", "objectives"}),
+        supports_scoring=True,
+        supports_objectives=True,
+        supported_predicate_families=frozenset({"presence", "boolean", "string", "number"}),
+        supported_quantifiers=frozenset({"all", "any", "at_least"}),
+        supported_truth_outcomes=frozenset({"true", "false", "unknown", "unsupported"}),
+        supported_evidence_channels=frozenset({"api_response"}),
+        supported_time_domains=frozenset({"wall_clock"}),
+        preserves_binding_provenance=True,
+        constraints={
+            "reward_owner": "evaluator",
+            "outcome_reproduction": "stochastic-bounded",
+            "goal_truth": (
+                "goal attainment is evaluator-only truth, separate from reward and "
+                "from the participant observation boundary"
+            ),
+            "objective_terminal_state": (
+                "running until a distinct mapped terminal cause is available"
+            ),
+        },
+    )
+
+
+def _cleanup_capabilities() -> CleanupCapabilities:
+    """Declare the NASim cleanup surface."""
+
+    return declared_cleanup_capabilities(
+        name="nasim-cleanup",
+        supported_contract_versions=CLEANUP_CAPABILITY_REQUIRED_CONTRACTS,
+        supported_action_kinds=frozenset({"destroy", "reset", "verify"}),
+        supported_verification_methods=frozenset({"probe", "receipt"}),
+        supports_reusable_state=True,
+        supports_residual_state_disclosure=True,
     )
 
 
@@ -183,7 +213,13 @@ def create_nasim_manifest() -> BackendManifest:
     source_revision = read_source_revision(load_qualification)
     return assemble_manifest(
         NASIM_BACKEND_NAME,
-        _capabilities(),
+        compose_capability_set(
+            provisioner=_provisioner_capabilities(),
+            orchestrator=_orchestrator_capabilities(),
+            evaluator=_evaluator_capabilities(),
+            participant_runtime=_participant_capabilities(),
+            cleanup=_cleanup_capabilities(),
+        ),
         _realization_support(source_revision),
         {
             "source_identity": "qualified-complete-runtime-artifact-roots-attested",

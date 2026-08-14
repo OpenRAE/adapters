@@ -55,6 +55,7 @@ from raes_adapters.cyberbattlesim.backend import (
     DriverResetReport,
     DriverStep,
     cyberbattlesim_backend_conformance_payload,
+    cyberbattlesim_manifest_capability_gaps,
     run_cyberbattlesim_conformance,
 )
 from raes_adapters.cyberbattlesim.scenario_ledger import validate_all
@@ -136,6 +137,7 @@ payload = cyberbattlesim_backend_conformance_payload(report)
 assert payload["passed"] is True
 assert payload["native_conformance"] is False
 assert payload["cases"]
+assert cyberbattlesim_manifest_capability_gaps()
 """
 
 NASIM_CONFORMANCE_PROBE = r"""
@@ -212,7 +214,7 @@ class Driver:
 # Compose the PR conformance evidence bundle from the installed wheel: the
 # published report projection (which drives this injected driver through the
 # constructed target's four surfaces on the published fixtures), source-protocol
-# diagnostics, fail-closed capability evidence, and declared weaknesses. The
+# diagnostics, unresolved capability inventory, and declared weaknesses. The
 # hostile-failure / leakage probes are injected-driver test constructs and live
 # in the PR test suite, not this happy-path installed-package proof.
 assert validate_all() == []
@@ -221,7 +223,7 @@ assert bundle["native_conformance"] is False
 assert bundle["backend_conformance"]["passed"] is True
 assert bundle["backend_conformance"]["cases"]
 assert bundle["source_diagnostics"]
-assert bundle["capability_evidence"]
+assert bundle["capability_gaps"]
 assert bundle["declared_weaknesses"]
 # Serializable to the portable JSON the evidence bundle claims to be.
 json.dumps(bundle, sort_keys=True)
@@ -243,6 +245,7 @@ assert index["reports"]
 assert index["adapter_diagnostics"]
 assert index["adapter_diagnostics"][0]["seed"] == 3
 assert all(report["native_conformance"] is False for report in index["reports"])
+assert all(report["capability_gaps"] for report in index["reports"])
 assert (Path(sys.argv[1]) / "index.json").is_file()
 json.dumps(index, sort_keys=True)
 """
@@ -323,19 +326,32 @@ class Driver:
 # Compose the PR conformance disclosure bundle from the installed wheel. PrimAITE
 # is fail-closed: the live driver is non-runnable in-process, so an injected
 # driver keeps native_conformance false, the canonical report keeps its single
-# published no-witness case, capability evidence stays empty, and every
-# affirmative capability is disclosed as a gap rather than certified.
+# published no-witness case, and every affirmative capability is disclosed as
+# a gap rather than certified.
 assert validate_all() == []
 bundle = run_primaite_pr_conformance(driver=Driver())
 assert bundle["native_conformance"] is False
 assert bundle["backend_conformance"]["native_conformance"] is False
 assert bundle["backend_conformance"]["cases"]
 assert bundle["source_diagnostics"]
-assert bundle["capability_evidence"] == {}
 assert bundle["capability_gaps"]
 assert bundle["declared_weaknesses"]
 # Serializable to the portable JSON the evidence bundle claims to be.
 json.dumps(bundle, sort_keys=True)
+"""
+
+EVIDENCE_REJECTION_PROBE = r"""
+import subprocess
+import sys
+
+completed = subprocess.run(sys.argv[1:], capture_output=True, check=False, text=True)
+expected = (
+    "researcher.validation.evidence-unverifiable: "
+    "task evidence requirements cannot be verified by the backend manifest\n"
+)
+assert completed.returncode == 3, completed
+assert completed.stdout == "", completed
+assert completed.stderr == expected, completed
 """
 
 nox.options.default_venv_backend = "none"
@@ -350,6 +366,20 @@ def _run(session: nox.Session, *args: str, **kwargs: object) -> None:
 def _uv_run_root(session: nox.Session, *args: str) -> None:
     """Run a tool from the project env (locked by the root uv.lock)."""
     _run(session, "uv", "run", "--frozen", "--project", str(REPO_ROOT), *args)
+
+
+def _expect_evidence_rejection(session: nox.Session, python: Path, *command: str) -> None:
+    """Require the clean-installed CLI's exact fail-closed evidence diagnostic."""
+
+    _run(
+        session,
+        str(python),
+        "-I",
+        "-c",
+        EVIDENCE_REJECTION_PROBE,
+        *command,
+        env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
+    )
 
 
 def _tracked(session: nox.Session) -> list[str]:
@@ -576,8 +606,9 @@ def _distributions(session: nox.Session) -> None:
             "cyberbattlesim-chain",
             env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
         )
-        _run(
+        _expect_evidence_rejection(
             session,
+            conformance_venv / "bin" / "python",
             str(conformance_venv / "bin" / "raes-adapters"),
             "validate",
             "--mode",
@@ -610,7 +641,6 @@ def _distributions(session: nox.Session) -> None:
             "20260729",
             "--run-id",
             "distribution-validation",
-            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
         )
         _run(
             session,
@@ -666,8 +696,9 @@ def _distributions(session: nox.Session) -> None:
             "nasim-tiny",
             env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
         )
-        _run(
+        _expect_evidence_rejection(
             session,
+            nasim_venv / "bin" / "python",
             str(nasim_venv / "bin" / "raes-adapters"),
             "validate",
             "--backend",
@@ -700,7 +731,6 @@ def _distributions(session: nox.Session) -> None:
             "20260802",
             "--run-id",
             "distribution-validation",
-            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
         )
         _run(
             session,
@@ -768,8 +798,9 @@ def _distributions(session: nox.Session) -> None:
             "cyborg-cage2",
             env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
         )
-        _run(
+        _expect_evidence_rejection(
             session,
+            cyborg_venv / "bin" / "python",
             str(cyborg_venv / "bin" / "raes-adapters"),
             "validate",
             "--mode",
@@ -804,7 +835,6 @@ def _distributions(session: nox.Session) -> None:
             "11",
             "--run-id",
             "distribution-validation",
-            env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
         )
         _run(
             session,

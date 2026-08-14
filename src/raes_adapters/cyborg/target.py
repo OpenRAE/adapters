@@ -30,6 +30,7 @@ _CONFIG_KEYS = {
     "driver",
     "mapping_ledger_resource",
     "qualification_profile_id",
+    "reseed_on_reset",
     "scenario",
     "seed",
     "simulator_version",
@@ -62,6 +63,7 @@ def _normalized_config(config: dict[str, object]) -> dict[str, object]:
             CAGE2_SOURCE_26CE1C1.ledger_resource,
         ),
         "seed": config.get("seed"),
+        "reseed_on_reset": config.get("reseed_on_reset", True),
         "driver": config.get("driver"),
         "scenario": config.get("scenario"),
     }
@@ -99,6 +101,8 @@ def _validate_selection(
     seed = config["seed"]
     if seed is not None and (type(seed) is not int or not 0 <= seed <= 0xFFFFFFFF):
         raise ValueError("CybORG seed must be an unsigned 32-bit integer.")
+    if type(config["reseed_on_reset"]) is not bool:
+        raise ValueError("CybORG reset seed policy must be boolean.")
     driver = config["driver"]
     if driver is not None and (
         not callable(getattr(driver, "construct", None))
@@ -142,6 +146,7 @@ def create_cyborg_components(
         profile_id=str(normalized["qualification_profile_id"]),
         source_commit=str(normalized["source_commit"]),
         seed=normalized["seed"] if isinstance(normalized["seed"], int) else None,
+        reseed_on_reset=cast(bool, normalized["reseed_on_reset"]),
         scenario_binding=(
             bind_scenario_profile(
                 normalized["scenario"],

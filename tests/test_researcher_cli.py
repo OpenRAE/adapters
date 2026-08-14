@@ -14,8 +14,6 @@ from pathlib import Path
 import pytest
 from raes import parse_sdl
 from raes_contracts.contracts import (
-    ExperimentRunModel,
-    ExperimentStudyModel,
     ParticipantConfigurationResultModel,
     ParticipantImplementationManifestModel,
     ParticipantImplementationSelectionModel,
@@ -30,7 +28,11 @@ from raes_adapters.cyborg.driver import (
     _NativeRewardComponent,
     _NativeTurnResult,
 )
-from raes_adapters.cyborg.researcher import RunControls, execute_episode
+from raes_adapters.cyborg.researcher import (
+    RunControls,
+    execute_episode,
+    execute_episode_series,
+)
 
 _SDL = """
 name: researcher-cage2
@@ -141,6 +143,7 @@ class FakeResearchDriver:
     handles: list[object] = field(default_factory=list)
     selections: list[ParticipantValidatedActionSelection] = field(default_factory=list)
     cleanup_calls: int = 0
+    reset_calls: int = 0
 
     def construct(self, descriptor: object, *, seed: int | None) -> object:
         del descriptor, seed
@@ -160,6 +163,7 @@ class FakeResearchDriver:
 
     def reset(self, handle: object, *, seed: int | None) -> bool:
         del seed
+        self.reset_calls += 1
         return handle in self.handles
 
     def step(
@@ -266,15 +270,13 @@ def test_validate_rejects_invalid_pack_with_bounded_code_only(
 
 
 @pytest.mark.skipif(not _PACK_VALIDATOR_AVAILABLE, reason="requires the cyborg extra")
-def test_validate_admits_packaged_example(capsys: pytest.CaptureFixture[str]) -> None:
-    assert cli.main(_validate_args()) == 0
-    assert json.loads(capsys.readouterr().out) == {
-        "disposition": "validated",
-        "pack": "admitted",
-        "participant": "cyborg-blue-sleep-policy",
-        "run_count": 2,
-        "scope": "run-admission",
-    }
+def test_validate_rejects_task_with_unverifiable_semantic_evidence(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert cli.main(_validate_args()) == cli.EXIT_VALIDATION
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "researcher.validation.evidence-unverifiable" in captured.err
 
 
 @pytest.mark.skipif(not _PACK_VALIDATOR_AVAILABLE, reason="requires the cyborg extra")
@@ -507,6 +509,42 @@ def test_native_episode_binds_real_blue_selection_and_retains_raes_evidence() ->
     assert driver.selections[0].action_contract_address == "participant.action-contract.sleep"
 
 
+def test_condition_series_reuses_native_session_and_binds_unique_run_evidence() -> None:
+    driver = FakeResearchDriver()
+    manifest, selection, configuration = _participant_artifacts()
+    controls = tuple(
+        RunControls(
+            run_id=f"cage2-slot-{index:05d}-attempt-01",
+            seed=153,
+            max_steps=1,
+            red_variant="sleep",
+            blue_manifest=manifest,
+            blue_selection=selection,
+            blue_configuration=configuration,
+        )
+        for index in (1, 2)
+    )
+
+    episodes = execute_episode_series(
+        parse_sdl(textwrap.dedent(_SDL)),
+        controls,
+        driver=driver,
+    )
+
+    assert len(episodes) == 2
+    assert driver.cleanup_calls == 2
+    assert driver.reset_calls == 1
+    assert len(driver.selections) == 2
+    assert [episode.evidence_records[0].run_ref.ref_id for episode in episodes] == [
+        item.run_id for item in controls
+    ]
+    assert len(episodes[0].evidence_records) == len(episodes[1].evidence_records)
+    assert [
+        {record.run_ref.ref_id for record in episode.evidence_records} for episode in episodes
+    ] == [{item.run_id} for item in controls]
+    assert all(episode.cleanup_verified for episode in episodes)
+
+
 def test_full_scenario_episode_consumes_authored_evaluation_plan(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -713,66 +751,49 @@ def test_native_output_and_exception_details_are_suppressed(
         print("native secret error", file=sys.stderr)
         raise HostileFailure()
 
-    monkeypatch.setattr(cli.util, "find_spec", lambda name: object())
-    monkeypatch.setattr(cli, "verify_selected_cyborg_source", lambda: None)
     monkeypatch.setattr(researcher, "execute_episode", fail_after_native_output)
-    previous = Path.cwd()
-    try:
-        import os
-
-        os.chdir(tmp_path)
-        assert cli.main(_native_run_args("failed-evidence")) == cli.EXIT_RUNTIME
-    finally:
-        os.chdir(previous)
+    output = tmp_path / "failed-evidence"
+    output.mkdir()
+    adapter = cli._BACKENDS["cyborg-cage2"]
+    with pytest.raises(cli._CommandFailure) as failure:
+        cli._execute_quietly(adapter, object(), object(), output)
 
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert captured.err.strip() == "researcher.runtime.failure: native execution or cleanup failed"
-    failure = json.loads((tmp_path / "failed-evidence" / "failure.json").read_text())
-    assert failure["code"] == "researcher.runtime.failure"
-    assert "native secret" not in json.dumps(failure)
+    assert captured.err == ""
+    assert failure.value.exit_code == cli.EXIT_RUNTIME
+    retained = json.loads((output / "failure.json").read_text())
+    assert retained["code"] == "researcher.runtime.failure"
+    assert "native secret" not in json.dumps(retained)
 
 
 @pytest.mark.skipif(not _PACK_VALIDATOR_AVAILABLE, reason="requires the cyborg extra")
-def test_study_run_seals_portable_raes_evidence_and_exact_inventory(
+def test_study_run_rejects_unverifiable_evidence_before_execution_or_output(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from raes_adapters.cyborg import researcher
 
-    def run_with_fake_driver(scenario: object, controls: RunControls) -> object:
-        return execute_episode(scenario, controls, driver=FakeResearchDriver())
+    def reject_execution(scenario: object, controls: RunControls) -> object:
+        del scenario, controls
+        pytest.fail("unverifiable evidence must be rejected before execution")
 
     monkeypatch.setattr(cli.util, "find_spec", lambda name: object())
-    monkeypatch.setattr(cli, "verify_selected_cyborg_source", lambda: None)
-    monkeypatch.setattr(researcher, "execute_episode", run_with_fake_driver)
+    monkeypatch.setattr(researcher, "execute_episode", reject_execution)
     previous = Path.cwd()
     try:
         import os
 
         os.chdir(tmp_path)
-        assert cli.main(_native_run_args("evidence", mode="study", seeds=(7, 11))) == 0
+        assert (
+            cli.main(_native_run_args("evidence", mode="study", seeds=(7, 11)))
+            == cli.EXIT_VALIDATION
+        )
     finally:
         os.chdir(previous)
 
     captured = capsys.readouterr()
-    assert json.loads(captured.out)["run_count"] == 2
-    output = tmp_path / "evidence"
-    inventory = json.loads((output / "inventory.json").read_text())
-    paths = {item["path"] for item in inventory["artifacts"]}
-    assert {"machine-inventory.json", "provenance.json", "summary.json"} <= paths
-    assert "runs/research-example-1/evidence-records.json" in paths
-    assert "runs/research-example-2/derived-measures.json" in paths
-    assert "runs/research-example-1/run.json" in paths
-    assert "study.json" in paths
-    ExperimentRunModel.model_validate_json(
-        (output / "runs/research-example-1/run.json").read_text()
-    )
-    ExperimentStudyModel.model_validate_json((output / "study.json").read_text())
-    assert not any(Path(path).is_absolute() for path in paths)
-    serialized = "\n".join(path.read_text() for path in output.rglob("*.json"))
-    assert "RESEARCHER_SECRET_SENTINEL" not in serialized
-    assert str(tmp_path) not in serialized
-    assert "Traceback" not in serialized
-    assert captured.err == ""
+    assert captured.out == ""
+    assert "researcher.validation.evidence-unverifiable" in captured.err
+    assert not (tmp_path / "evidence").exists()

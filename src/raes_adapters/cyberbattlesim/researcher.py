@@ -71,7 +71,7 @@ from raes_adapters.cyberbattlesim import load_qualification
 from raes_adapters.cyberbattlesim.backend.conformance import (
     cyberbattlesim_backend_conformance_payload,
     cyberbattlesim_declared_weaknesses,
-    cyberbattlesim_manifest_capability_evidence_gaps,
+    cyberbattlesim_manifest_capability_gaps,
     cyberbattlesim_source_protocol_diagnostics,
     run_cyberbattlesim_conformance,
 )
@@ -550,10 +550,7 @@ def cyberbattlesim_conformance_suite(
             or any(not case.passed for case in report.cases)
         ):
             raise RuntimeError("CyberBattleSim published conformance cases failed.")
-        if cyberbattlesim_manifest_capability_evidence_gaps(
-            conformance_report=report, source_diagnostics=diagnostics
-        ):
-            raise RuntimeError("CyberBattleSim manifest capability evidence is incomplete.")
+        capability_gaps = cyberbattlesim_manifest_capability_gaps()
         report_path = write_backend_conformance_report(
             payload,
             output_dir=output_dir,
@@ -565,6 +562,7 @@ def cyberbattlesim_conformance_suite(
                 "execution_basis": "installed-source-probe",
                 "native_conformance": report.native_conformance,
                 "report_path": report_path.relative_to(output_dir).as_posix(),
+                "capability_gaps": list(capability_gaps),
             }
         )
     index: dict[str, object] = {

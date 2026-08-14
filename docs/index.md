@@ -30,6 +30,7 @@ semantic and protocol authority.
 - [CybORG/CAGE-2 provisioner and backend-manifest guardrails](decisions/cyborg-cage2-provisioner-manifest-guardrails.md)
 - [CybORG conformance-composition guardrails](decisions/cyborg-conformance-guardrails.md)
 - [CybORG researcher run-and-evidence command guardrails](decisions/cyborg-researcher-command-guardrails.md)
+- [CybORG/CAGE-2 protocol-reproduction guardrails](decisions/cyborg-cage2-protocol-reproduction-guardrails.md)
 - [CybORG/CAGE-2 downstream environment-pack guardrails](decisions/cyborg-cage2-example-pack-guardrails.md)
 - [NASim researcher run-and-evidence command guardrails](decisions/nasim-researcher-command-guardrails.md)
 - [CyberBattleSim qualification guardrails](decisions/cyberbattlesim-qualification-guardrails.md)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import textwrap
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from contextlib import suppress
 from dataclasses import replace
 from importlib.resources import files
@@ -63,6 +63,7 @@ from raes_runtime.registry_probes import (  # type: ignore[import-untyped]
     sample_participant_action_admission_request,
 )
 
+from raes_adapters._conformance_support import manifest_capability_gaps
 from raes_adapters.base import run_conformance_probe
 
 from ._diagnostics import diagnostic_address
@@ -101,53 +102,6 @@ _RED = "participant.behavior.red"
 _SLEEP = "participant.action-contract.sleep"
 _CLOCK = "time.clock.cage2"
 _WORKFLOW = "orchestration.workflow.cage2-probe"
-
-_PUBLISHED_CONFORMANCE_EVIDENCE = "evidence.cyborg.published-conformance.disclosed"
-_SOURCE_LEDGER_EVIDENCE = "evidence.cyborg.source-ledger.validated"
-_ADAPTER_RUNTIME_EVIDENCE = "evidence.cyborg.adapter-runtime.validated"
-_ALL_EVIDENCE = (
-    _PUBLISHED_CONFORMANCE_EVIDENCE,
-    _SOURCE_LEDGER_EVIDENCE,
-    _ADAPTER_RUNTIME_EVIDENCE,
-)
-_CAPABILITY_PROBE_REQUIREMENTS: Mapping[str, tuple[str, ...]] = {
-    "/capabilities/evaluator/preserves_binding_provenance": _ALL_EVIDENCE,
-    "/capabilities/evaluator/supported_evidence_channels": _ALL_EVIDENCE,
-    "/capabilities/evaluator/supported_predicate_families": _ALL_EVIDENCE,
-    "/capabilities/evaluator/supported_quantifiers": _ALL_EVIDENCE,
-    "/capabilities/evaluator/supported_sections": _ALL_EVIDENCE,
-    "/capabilities/evaluator/supported_time_domains": _ALL_EVIDENCE,
-    "/capabilities/evaluator/supported_truth_outcomes": _ALL_EVIDENCE,
-    "/capabilities/evaluator/supports_objectives": _ALL_EVIDENCE,
-    "/capabilities/evaluator/supports_scoring": _ALL_EVIDENCE,
-    "/capabilities/orchestrator/supported_sections": _ALL_EVIDENCE,
-    "/capabilities/orchestrator/supported_workflow_features": _ALL_EVIDENCE,
-    "/capabilities/orchestrator/supports_workflows": _ALL_EVIDENCE,
-    "/capabilities/participant_runtime/supported_behavior_features": _ALL_EVIDENCE,
-    "/capabilities/participant_runtime/supported_interaction_features": _ALL_EVIDENCE,
-    "/capabilities/participant_runtime/supported_participant_roles": _ALL_EVIDENCE,
-    "/capabilities/provisioner/supported_account_features": _ALL_EVIDENCE,
-    "/capabilities/provisioner/supported_node_types": _ALL_EVIDENCE,
-    "/capabilities/provisioner/supported_os_families": _ALL_EVIDENCE,
-    "/capabilities/provisioner/supports_accounts": _ALL_EVIDENCE,
-    "/capabilities/provisioner/supports_acls": _ALL_EVIDENCE,
-    "/capabilities/time/max_clocks": _ALL_EVIDENCE,
-    "/capabilities/time/max_time_domains": _ALL_EVIDENCE,
-    "/capabilities/time/supported_advancement_modes": _ALL_EVIDENCE,
-    "/capabilities/time/supported_authority_kinds": _ALL_EVIDENCE,
-    "/capabilities/time/supported_constraint_kinds": _ALL_EVIDENCE,
-    "/capabilities/time/supported_contract_versions": _ALL_EVIDENCE,
-    "/capabilities/time/supported_domain_kinds": _ALL_EVIDENCE,
-    "/capabilities/time/supported_mapping_kinds": _ALL_EVIDENCE,
-    "/capabilities/time/supported_replay_behaviors": _ALL_EVIDENCE,
-    "/capabilities/time/supported_reset_behaviors": _ALL_EVIDENCE,
-    "/capabilities/time/supported_synchronization_modes": _ALL_EVIDENCE,
-    "/capabilities/time/supports_append_only_history": _ALL_EVIDENCE,
-    "/capabilities/time/supports_exact_rational_mappings": _ALL_EVIDENCE,
-    "/capabilities/time/supports_pause": _ALL_EVIDENCE,
-    "/capabilities/time/supports_run_provenance": _ALL_EVIDENCE,
-}
-_NON_CAPABILITY_KEYS = frozenset({"constraints", "name"})
 
 
 class _HermeticProbeDriver(object):
@@ -674,54 +628,22 @@ def cyborg_declared_weaknesses(
     return tuple(sorted(refs))
 
 
-def cyborg_manifest_capability_evidence(
+def cyborg_manifest_capability_gaps(
     manifest: BackendManifest | None = None,
     *,
     payload: Mapping[str, object] | None = None,
-    conformance_report: BackendConformanceReport | None = None,
-    source_diagnostics: Iterable[Diagnostic] = (),
-    adapter_diagnostics: Iterable[Diagnostic] = (),
-) -> dict[str, tuple[str, ...]]:
-    """Return evidence references for declared affirmative manifest surfaces."""
+) -> tuple[str, ...]:
+    """Return every affirmative manifest leaf as unresolved inventory."""
 
-    passed_refs = set(
-        _passed_probe_evidence_refs(
-            conformance_report,
-            source_diagnostics,
-            adapter_diagnostics,
+    resolved = (
+        payload
+        if payload is not None
+        else cast(
+            Mapping[str, object],
+            backend_manifest_payload(manifest or create_cyborg_manifest()),
         )
     )
-    evidence: dict[str, tuple[str, ...]] = {}
-    for pointer in _affirmative_capability_pointers(_manifest_payload(manifest, payload)):
-        required = _CAPABILITY_PROBE_REQUIREMENTS.get(pointer)
-        if required is not None and set(required) <= passed_refs:
-            evidence[pointer] = required
-    return evidence
-
-
-def cyborg_manifest_capability_evidence_gaps(
-    manifest: BackendManifest | None = None,
-    *,
-    payload: Mapping[str, object] | None = None,
-    conformance_report: BackendConformanceReport | None = None,
-    source_diagnostics: Iterable[Diagnostic] = (),
-    adapter_diagnostics: Iterable[Diagnostic] = (),
-) -> tuple[str, ...]:
-    """Return affirmative capability pointers lacking passing evidence."""
-
-    manifest_payload = _manifest_payload(manifest, payload)
-    evidence = cyborg_manifest_capability_evidence(
-        manifest,
-        payload=payload,
-        conformance_report=conformance_report,
-        source_diagnostics=source_diagnostics,
-        adapter_diagnostics=adapter_diagnostics,
-    )
-    return tuple(
-        pointer
-        for pointer in _affirmative_capability_pointers(manifest_payload)
-        if pointer not in evidence
-    )
+    return manifest_capability_gaps(resolved)
 
 
 def cyborg_conformance_reproduction_commands(
@@ -775,17 +697,7 @@ def run_cyborg_conformance_suite(
         payload = cyborg_backend_conformance_payload(report)
         if not _report_has_only_passing_or_published_unsupported_cases(report):
             raise RuntimeError("CybORG published conformance cases failed.")
-        capability_evidence = cyborg_manifest_capability_evidence(
-            conformance_report=report,
-            source_diagnostics=diagnostics,
-            adapter_diagnostics=adapter_diagnostics,
-        )
-        if cyborg_manifest_capability_evidence_gaps(
-            conformance_report=report,
-            source_diagnostics=diagnostics,
-            adapter_diagnostics=adapter_diagnostics,
-        ):
-            raise RuntimeError("CybORG manifest capability evidence is incomplete.")
+        capability_gaps = cyborg_manifest_capability_gaps()
         report_path = write_backend_conformance_report(
             payload,
             output_dir=output_dir,
@@ -797,7 +709,7 @@ def run_cyborg_conformance_suite(
                 "execution_basis": ExecutionBasis.HERMETIC_LIVE.value,
                 "native_conformance": report.native_conformance,
                 "report_path": report_path.relative_to(output_dir).as_posix(),
-                "capability_evidence": capability_evidence,
+                "capability_gaps": list(capability_gaps),
             }
         )
     index: dict[str, object] = {
@@ -825,43 +737,6 @@ def run_cyborg_conformance_suite(
     return index
 
 
-def _manifest_payload(
-    manifest: BackendManifest | None,
-    payload: Mapping[str, object] | None,
-) -> Mapping[str, object]:
-    """Return the provided payload or project the live CybORG manifest."""
-
-    if payload is not None:
-        return payload
-    return cast(
-        Mapping[str, object], backend_manifest_payload(manifest or create_cyborg_manifest())
-    )
-
-
-def _passed_probe_evidence_refs(
-    report: BackendConformanceReport | None,
-    source_diagnostics: Iterable[Diagnostic],
-    adapter_diagnostics: Iterable[Diagnostic],
-) -> tuple[str, ...]:
-    """Return only evidence references whose owning probes passed."""
-
-    refs: list[str] = []
-    if (
-        report is not None
-        and not report.unsupported_contract_gaps
-        and not report.unsupported_capability_gaps
-        and _report_has_only_passing_or_published_unsupported_cases(report)
-    ):
-        refs.append(_PUBLISHED_CONFORMANCE_EVIDENCE)
-    models = [diagnostic_model(item) for item in source_diagnostics]
-    if models and all(not model.code.endswith("validation-failed") for model in models):
-        refs.append(_SOURCE_LEDGER_EVIDENCE)
-    adapter_models = [diagnostic_model(item) for item in adapter_diagnostics]
-    if adapter_models and all(model.code.endswith(".validated") for model in adapter_models):
-        refs.append(_ADAPTER_RUNTIME_EVIDENCE)
-    return tuple(refs)
-
-
 def _report_has_only_passing_or_published_unsupported_cases(
     report: BackendConformanceReport,
 ) -> bool:
@@ -882,71 +757,6 @@ def _report_has_only_passing_or_published_unsupported_cases(
         }
         and all(item.passed for item in report.cases if item is not case)
     )
-
-
-def _affirmative_capability_pointers(payload: Mapping[str, object]) -> tuple[str, ...]:
-    """Derive JSON Pointers for every affirmative manifest capability."""
-
-    capabilities = payload.get("capabilities")
-    if not isinstance(capabilities, Mapping):
-        return ()
-    pointers: list[str] = []
-    for name, value in sorted(capabilities.items(), key=lambda item: str(item[0])):
-        if not _is_affirmative_capability_value(value):
-            continue
-        surface = f"/capabilities/{_escape_pointer_token(str(name))}"
-        if isinstance(value, Mapping):
-            nested = tuple(
-                _iter_affirmative_capability_pointers(cast(Mapping[object, object], value), surface)
-            )
-            pointers.extend(nested or (surface,))
-        else:
-            pointers.append(surface)
-    return tuple(pointers)
-
-
-def _iter_affirmative_capability_pointers(
-    value: Mapping[object, object],
-    base_pointer: str,
-) -> Iterable[str]:
-    """Yield affirmative leaves below one manifest capability mapping."""
-
-    for key, child in sorted(value.items(), key=lambda item: str(item[0])):
-        if key in _NON_CAPABILITY_KEYS or not _is_affirmative_capability_value(child):
-            continue
-        pointer = f"{base_pointer}/{_escape_pointer_token(str(key))}"
-        if isinstance(child, Mapping):
-            nested = tuple(
-                _iter_affirmative_capability_pointers(cast(Mapping[object, object], child), pointer)
-            )
-            yield from nested or (pointer,)
-        else:
-            yield pointer
-
-
-def _is_affirmative_capability_value(value: object) -> bool:
-    """Return whether a manifest capability value makes an affirmative claim."""
-
-    affirmative = False
-    if value is True:
-        affirmative = True
-    elif isinstance(value, str | int | float) and value is not False:
-        affirmative = bool(value)
-    elif isinstance(value, Sequence) and not isinstance(value, str | bytes):
-        affirmative = any(_is_affirmative_capability_value(item) for item in value)
-    elif isinstance(value, Mapping):
-        affirmative = any(
-            _is_affirmative_capability_value(child)
-            for key, child in value.items()
-            if key not in _NON_CAPABILITY_KEYS
-        )
-    return affirmative
-
-
-def _escape_pointer_token(token: str) -> str:
-    """Escape one JSON Pointer token."""
-
-    return token.replace("~", "~0").replace("/", "~1")
 
 
 def _cli_output_directory(value: str) -> Path:
@@ -997,8 +807,7 @@ __all__ = [
     "cyborg_backend_conformance_payload",
     "cyborg_conformance_reproduction_commands",
     "cyborg_declared_weaknesses",
-    "cyborg_manifest_capability_evidence",
-    "cyborg_manifest_capability_evidence_gaps",
+    "cyborg_manifest_capability_gaps",
     "cyborg_source_diagnostics",
     "run_cyborg_conformance",
     "run_cyborg_conformance_suite",

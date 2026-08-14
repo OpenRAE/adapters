@@ -176,15 +176,13 @@ def test_inspect_reports_external_pack_without_native_import(
     assert payload["examples"] == ["cyberbattlesim-chain (external release asset)"]
 
 
-def test_validate_admits_exact_external_pack(capsys: pytest.CaptureFixture[str]) -> None:
-    assert cli.main(_args()) == 0
-    assert json.loads(capsys.readouterr().out) == {
-        "disposition": "validated",
-        "pack": "admitted",
-        "participant": "cyberbattlesim-red-credential-cache",
-        "run_count": 1,
-        "scope": "run-admission",
-    }
+def test_validate_rejects_task_with_unverifiable_semantic_evidence(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert cli.main(_args()) == cli.EXIT_VALIDATION
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "researcher.validation.evidence-unverifiable" in captured.err
 
 
 def test_validate_rejects_any_resealed_pack_digest(
@@ -252,7 +250,7 @@ def test_episode_applies_declared_cumulative_epsilon_step_offset() -> None:
     assert driver.proposal_epsilons == [researcher._epsilon_for_step(141)]
 
 
-def test_run_suppresses_native_output_and_seals_portable_evidence(
+def test_run_rejects_unverifiable_evidence_before_execution_or_output(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
@@ -270,27 +268,18 @@ def test_run_suppresses_native_output_and_seals_portable_evidence(
         ),
     )
 
-    execute_episode = researcher.execute_episode
-
-    def run_with_fake(scenario: object, controls: object) -> object:
-        print("native output must be suppressed")
-        return execute_episode(scenario, controls, driver=FakeDriver())  # type: ignore[arg-type]
-
-    monkeypatch.setattr(researcher, "execute_episode", run_with_fake)
+    monkeypatch.setattr(
+        researcher,
+        "execute_episode",
+        lambda *args, **kwargs: pytest.fail("unverifiable evidence must not execute"),
+    )
     before = Path.cwd()
     try:
         os.chdir(tmp_path)
-        assert cli.main(_args("run")) == 0
+        assert cli.main(_args("run")) == cli.EXIT_VALIDATION
     finally:
         os.chdir(before)
     captured = capsys.readouterr()
-    assert "native output" not in captured.out
-    inventory = json.loads((tmp_path / "evidence" / "inventory.json").read_text())
-    paths = {item["path"] for item in inventory["artifacts"]}
-    assert "provenance.json" in paths
-    assert "runs/cyberbattlesim-smoke-1/run.json" in paths
-    assert "runs/cyberbattlesim-smoke-1/episode-outcome.json" in paths
-    serialized = "\n".join(path.read_text() for path in (tmp_path / "evidence").rglob("*.json"))
-    assert str(PACK_ROOT) not in serialized
-    assert "must-not-cross" not in serialized
-    assert "Traceback" not in serialized
+    assert captured.out == ""
+    assert "researcher.validation.evidence-unverifiable" in captured.err
+    assert not (tmp_path / "evidence").exists()

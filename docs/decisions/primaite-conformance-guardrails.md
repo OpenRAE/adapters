@@ -53,7 +53,7 @@ CyberBattleSim/NASim/CybORG conformance suites are precedents for composition
 and hostile leakage tests. Reuse their shared mechanics and patterns, not their
 source semantics or private driver code.
 
-## Additive probes and evidence closure
+## Additive probes and unresolved capability inventory
 
 Adapter-local probes cover facts RAES cannot infer from the generic profile:
 selected source and profile identity, source-ledger coverage, reset and
@@ -63,18 +63,12 @@ cutoff semantics, cleanup, and portable-output leakage.
 
 They must not become a second profile table, fixture corpus, schema registry,
 manifest authority, or copied capability catalog. Derive affirmative capability
-JSON pointers from the live `backend_manifest_payload()` and join each pointer
-to stable evidence references only when the owning probes passed. A newly
-declared affirmative capability with no explicit evidence requirement must fail
-closed as an evidence gap.
-
-Capability evidence is lane-scoped. A deterministic injected-driver PR run may
-close the portable-mechanics evidence it actually exercises, with
-`native_conformance=false` and explicit non-claims. It must not certify that the
-live PrimAITE source runs safely in-process, that CPython 3.12 native evidence
-exists, or that stochastic replay/equivalence was achieved. Any no-argument
-production-live evidence API remains conservative unless a real, qualified,
-isolated live driver supplies passing evidence.
+JSON pointers from the live `backend_manifest_payload()` as unresolved inventory
+only. A deterministic injected-driver PR run may prove the bounded mechanics it
+actually exercises, with `native_conformance=false` and explicit non-claims, but
+that broad result is not per-leaf capability evidence. It must not certify that
+the live PrimAITE source runs safely in-process, that CPython 3.12 native evidence
+exists, or that stochastic replay/equivalence was achieved.
 
 Leakage coverage is the success/failure cross-product over the four declared
 backend surfaces: provisioner, orchestrator, participant runtime, and evaluator.
@@ -96,7 +90,7 @@ success cannot be synthesized after rollback is impossible.
 The PR suite is deterministic, offline, dependency-light, and clean-installable
 under the `primaite` extra. It uses a fully constructed `RuntimeTarget`, an
 explicit injected driver, fixed ordered seeds, published RAES conformance,
-source-protocol diagnostics, adapter-local probes, capability-evidence closure,
+source-protocol diagnostics, adapter-local probes, unresolved capability inventory,
 declared weaknesses, leakage checks, report projection, and cleanup. It must not
 derive seed, case order, corpus roots, or suite tier from time, PR number,
 hashing, global random state, test order, or environment variables.
@@ -117,8 +111,9 @@ ownership:
   report writer;
 - local diagnostics are validated with `diagnostic_model()` and serialized with
   `diagnostic_payload()`;
-- capability evidence is pointer-to-reference data derived from the live
-  manifest, not copied capability values;
+- affirmative capability pointers are unresolved inventory derived from the
+  live manifest, never pointer-to-reference evidence manufactured from broad
+  passed probes;
 - declared weaknesses are derived from qualification limitations and selected
   loss disclosures, not a second list; and
 - reproduction commands are fixed argv arrays with no shell interpolation,
