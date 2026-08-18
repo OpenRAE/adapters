@@ -52,7 +52,7 @@ def inventory_document(
 ) -> dict[str, object]:
     """Build a deterministic inventory document without writing it."""
 
-    ordered = sorted(members, key=lambda item: item.relative_to(root).as_posix())
+    ordered = sorted(members)
     return {
         "artifacts": [inventory_entry(root, path, type_name=type_for(path)) for path in ordered]
     }

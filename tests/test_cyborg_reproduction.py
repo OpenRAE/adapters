@@ -40,6 +40,17 @@ def test_generic_integrity_precedes_backend_semantic_verification(
         reproduction.verify_bundle(bundle)
 
 
+def test_generic_integrity_rejects_cyborg_bundle_root_symlink(tmp_path: Path) -> None:
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    (bundle / "inventory.json").write_text('{"artifacts":[]}\n', encoding="utf-8")
+    link = tmp_path / "bundle-link"
+    link.symlink_to(bundle, target_is_directory=True)
+
+    with pytest.raises(BundleInvalid, match="bundle.root.invalid"):
+        reproduction.verify_bundle(link)
+
+
 class StudyDriver:
     """Bounded native seam for the real scheduler and persistence path."""
 

@@ -42,6 +42,24 @@ def test_generic_producer_wrapper_preserves_exact_inventory_bytes(tmp_path: Path
     assert (tmp_path / "inventory.json").read_bytes() == _canonical_bytes(expected)
 
 
+def test_generic_producer_wrapper_preserves_legacy_path_order(tmp_path: Path) -> None:
+    nested = tmp_path / "a"
+    nested.mkdir()
+    nested_content = b"nested\n"
+    sibling_content = b"sibling\n"
+    (nested / "b.json").write_bytes(nested_content)
+    (tmp_path / "a-b.json").write_bytes(sibling_content)
+    expected = {
+        "artifacts": [
+            _entry("a/b.json", nested_content, "application/json"),
+            _entry("a-b.json", sibling_content, "application/json"),
+        ]
+    }
+
+    assert cli._seal_inventory(tmp_path) == expected
+    assert (tmp_path / "inventory.json").read_bytes() == _canonical_bytes(expected)
+
+
 def test_cyborg_compatibility_wrappers_preserve_media_types_and_bytes(tmp_path: Path) -> None:
     markdown_content = b"# Result\n"
     gzip_content = b"compressed"

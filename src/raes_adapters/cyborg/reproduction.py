@@ -2835,8 +2835,8 @@ def verify_bundle(
 ) -> dict[str, object]:
     """Offline-verify every transitive inventory and recompute the frozen result."""
 
+    verify_integrity_bundle(root)
     bundle = root.resolve()
-    verify_integrity_bundle(bundle)
     expected_root_directories = {"plans", "runs"}
     if (
         bundle.is_symlink()
