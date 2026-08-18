@@ -1,28 +1,21 @@
 # RAES adapters
 
-This repository contains a single distribution, `raes-adapters`, that connects
-concrete simulator backends to published RAES contracts. It ships shared base
-plumbing plus backend modules whose dependencies can live behind separate
-extras in one lock. Maintainer-selected backends are admitted; backend-local
-qualification evidence records attainable claim strength and limitations. The
-`cyborg` and `cyberbattlesim` extras are dependency-light because their selected
-native sources have no governed publishable artifact, so users acquire those
-simulators separately and the base install remains independent. The admitted
-CybORG backend is supported through its documented source installation despite
-the absence of an automatically installed native simulator; its extra installs
-the published environment-pack validator used by the researcher command.
-
-The shared `raes_adapters.base` module provides plumbing only. RAES remains the
-semantic and protocol authority.
+`raes-adapters` connects concrete simulator backends to published RAES
+contracts. Start with the installed conformance quickstart, then select the
+researcher command or evidence recipe that matches the claim you need to make.
+Scenario validity, adapter conformance, native run completion, and scientific
+evidence are separate boundaries.
 
 ## Start here
 
 - [Repository overview](https://github.com/OpenRAE/adapters#readme)
+- [Researcher guide](researcher-guide.md)
 - [Installed researcher command](researcher-command.md)
 - [NASim researcher command](nasim-researcher-command.md)
 - [CyberBattleSim researcher command](cyberbattlesim-researcher-command.md)
 - [CyberBattleSim baseline reproduction](cyberbattlesim-baseline-reproduction.md)
 - [Contribution guide](https://github.com/OpenRAE/adapters/blob/dev/CONTRIBUTING.md)
+- [Developer index](maintainers/index.md)
 - [Architecture decisions](decisions/adrs/README.md)
 - [CybORG/CAGE-2 backend qualification guardrails](decisions/cyborg-cage2-runtime-qualification-guardrails.md)
 - [CybORG/CAGE-2 source-ledger guardrails](decisions/cyborg-cage2-source-ledger-guardrails.md)

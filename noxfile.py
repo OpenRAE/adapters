@@ -363,9 +363,9 @@ def _run(session: nox.Session, *args: str, **kwargs: object) -> None:
     session.run(*args, external=True, **kwargs)
 
 
-def _uv_run_root(session: nox.Session, *args: str) -> None:
+def _uv_run_root(session: nox.Session, *args: str, **kwargs: object) -> None:
     """Run a tool from the project env (locked by the root uv.lock)."""
-    _run(session, "uv", "run", "--frozen", "--project", str(REPO_ROOT), *args)
+    _run(session, "uv", "run", "--frozen", "--project", str(REPO_ROOT), *args, **kwargs)
 
 
 def _expect_evidence_rejection(session: nox.Session, python: Path, *command: str) -> None:
@@ -422,16 +422,28 @@ def _hygiene(session: nox.Session, paths: list[str]) -> None:
         session.log("hygiene: no files selected; skipping")
         return
     if text:
-        _uv_run_root(session, "trailing-whitespace-fixer", *text)
-        _uv_run_root(session, "end-of-file-fixer", *text)
-        _uv_run_root(session, "check-merge-conflict", *text)
+        session.log(f"hygiene: text files ({len(text)})")
+        _uv_run_root(session, "trailing-whitespace-fixer", *text, log=False)
+        _uv_run_root(session, "end-of-file-fixer", *text, log=False)
+        _uv_run_root(session, "check-merge-conflict", *text, log=False)
     if yaml:
-        _uv_run_root(session, "check-yaml", "--unsafe", *yaml)
+        session.log(f"hygiene: YAML files ({len(yaml)})")
+        _uv_run_root(session, "check-yaml", "--unsafe", *yaml, log=False)
     if json:
-        _uv_run_root(session, "check-json", *json)
-    _uv_run_root(session, "check-added-large-files", "--maxkb", MAX_LARGE_FILE_KB, *files)
+        session.log(f"hygiene: JSON files ({len(json)})")
+        _uv_run_root(session, "check-json", *json, log=False)
+    session.log(f"hygiene: tracked files ({len(files)})")
+    _uv_run_root(
+        session,
+        "check-added-large-files",
+        "--maxkb",
+        MAX_LARGE_FILE_KB,
+        *files,
+        log=False,
+    )
     if priv:
-        _uv_run_root(session, "detect-private-key", *priv)
+        session.log(f"hygiene: non-test files ({len(priv)})")
+        _uv_run_root(session, "detect-private-key", *priv, log=False)
 
 
 def _lint(session: nox.Session) -> None:
@@ -838,14 +850,15 @@ def _distributions(session: nox.Session) -> None:
         )
         _run(
             session,
+            str(cyborg_venv / "bin" / "python"),
+            "-I",
+            str(REPO_ROOT / "tools" / "check_readme_quickstart.py"),
+            "--readme",
+            str(REPO_ROOT / "README.md"),
+            "--runner",
             str(cyborg_venv / "bin" / "raes-adapters"),
-            "run",
-            "--mode",
-            "conformance",
-            "--suite",
-            "pr",
-            "--output",
-            "researcher-conformance",
+            "--workdir",
+            str(probe_cwd / "readme-quickstart"),
             env={"PYTHONPATH": "", "PYTHONSAFEPATH": "1"},
         )
 

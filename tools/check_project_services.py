@@ -78,6 +78,77 @@ def _validate_docs_requirements(text: str, errors: list[str]) -> None:
             )
 
 
+def _validate_ground_control(text: str, errors: list[str]) -> None:
+    if "default_fallback:" in text:
+        errors.append(".ground-control.yaml: routing.default_fallback is retired")
+
+
+def _validate_codeql(text: str, errors: list[str]) -> None:
+    if "continue-on-error:" in text:
+        errors.append(".github/workflows/codeql-analysis.yml: CodeQL must fail closed")
+
+
+def _validate_ci(text: str, errors: list[str]) -> None:
+    # The verification graph runs as independent parallel jobs; `PR Gate` is the
+    # single aggregating required check that keeps every stage mandatory before a
+    # protected-branch merge. Pin its contract so no job can silently leave the
+    # gate: it must depend on every verification job plus Sonar, run on every PR,
+    # and fail closed unless each verification job succeeded (and Sonar passed on
+    # same-repository PRs). Adding a verification job means extending this list.
+    for expected in (
+        "name: PR Gate",
+        "needs: [fast-checks, policy, tool-tests, typecheck, tests, distributions, docs, sonar]",
+        "if: ${{ always() && github.event_name == 'pull_request' }}",
+        '.value.result == "success"',
+        "A required verification job did not succeed",
+        "SonarCloud did not succeed for a same-repository PR",
+    ):
+        _require(text, expected, ".github/workflows/ci.yml", errors)
+
+
+def _validate_release_workflow(text: str, errors: list[str]) -> None:
+    for expected in (
+        "googleapis/release-please-action@",
+        "pypa/gh-action-pypi-publish@",
+        "environment: pypi",
+        "id-token: write",
+        "raes-pack-release build",
+        "env-pack-assets/cyberbattlesim-chain-1.0.0.tar.gz",
+        "env-pack-assets/cyberbattlesim-chain-1.0.0-views.tar.gz",
+        "(cd env-pack-assets && sha256sum",
+        "ENV_PACK_SHA256SUMS",
+        "Run the published README quickstart",
+        "/tmp/smoke/bin/raes-adapters run --mode conformance --suite pr --output cage2-quickstart",
+        '"evidence_basis": "hermetic-live"',
+        "cage2-quickstart/runs/cyborg-pr-seed-3/conformance/backend-conformance.json",
+    ):
+        _require(text, expected, ".github/workflows/release-please.yml", errors)
+
+    # No stored PyPI credential, and no silent `skip-existing` recovery that could
+    # mask a partial or duplicate publication.
+    for forbidden in (
+        "PYPI_API_TOKEN",
+        "TWINE_PASSWORD",
+        "skip-existing: true",
+        "sha256sum env-pack-assets/* | tee ENV_PACK_SHA256SUMS",
+    ):
+        if forbidden in text:
+            errors.append(
+                ".github/workflows/release-please.yml: forbidden release setting "
+                f"present: {forbidden}"
+            )
+
+
+def validate_workflow_policy(path: Path, repo_root: Path) -> list[str]:
+    """Return action-pin and retired GitHub Pages errors for one workflow."""
+
+    errors = validate_action_pins(path, repo_root)
+    text = path.read_text(encoding="utf-8")
+    if "actions/deploy-pages@" in text or "pages: write" in text:
+        errors.append(f"{path.relative_to(repo_root)}: GitHub Pages publishing is retired")
+    return errors
+
+
 def validate_repository(repo_root: Path) -> list[str]:
     """Validate the complete repository-owned project-services contract."""
     errors: list[str] = []
@@ -89,8 +160,7 @@ def validate_repository(repo_root: Path) -> list[str]:
     _require(ground_control, "completion_command: make verify", ".ground-control.yaml", errors)
     _require(ground_control, "policy_command: make policy", ".ground-control.yaml", errors)
     _require(ground_control, "precommit_command: make precommit", ".ground-control.yaml", errors)
-    if "default_fallback:" in ground_control:
-        errors.append(".ground-control.yaml: routing.default_fallback is retired")
+    _validate_ground_control(ground_control, errors)
 
     root_pyproject = _read_required(repo_root, "pyproject.toml", errors)
     _require(root_pyproject, 'name = "raes-adapters"', "pyproject.toml", errors)
@@ -137,28 +207,13 @@ def validate_repository(repo_root: Path) -> list[str]:
         "queries: security-extended",
     ):
         _require(codeql, expected, ".github/workflows/codeql-analysis.yml", errors)
-    if "continue-on-error:" in codeql:
-        errors.append(".github/workflows/codeql-analysis.yml: CodeQL must fail closed")
+    _validate_codeql(codeql, errors)
 
     title_lint = _read_required(repo_root, ".github/workflows/pr-title-lint.yml", errors)
     _require(title_lint, "name: Lint PR title", ".github/workflows/pr-title-lint.yml", errors)
 
     ci = _read_required(repo_root, ".github/workflows/ci.yml", errors)
-    # The verification graph runs as independent parallel jobs; `PR Gate` is the
-    # single aggregating required check that keeps every stage mandatory before a
-    # protected-branch merge. Pin its contract so no job can silently leave the
-    # gate: it must depend on every verification job plus Sonar, run on every PR,
-    # and fail closed unless each verification job succeeded (and Sonar passed on
-    # same-repository PRs). Adding a verification job means extending this list.
-    for expected in (
-        "name: PR Gate",
-        "needs: [fast-checks, policy, tool-tests, typecheck, tests, distributions, docs, sonar]",
-        "if: ${{ always() && github.event_name == 'pull_request' }}",
-        '.value.result == "success"',
-        "A required verification job did not succeed",
-        "SonarCloud did not succeed for a same-repository PR",
-    ):
-        _require(ci, expected, ".github/workflows/ci.yml", errors)
+    _validate_ci(ci, errors)
 
     scorecard = _read_required(repo_root, ".github/workflows/scorecard.yml", errors)
     for expected in (
@@ -178,6 +233,8 @@ def validate_repository(repo_root: Path) -> list[str]:
         '"mkdocs",\n        "build",\n        "--strict",',
         "def _tool_tests(session: nox.Session)",
         '"tools/check_project_services.py"',
+        'REPO_ROOT / "tools" / "check_readme_quickstart.py"',
+        '"--runner"',
     ):
         _require(noxfile, expected, "noxfile.py", errors)
 
@@ -223,38 +280,11 @@ def validate_repository(repo_root: Path) -> list[str]:
     _read_required(repo_root, ".release-please-manifest.json", errors)
 
     release_wf = _read_required(repo_root, ".github/workflows/release-please.yml", errors)
-    for expected in (
-        "googleapis/release-please-action@",
-        "pypa/gh-action-pypi-publish@",
-        "environment: pypi",
-        "id-token: write",
-        "raes-pack-release build",
-        "env-pack-assets/cyberbattlesim-chain-1.0.0.tar.gz",
-        "env-pack-assets/cyberbattlesim-chain-1.0.0-views.tar.gz",
-        "(cd env-pack-assets && sha256sum",
-        "ENV_PACK_SHA256SUMS",
-    ):
-        _require(release_wf, expected, ".github/workflows/release-please.yml", errors)
-    # No stored PyPI credential, and no silent `skip-existing` recovery that could
-    # mask a partial or duplicate publication.
-    for forbidden in (
-        "PYPI_API_TOKEN",
-        "TWINE_PASSWORD",
-        "skip-existing: true",
-        "sha256sum env-pack-assets/* | tee ENV_PACK_SHA256SUMS",
-    ):
-        if forbidden in release_wf:
-            errors.append(
-                ".github/workflows/release-please.yml: forbidden release setting "
-                f"present: {forbidden}"
-            )
+    _validate_release_workflow(release_wf, errors)
 
     workflows = sorted((repo_root / ".github/workflows").glob("*.y*ml"))
     for workflow in workflows:
-        errors.extend(validate_action_pins(workflow, repo_root))
-        workflow_text = workflow.read_text(encoding="utf-8")
-        if "actions/deploy-pages@" in workflow_text or "pages: write" in workflow_text:
-            errors.append(f"{workflow.relative_to(repo_root)}: GitHub Pages publishing is retired")
+        errors.extend(validate_workflow_policy(workflow, repo_root))
 
     return errors
 
