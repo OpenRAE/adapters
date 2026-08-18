@@ -244,6 +244,13 @@ The [backend architecture guardrails](docs/decisions/cyberbattlesim-backend-guar
 record the component ownership, failure hygiene, capability claims, and
 acceptance-test mapping.
 
+Issue [#30](https://github.com/OpenRAE/adapters/issues/30) adds the frozen
+[source-native/RAES baseline reproduction](docs/cyberbattlesim-baseline-reproduction.md).
+Its content-addressed bundle preserves all 20 scheduled terminal attempts,
+offline-recomputable aggregates, six separately cited tiers, and the known
+stochastic, topology, evaluator, metric, and packaging limitations for the
+OpenRAE/research#14 and #20 consumers.
+
 Issue [#28](https://github.com/OpenRAE/adapters/issues/28) composes that
 runtime target with the published RAES conformance report and adapter-local
 source-protocol probes. The backend conformance result remains the exact

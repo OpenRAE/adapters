@@ -40,3 +40,90 @@ traceback. Native stdout and stderr were discarded by the command boundary.
 The golden-readiness checklist remains unchecked. Advancing from `built` to
 `golden` still requires its full manual participant-equivalent walkthrough and
 durable golden evidence.
+
+## Baseline reproduction evidence — 2026-08-10
+
+Issue [OpenRAE/adapters#30](https://github.com/OpenRAE/adapters/issues/30)
+executed the exact source-native and installed RAES-mediated paths from an
+offline CPython 3.12.3 environment on four x86-64 vCPUs with 16 GiB RAM. The
+apparatus used implementation commit
+`bf1cbff7bfeace506324910651697ef7b00b5de6`, adapter wheel SHA-256
+`52550a728936151208dd6875b5112b274edd9e3b93e844e34f34497026aa1808`,
+and upstream wheel SHA-256
+`d921703d77b82f14aeaff223cfeaf3753916b1518119d474dfd5e4444170b9a5`.
+The admitted pack digest was
+`sha256:66493882579d5cba87248c5722782ff5ded5f0d7423f4e559f15bfb61712a905`.
+
+The accepted declaration is
+`f09ec5759021cf1d5de9b260e0299934bf6f6cc4161b822e8f5f0b76bdb96b53`.
+All ten source-native and ten mediated attempts terminalized valid with cleanup
+verified and zero retries. The final 128-file bundle passed structural leakage
+scanning, contract validation, digest-bound citation validation, inventory
+verification, and independent offline recomputation. Its inventory file
+SHA-256 is
+`4653bc5afbf501f005f997df782f73f282cccbe28f9cbe176d5a9c3f5970a292`.
+
+The scientific result is deliberately not described as passing overall:
+
+| Tier or metric | Result |
+| --- | --- |
+| Authored source / contract / disclosure | passed / passed / passed |
+| Execution control / state-observation | weakened / weakened |
+| Outcome-evaluation | failed |
+| Cumulative reward | bounded; mean difference 19.2, 95% interval `[-91.8025, 130.1025]` within ±500 |
+| Steps to termination | outside tolerance; mean difference 33.5, 95% interval `[-55.0, 119.5]` exceeds ±60 |
+| Availability / terminal cause | unavailable because the mediated evaluator does not retain them |
+
+The first 20-attempt series remains retained under declaration
+`825dde3b4cd66f228e0f93157a2add35e3c9a822a7adac1d8ffd322b32116232`
+with a machine-readable rejection record. Its bound byte scanner could not
+distinguish RAES `withheld_refs` names from native values, so its criteria and
+scanner were not edited in place; the accepted revision used disjoint
+identities and unchanged scientific conditions.
+
+## Corrective baseline reproduction — 2026-08-11
+
+Revision 3 ran from implementation commit
+`e5d6aff625047037f5a94a9635d92966413055b7` using the exact adapter wheel with
+SHA-256
+`150c3b69a91d766d7863feb01e443257ad646e7f9cddcb2727a58c8c6137793d`.
+Its declaration is
+`c588a174ab97ef1e4d863b743a02213e9527b7731cfbdc897d6602d72362bebf`.
+All ten source-native and ten mediated attempts terminalized valid with zero
+retries. The final 138-file bundle passes independent offline recomputation,
+evidence-reference and citation checks, the bounded leakage scan, regular-tree
+checks, and inventory verification. Its `inventory.json` SHA-256 is
+`20eec98ff44f09e3b3466e0c57af2a960cf9886cdfcd9d5add5f5392172fa8dd`.
+
+Revision 3 corrected the apparatus defects without changing the frozen
+tolerances or stochastic bindings: the mediated lane now retains one
+checksum-bound sanitized availability/cause artifact per episode and carries
+the upstream evaluator's cumulative epsilon-step schedule across its isolated
+processes. The observed result is:
+
+| Tier or metric | Result |
+| --- | --- |
+| Authored source / contract / disclosure | passed / passed / passed |
+| Execution control / state-observation | weakened / weakened |
+| Outcome-evaluation | failed |
+| Cumulative reward | outside tolerance; mean difference `-488.6`, 95% interval `[-1558.015, 90.6]` exceeds +/-500 |
+| Steps to termination | outside tolerance; mean difference `51.4`, 95% interval `[-48.5, 153.8025]` exceeds +/-60 |
+| Mean availability | bounded; mean difference `-0.0008853231676272388`, 95% interval `[-0.010524172216097161, 0.00887836373877486]` within +/-0.05 |
+| Terminal cause | bounded; source `defender-sla` proportion `1.0`, mediated `0.9` plus `0.1` evaluator cutoff, within +/-0.10 |
+
+One mediated attempt reached the declared 600-step cutoff with cumulative
+reward `512`; the other nine mediated attempts average about `258.8` steps and
+`5699.2` reward. This single retained row drives both interval failures. It was
+not excluded or retried. Because the compared paths have explicitly different
+and partly unbound random-stream dispositions, the exact path is not
+deterministically attributable. The result supports readiness and research
+diagnosis, but not outcome equivalence; a stronger claim requires a separately
+declared stochastic-control and sample-size design.
+
+Together, these records supply the CyberBattleSim apparatus/readiness slice for
+[OpenRAE/research#14](https://github.com/OpenRAE/research/issues/14) and the
+content-addressed, recomputable publication slice for
+[OpenRAE/research#20](https://github.com/OpenRAE/research/issues/20). It does
+not by itself close corpus-wide readiness, complete the paper, assign a
+persistent identifier, mark the environment pack golden, or establish
+deterministic replay or outcome equivalence.

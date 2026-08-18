@@ -5,10 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
+import tracemalloc
 from pathlib import Path
 
 import pytest
 
+from raes_adapters import _bundle_command as bundle_command
 from raes_adapters import bundle_verifier
 from raes_adapters.entrypoint import main
 
@@ -39,11 +42,11 @@ def test_flat_bundle_and_all_renderers_are_deterministic(tmp_path: Path) -> None
     card = bundle_verifier.verify_bundle(tmp_path)
 
     assert card.status == "verified"
-    first_json = bundle_verifier.render_card(card, "json")
-    second_json = bundle_verifier.render_card(card, "json")
+    first_json = bundle_command.render_card(card, "json")
+    second_json = bundle_command.render_card(card, "json")
     assert first_json == second_json
-    assert "integrity-only" in bundle_verifier.render_card(card, "terminal")
-    assert "Semantic fidelity: not assessed" in bundle_verifier.render_card(card, "markdown")
+    assert "integrity-only" in bundle_command.render_card(card, "terminal")
+    assert "Semantic fidelity: not assessed" in bundle_command.render_card(card, "markdown")
 
 
 def test_transitive_inventory_closure_is_verified(tmp_path: Path) -> None:
@@ -97,12 +100,101 @@ def test_invalid_membership_and_tampering_are_rejected(
 
 
 def test_symlink_is_rejected_even_when_not_in_inventory(tmp_path: Path) -> None:
-    outside = tmp_path.parent / "outside"
+    outside = tmp_path.parent / f"{tmp_path.name}-outside"
     outside.write_bytes(b"outside")
     (tmp_path / "link").symlink_to(outside)
     _write_inventory(tmp_path, [])
 
     with pytest.raises(bundle_verifier.BundleInvalid, match="bundle.filesystem.symlink"):
+        bundle_verifier.verify_bundle(tmp_path)
+
+
+def test_intermediate_directory_swap_cannot_escape_bundle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    container = tmp_path / "container"
+    container.mkdir()
+    local = container / "sub"
+    local.mkdir()
+    (local / "item.bin").write_bytes(b"local bytes")
+    outside = tmp_path.parent / f"{tmp_path.name}-outside"
+    outside.mkdir()
+    outside_payload = b"outside bytes"
+    (outside / "item.bin").write_bytes(outside_payload)
+    _write_inventory(tmp_path, [_entry("container/sub/item.bin", outside_payload)])
+    parked = container / "sub.parked"
+
+    def point_outside() -> None:
+        local.rename(parked)
+        local.symlink_to(outside, target_is_directory=True)
+
+    def point_local() -> None:
+        local.unlink()
+        parked.rename(local)
+
+    original_scan = bundle_verifier._scan
+    calls = 0
+
+    def raced_scan(*args: object, **kwargs: object) -> object:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            point_local()
+        result = original_scan(*args, **kwargs)
+        point_outside()
+        return result
+
+    monkeypatch.setattr(bundle_verifier, "_scan", raced_scan)
+    try:
+        with pytest.raises(bundle_verifier.BundleInvalid, match="bundle.filesystem.mutated"):
+            bundle_verifier.verify_bundle(tmp_path)
+    finally:
+        if local.is_symlink():
+            point_local()
+
+
+def test_secure_descriptor_primitives_are_required(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_inventory(tmp_path, [])
+    monkeypatch.setattr(bundle_verifier.os, "O_NOFOLLOW", 0, raising=False)
+
+    with pytest.raises(bundle_verifier.BundleInvalid, match="bundle.filesystem.unsupported"):
+        bundle_verifier.verify_bundle(tmp_path)
+
+
+def test_mount_identity_primitive_is_required(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_inventory(tmp_path, [])
+    monkeypatch.setattr(bundle_verifier, "_mount_id", lambda _descriptor: None, raising=False)
+
+    with pytest.raises(bundle_verifier.BundleInvalid, match="bundle.filesystem.unsupported"):
+        bundle_verifier.verify_bundle(tmp_path)
+
+
+def test_raced_fifo_is_opened_nonblocking(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    if not hasattr(os, "mkfifo") or not hasattr(os, "O_NONBLOCK"):
+        pytest.skip("nonblocking FIFO admission is unavailable")
+    payload = b"regular"
+    item = tmp_path / "item"
+    item.write_bytes(payload)
+    _write_inventory(tmp_path, [_entry("item", payload)])
+    original_flags = bundle_verifier._file_flags
+    raced = False
+
+    def raced_flags() -> int:
+        nonlocal raced
+        flags = original_flags()
+        if not raced:
+            raced = True
+            assert flags & os.O_NONBLOCK
+            item.unlink()
+            os.mkfifo(item)
+        return flags
+
+    monkeypatch.setattr(bundle_verifier, "_file_flags", raced_flags)
+    with pytest.raises(bundle_verifier.BundleInvalid, match="bundle.filesystem.mutated"):
         bundle_verifier.verify_bundle(tmp_path)
 
 
@@ -177,6 +269,51 @@ def test_every_admission_limit_fails_closed(
         bundle_verifier.verify_bundle(tmp_path)
 
 
+def test_regular_file_limit_does_not_count_directories(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "one" / "two").mkdir(parents=True)
+    _write_inventory(tmp_path, [])
+    monkeypatch.setattr(bundle_verifier, "MAX_FILES", 1)
+
+    card = bundle_verifier.verify_bundle(tmp_path)
+
+    assert card.files == 1
+
+
+def test_directory_traversal_has_an_independent_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "directory").mkdir()
+    _write_inventory(tmp_path, [])
+    monkeypatch.setattr(bundle_verifier, "_MAX_DIRECTORIES", 0, raising=False)
+
+    with pytest.raises(bundle_verifier.BundleInvalid, match="bundle.limit.directories"):
+        bundle_verifier.verify_bundle(tmp_path)
+
+
+def test_fixed_limits_accept_the_exact_boundary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = b"x"
+    (tmp_path / "item").write_bytes(payload)
+    _write_inventory(tmp_path, [_entry("item", payload)])
+    inventory_size = (tmp_path / "inventory.json").stat().st_size
+    monkeypatch.setattr(bundle_verifier, "MAX_FILES", 2)
+    monkeypatch.setattr(bundle_verifier, "MAX_INVENTORIES", 1)
+    monkeypatch.setattr(bundle_verifier, "MAX_ENTRIES", 1)
+    monkeypatch.setattr(bundle_verifier, "MAX_UNIQUE_BYTES", inventory_size + len(payload))
+    monkeypatch.setattr(bundle_verifier, "MAX_ARTIFACT_BYTES", len(payload))
+    monkeypatch.setattr(bundle_verifier, "MAX_INVENTORY_BYTES", inventory_size)
+
+    card = bundle_verifier.verify_bundle(tmp_path)
+
+    assert card.files == 2
+    assert card.inventories == 1
+    assert card.entries == 1
+    assert card.unique_bytes == inventory_size + len(payload)
+
+
 @pytest.mark.parametrize(
     "payload",
     [
@@ -192,6 +329,48 @@ def test_malformed_inventories_are_rejected(tmp_path: Path, payload: bytes) -> N
 
     with pytest.raises(bundle_verifier.BundleInvalid, match="bundle.inventory"):
         bundle_verifier.verify_bundle(tmp_path)
+
+
+@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+def test_non_finite_json_constants_are_rejected(tmp_path: Path, constant: str) -> None:
+    (tmp_path / "inventory.json").write_text(f'{{"artifacts":{constant}}}', encoding="utf-8")
+
+    with pytest.raises(bundle_verifier.BundleInvalid, match="bundle.inventory.malformed"):
+        bundle_verifier.verify_bundle(tmp_path)
+
+
+def test_parser_recursion_is_invalid_input(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    nesting = 1_100
+    payload = '{"artifacts":' + "[" * nesting + "[]" + "]" * nesting + "}"
+    (tmp_path / "inventory.json").write_text(payload, encoding="utf-8")
+
+    assert main(["verify-bundle", "--bundle", str(tmp_path)]) == 3
+    captured = capsys.readouterr()
+    assert "bundle.inventory.malformed" in captured.out
+    assert captured.err == ""
+
+
+def test_oversized_json_integer_is_invalid_input(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    maximum_digits = sys.get_int_max_str_digits()
+    if maximum_digits == 0:
+        pytest.skip("Python integer conversion limit is disabled")
+    payload = (
+        '{"artifacts":[{"media_type":"x","path":"x","sha256":"'
+        + "0" * 64
+        + '","size_bytes":'
+        + "9" * (maximum_digits + 1)
+        + "}]}"
+    )
+    (tmp_path / "inventory.json").write_text(payload, encoding="utf-8")
+
+    assert main(["verify-bundle", "--bundle", str(tmp_path)]) == 3
+    captured = capsys.readouterr()
+    assert "bundle.inventory.malformed" in captured.out
+    assert captured.err == ""
 
 
 @pytest.mark.parametrize(
@@ -268,6 +447,35 @@ def test_root_must_be_a_real_directory_with_an_inventory(tmp_path: Path) -> None
         bundle_verifier.verify_bundle(root_link)
 
 
+@pytest.mark.parametrize("suffix", ["\x00suffix", "\ud800"])
+def test_malformed_root_path_text_is_invalid_input(
+    tmp_path: Path, suffix: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = f"{tmp_path}{suffix}"
+
+    assert main(["verify-bundle", "--bundle", root]) == 3
+    captured = capsys.readouterr()
+    assert "bundle.root.invalid" in captured.out
+    assert root not in captured.out
+    assert captured.err == ""
+
+
+def test_undecodable_filesystem_name_is_invalid_input(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    if os.name != "posix":
+        pytest.skip("byte-oriented filesystem names are POSIX-specific")
+    name = os.fsencode(tmp_path) + b"/undecodable-\xff"
+    descriptor = os.open(name, os.O_WRONLY | os.O_CREAT, 0o600)
+    os.close(descriptor)
+    _write_inventory(tmp_path, [])
+
+    assert main(["verify-bundle", "--bundle", str(tmp_path)]) == 3
+    captured = capsys.readouterr()
+    assert "bundle.inventory.path-invalid" in captured.out
+    assert captured.err == ""
+
+
 def test_mutation_during_hashing_is_rejected(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -304,6 +512,31 @@ def test_files_added_while_hashing_are_rejected(
         bundle_verifier.verify_bundle(tmp_path)
 
 
+def test_root_replacement_while_hashing_is_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_inventory(tmp_path, [])
+    parked = tmp_path.parent / f"{tmp_path.name}-parked"
+    original = bundle_verifier._inventory_payload
+
+    def replace_root(record: bundle_verifier._FileRecord) -> list[object]:
+        result = original(record)
+        tmp_path.rename(parked)
+        tmp_path.mkdir()
+        _write_inventory(tmp_path, [])
+        return result
+
+    monkeypatch.setattr(bundle_verifier, "_inventory_payload", replace_root)
+    try:
+        with pytest.raises(bundle_verifier.BundleInvalid, match="bundle.filesystem.mutated"):
+            bundle_verifier.verify_bundle(tmp_path)
+    finally:
+        if parked.exists():
+            (tmp_path / "inventory.json").unlink()
+            tmp_path.rmdir()
+            parked.rename(tmp_path)
+
+
 def test_verification_is_read_only(tmp_path: Path) -> None:
     payload = b"evidence"
     (tmp_path / "item").write_bytes(payload)
@@ -318,15 +551,40 @@ def test_verification_is_read_only(tmp_path: Path) -> None:
     assert after == before
 
 
+def test_artifact_hashing_does_not_retain_payloads(tmp_path: Path) -> None:
+    payload = b"x" * (128 * 1024)
+    source = tmp_path / "item-00"
+    source.write_bytes(payload)
+    entries = [_entry(source.name, payload)]
+    try:
+        for index in range(1, 64):
+            path = tmp_path / f"item-{index:02d}"
+            os.link(source, path)
+            entries.append(_entry(path.name, payload))
+    except OSError:
+        pytest.skip("hard links are unavailable")
+    _write_inventory(tmp_path, entries)
+
+    tracemalloc.start()
+    try:
+        card = bundle_verifier.verify_bundle(tmp_path)
+        _current, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert card.files == 65
+    assert peak < 4 * 1024**2
+
+
 def test_cards_are_stable_and_disclose_only_integrity(tmp_path: Path) -> None:
     _write_inventory(tmp_path, [])
     card = bundle_verifier.verify_bundle(tmp_path)
     counts = card.payload()["counts"]
     assert isinstance(counts, dict)
-    assert bundle_verifier.render_card(card, "json") == json.dumps(
+    assert bundle_command.render_card(card, "json") == json.dumps(
         card.payload(), sort_keys=True, separators=(",", ":")
     )
-    assert bundle_verifier.render_card(card, "terminal") == "\n".join(
+    assert bundle_command.render_card(card, "terminal") == "\n".join(
         (
             "status: verified",
             "code: bundle.integrity.verified",
@@ -339,7 +597,7 @@ def test_cards_are_stable_and_disclose_only_integrity(tmp_path: Path) -> None:
             "capture-completeness: not-assessed",
         )
     )
-    markdown = bundle_verifier.render_card(card, "markdown")
+    markdown = bundle_command.render_card(card, "markdown")
     assert markdown.startswith("# Bundle integrity card\n")
     assert "Semantic fidelity: not assessed" in markdown
     assert "Capture completeness: not assessed" in markdown

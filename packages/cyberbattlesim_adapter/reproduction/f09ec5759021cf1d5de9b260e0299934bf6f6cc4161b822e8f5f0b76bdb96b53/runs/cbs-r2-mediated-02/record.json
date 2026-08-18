@@ -1,0 +1,57 @@
+{
+  "attempt_id": "cbs-r2-mediated-02-attempt-01",
+  "cleanup": {
+    "attempted": true,
+    "receipt_ref": "cleanup.cbs-r2-mediated-02-attempt-01",
+    "verified": true
+  },
+  "declaration_sha256": "f09ec5759021cf1d5de9b260e0299934bf6f6cc4161b822e8f5f0b76bdb96b53",
+  "diagnostics": [],
+  "disposition": "valid",
+  "evidence_refs": [
+    {
+      "path": "portable/runs/cbs-r2-mediated-02-1/run.json",
+      "sha256": "4a2ec5bedca15db48c638f620756a01207da1f29a1df5e2ccac1d1e76532c2c8"
+    },
+    {
+      "path": "portable/runs/cbs-r2-mediated-02-1/evidence-records.json",
+      "sha256": "3584922f9fbdc5182c2b00496711ccb392a3202f576512615de0257c217c31fc"
+    },
+    {
+      "path": "portable/runs/cbs-r2-mediated-02-1/derived-measures.json",
+      "sha256": "d9201b05d41e69f52f4c657dc3223f7e9715082c46a54581cf1a4e279636bf84"
+    },
+    {
+      "path": "portable/inventory.json",
+      "sha256": "c9f0f3c9fdd3fe97db67cf2820dfb1631e19129fb6b50a7d8b1a1aa3fe82ed82"
+    }
+  ],
+  "lane": "raes-mediated",
+  "metric_status": {
+    "cumulative_attacker_reward": "available",
+    "network_availability": "unavailable",
+    "steps_to_termination": "available",
+    "terminal_cause": "unavailable"
+  },
+  "metrics": {
+    "cumulative_attacker_reward": 5650.0,
+    "network_availability": null,
+    "steps_to_termination": 226,
+    "terminal_cause": null
+  },
+  "protocol_sha256": "db43d8e165c5ff9e027a63590811b594e5db552615053f1613839027ef5ef592",
+  "replicate": 2,
+  "run_id": "cbs-r2-mediated-02",
+  "schema_version": "cyberbattlesim-baseline-run/v1",
+  "seed_label": 20260729,
+  "stochastic_controls": {
+    "applied": [
+      "gym-environment",
+      "gym-action-space"
+    ],
+    "unbound": [
+      "python-random",
+      "numpy-global"
+    ]
+  }
+}

@@ -37,6 +37,7 @@ from raes_adapters._diagnostics import diagnostic_address
 from raes_adapters._experiment_evidence import (
     EvaluatorEvidenceConfig,
     EvaluatorSummary,
+    SupplementalJsonArtifact,
     build_capture_spec,
     build_evidence_and_measure,
     scoped_id,
@@ -119,6 +120,7 @@ class GymEvaluator(object):
         self._capture_spec: ExperimentCaptureSpecModel | None = None
         self._evidence_records: tuple[ExperimentEvidenceRecordModel, ...] = ()
         self._derived_measures: tuple[ExperimentDerivedMeasureModel, ...] = ()
+        self._supplemental_artifacts: tuple[SupplementalJsonArtifact, ...] = ()
 
     def start(self, plan: EvaluationPlan, snapshot: RuntimeSnapshot) -> ApplyResult:
         """Apply an evaluation plan and project evaluator-owned source facts."""
@@ -203,8 +205,19 @@ class GymEvaluator(object):
             return self._empty_summary(), self._projection_failure(snapshot)
         captured_at = _now_iso()
         summary = _summary(facts)
-        self._record_projection(summary, captured_at)
+        self._record_projection_facts(facts, summary, captured_at)
         return summary, None
+
+    def _record_projection_facts(
+        self,
+        facts: _DriverEvaluationFacts,
+        summary: EvaluatorSummary,
+        now: str,
+    ) -> None:
+        """Record one projection while allowing backend-local bounded additions."""
+
+        del facts
+        self._record_projection(summary, now)
 
     def _record_projection(self, summary: EvaluatorSummary, now: str) -> None:
         """Record the capture spec, evidence, and reward measure for one projection.
@@ -229,6 +242,7 @@ class GymEvaluator(object):
         self._capture_spec = None
         self._evidence_records = ()
         self._derived_measures = ()
+        self._supplemental_artifacts = ()
 
     def _empty_summary(self) -> EvaluatorSummary:
         """Return the non-source placeholder used for metadata-only changes."""
@@ -525,6 +539,11 @@ class GymEvaluator(object):
 
         return self._derived_measures
 
+    def supplemental_artifacts(self) -> tuple[SupplementalJsonArtifact, ...]:
+        """Return sanitized JSON members referenced by evaluator evidence."""
+
+        return self._supplemental_artifacts
+
     def stop(self, snapshot: RuntimeSnapshot) -> ApplyResult:
         entries = {
             address: entry
@@ -543,6 +562,7 @@ class GymEvaluator(object):
         self._capture_spec = None
         self._evidence_records = ()
         self._derived_measures = ()
+        self._supplemental_artifacts = ()
         return ApplyResult(
             success=True,
             snapshot=snapshot.with_entries(

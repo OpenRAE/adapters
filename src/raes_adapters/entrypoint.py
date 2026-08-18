@@ -11,7 +11,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     arguments = list(sys.argv[1:] if argv is None else argv)
     if arguments[:1] == ["verify-bundle"]:
-        from raes_adapters.bundle_verifier import main as verify_main
+        from raes_adapters._bundle_command import main as verify_main
 
         return verify_main(arguments[1:])
     from raes_adapters.cli import main as researcher_main

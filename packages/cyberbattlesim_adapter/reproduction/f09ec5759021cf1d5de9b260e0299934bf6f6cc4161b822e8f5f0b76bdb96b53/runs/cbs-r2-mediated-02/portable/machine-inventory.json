@@ -1,0 +1,17 @@
+{
+  "architecture": "x86_64",
+  "operating_system": "Linux",
+  "operating_system_release": "6.17.0-1019-aws",
+  "python": {
+    "implementation": "CPython",
+    "version": "3.12.3"
+  },
+  "software": {
+    "cyberbattlesim": "0.1.0",
+    "gymnasium": "0.29.1",
+    "numpy": "1.26.4",
+    "raes": "3.3.0",
+    "raes-adapters": "0.0.0",
+    "raes-env-packs": "3.6.2"
+  }
+}

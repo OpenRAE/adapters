@@ -65,6 +65,8 @@ from raes_contracts.satisfiability import canonical_contract_digest  # type: ign
 from raes_runtime.manager import RuntimeManager  # type: ignore[import-untyped]
 from raes_runtime.registry import RuntimeTarget  # type: ignore[import-untyped]
 
+from raes_adapters._experiment_evidence import SupplementalJsonArtifact
+
 
 @dataclass(frozen=True)
 class RedParticipantRunControls(object):
@@ -137,6 +139,7 @@ class EpisodeEvidence(object):
     derived_measures: tuple[ExperimentDerivedMeasureModel, ...]
     diagnostics: tuple[DiagnosticModel, ...]
     cleanup_verified: bool
+    supplemental_artifacts: tuple[SupplementalJsonArtifact, ...] = ()
 
 
 def single_participant_provenance(

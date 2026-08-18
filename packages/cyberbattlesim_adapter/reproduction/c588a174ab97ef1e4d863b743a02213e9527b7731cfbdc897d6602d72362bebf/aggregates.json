@@ -1,0 +1,164 @@
+{
+  "bootstrap": {
+    "interval_level": 0.95,
+    "method": "counter-addressed-sha256-percentile",
+    "resamples": 10000
+  },
+  "comparisons": {
+    "cumulative_attacker_reward": {
+      "interval_95": {
+        "lower": -1558.015,
+        "upper": 90.59999999999948
+      },
+      "mean_difference": -488.60000000000036,
+      "result": "outside-tolerance",
+      "tolerance": 500.0
+    },
+    "network_availability": {
+      "interval_95": {
+        "lower": -0.010524172216097161,
+        "upper": 0.00887836373877486
+      },
+      "mean_difference": -0.0008853231676272388,
+      "result": "bounded",
+      "tolerance": 0.05
+    },
+    "steps_to_termination": {
+      "interval_95": {
+        "lower": -48.5,
+        "upper": 153.80249999999998
+      },
+      "mean_difference": 51.39999999999998,
+      "result": "outside-tolerance",
+      "tolerance": 60.0
+    },
+    "terminal_cause": {
+      "proportion_differences": {
+        "defender-sla": -0.09999999999999998,
+        "evaluator-cutoff": 0.1
+      },
+      "result": "bounded",
+      "tolerance": 0.1
+    }
+  },
+  "declaration_sha256": "c588a174ab97ef1e4d863b743a02213e9527b7731cfbdc897d6602d72362bebf",
+  "lanes": {
+    "raes-mediated": {
+      "dispositions": {
+        "excluded": 0,
+        "failed": 0,
+        "invalid": 0,
+        "valid": 10
+      },
+      "metrics": {
+        "cumulative_attacker_reward": {
+          "available_count": 10,
+          "maximum": 5890.0,
+          "mean": 5180.5,
+          "mean_interval_95": {
+            "lower": 4122.097500000001,
+            "upper": 5741.2
+          },
+          "median": 5660.0,
+          "minimum": 512.0,
+          "missing_count": 0,
+          "sample_standard_deviation": 1642.5152967324232
+        },
+        "network_availability": {
+          "available_count": 10,
+          "maximum": 0.9767156862745099,
+          "mean": 0.9541735308721006,
+          "mean_interval_95": {
+            "lower": 0.9464699598909999,
+            "upper": 0.9623053575222692
+          },
+          "median": 0.949628904872717,
+          "minimum": 0.9369158878504673,
+          "missing_count": 0,
+          "sample_standard_deviation": 0.013618086812171516
+        },
+        "steps_to_termination": {
+          "available_count": 10,
+          "maximum": 600.0,
+          "mean": 292.9,
+          "mean_interval_95": {
+            "lower": 207.4875,
+            "upper": 383.70249999999993
+          },
+          "median": 303.5,
+          "minimum": 111.0,
+          "missing_count": 0,
+          "sample_standard_deviation": 152.27712310856882
+        },
+        "terminal_cause": {
+          "available_count": 10,
+          "missing_count": 0,
+          "proportions": {
+            "defender-sla": 0.9,
+            "evaluator-cutoff": 0.1
+          }
+        }
+      },
+      "scheduled_count": 10
+    },
+    "source-native": {
+      "dispositions": {
+        "excluded": 0,
+        "failed": 0,
+        "invalid": 0,
+        "valid": 10
+      },
+      "metrics": {
+        "cumulative_attacker_reward": {
+          "available_count": 10,
+          "maximum": 5886.0,
+          "mean": 5669.1,
+          "mean_interval_95": {
+            "lower": 5609.3975,
+            "upper": 5733.8025
+          },
+          "median": 5636.0,
+          "minimum": 5504.0,
+          "missing_count": 0,
+          "sample_standard_deviation": 105.44977740875301
+        },
+        "network_availability": {
+          "available_count": 10,
+          "maximum": 0.9698646986469864,
+          "mean": 0.9550588540397278,
+          "mean_interval_95": {
+            "lower": 0.949642189992438,
+            "upper": 0.9609061405691989
+          },
+          "median": 0.9513319185328307,
+          "minimum": 0.9452644526445265,
+          "missing_count": 0,
+          "sample_standard_deviation": 0.009770776394548795
+        },
+        "steps_to_termination": {
+          "available_count": 10,
+          "maximum": 401.0,
+          "mean": 241.5,
+          "mean_interval_95": {
+            "lower": 193.5,
+            "upper": 292.0
+          },
+          "median": 248.5,
+          "minimum": 131.0,
+          "missing_count": 0,
+          "sample_standard_deviation": 84.0452920222847
+        },
+        "terminal_cause": {
+          "available_count": 10,
+          "missing_count": 0,
+          "proportions": {
+            "defender-sla": 1.0
+          }
+        }
+      },
+      "scheduled_count": 10
+    }
+  },
+  "scheduled_count": 20,
+  "schema_version": "cyberbattlesim-baseline-aggregates/v1"
+}

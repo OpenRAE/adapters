@@ -51,9 +51,9 @@
       "uri": "raes-environment-pack:/docs/golden-readiness-checklist.md",
       "checksum": {
         "algorithm": "sha256",
-        "value": "ab3febf666b60f8a08186d9e9e97471b652e2522ef3c9cd5a34b450921229fe2"
+        "value": "9b718e4e388b409cb619bc9e6c02c87fd942cfea8c3c535f94c35b2f8040219f"
       },
-      "size_bytes": 2123,
+      "size_bytes": 3824,
       "created_at": "2026-08-08T00:00:00Z",
       "source": "OpenRAE/adapters#29",
       "satisfies_refs": [],
@@ -205,5 +205,5 @@
       "description": null
     }
   },
-  "set_digest": "sha256:08ae7e997b50bb396c290c4a5537a65e9e7d8b8e6abc97d1ff65022c4258e417"
+  "set_digest": "sha256:66493882579d5cba87248c5722782ff5ded5f0d7423f4e559f15bfb61712a905"
 }

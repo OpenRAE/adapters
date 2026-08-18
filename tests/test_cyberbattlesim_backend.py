@@ -341,6 +341,7 @@ def test_unchanged_operations_preserve_snapshots_and_component_state() -> None:
             terminated=False,
             truncated=False,
             terminal_cause=None,
+            network_availability=(1.0,),
         )
     )
     provisioner = CyberBattleSimProvisioner(driver)
@@ -608,6 +609,7 @@ def test_evaluator_reads_distinct_facts_without_advancing_or_leaking_to_particip
             terminated=False,
             truncated=False,
             terminal_cause=None,
+            network_availability=(1.0,),
         )
     )
     runtime = CyberBattleSimParticipantRuntime(driver)
@@ -650,7 +652,8 @@ def test_evaluator_reads_distinct_facts_without_advancing_or_leaking_to_particip
     derived_measures = evaluator.derived_measures()
     capture_spec = evaluator.capture_spec()
     assert isinstance(capture_spec, ExperimentCaptureSpecModel)
-    assert len(evidence_records) == len(derived_measures) == 1
+    assert len(evidence_records) == 2
+    assert len(derived_measures) == 1
     assert isinstance(evidence_records[0], ExperimentEvidenceRecordModel)
     assert isinstance(derived_measures[0], ExperimentDerivedMeasureModel)
     assert evidence_records[0].capture_spec_ref.ref_id == capture_spec.capture_spec_id
@@ -664,6 +667,23 @@ def test_evaluator_reads_distinct_facts_without_advancing_or_leaking_to_particip
     assert (
         raw_content.content_checksum.value
         == hashlib.sha256(raw_content.payload_summary.encode("utf-8")).hexdigest()
+    )
+    supplemental = evaluator.supplemental_artifacts()
+    assert len(supplemental) == 1
+    assert supplemental[0].relative_path == "episode-outcome.json"
+    assert supplemental[0].payload == {
+        "schema_version": "cyberbattlesim-sanitized-episode-outcome/v1",
+        "network_availability": [1.0],
+        "terminal_cause": None,
+    }
+    outcome_content = evidence_records[1].raw_content
+    assert outcome_content.content_uri == "episode-outcome.json"
+    assert outcome_content.content_checksum is not None
+    assert (
+        outcome_content.content_checksum.value
+        == hashlib.sha256(
+            (json.dumps(supplemental[0].payload, indent=2, sort_keys=True) + "\n").encode()
+        ).hexdigest()
     )
     portable_evaluation = str(
         {
@@ -752,6 +772,79 @@ def test_source_termination_closes_episode_and_restart_resets_same_seed() -> Non
     )
 
 
+def test_driver_retains_allowlisted_availability_and_classifies_source_cause() -> None:
+    class NativeEnvironment:
+        def step(
+            self, action: dict[str, object]
+        ) -> tuple[dict[str, object], float, bool, bool, dict[str, object]]:
+            assert action == {"connect": (1, 2, 3, 4)}
+            return (
+                {},
+                5000.0,
+                True,
+                False,
+                {
+                    "network_availability": 0.75,
+                    "native-private-value": "must-not-cross",
+                },
+            )
+
+    class SourcePolicy:
+        def on_step(self, *_args: object) -> None:
+            return None
+
+    driver = CyberBattleSimDriver()
+    driver._environment = NativeEnvironment()  # type: ignore[assignment]
+    driver._closed = False
+    driver._last_observation = {}
+    driver._max_steps = 600
+    driver._execution_ref = "driver.reset.1"
+    driver._pending_native_action = {"connect": (1, 2, 3, 4)}
+    driver._pending_action_kind = "connect"
+    driver._pending_target_address = "provision.node.customer-data"
+    driver._pending_proposal_ref = "driver.proposal.1"
+    driver._autonomous_policy = SourcePolicy()  # type: ignore[assignment]
+    driver._autonomous_wrapper = object()
+
+    step = driver.step(
+        "connect",
+        target_address="provision.node.customer-data",
+        proposal_ref="driver.proposal.1",
+    )
+    evaluation = driver.evaluate()
+
+    assert step.terminal_cause == "defender-sla"
+    assert evaluation.terminal_cause == "defender-sla"
+    assert evaluation.network_availability == (0.75,)
+    assert "native-private-value" not in str(evaluation)
+
+
+@pytest.mark.parametrize("value", [None, True, float("nan"), -0.1, 1.1])
+def test_driver_rejects_invalid_source_availability(value: object) -> None:
+    class NativeEnvironment:
+        def step(
+            self, _action: dict[str, object]
+        ) -> tuple[dict[str, object], float, bool, bool, dict[str, object]]:
+            return {}, 1.0, False, False, {"network_availability": value}
+
+    driver = CyberBattleSimDriver()
+    driver._environment = NativeEnvironment()  # type: ignore[assignment]
+    driver._closed = False
+    driver._last_observation = {
+        "action_mask": {"connect": [(0,)]},
+    }
+    driver._max_steps = 600
+    driver._execution_ref = "driver.reset.1"
+    driver._numpy = SimpleNamespace(
+        int32="int32",
+        argwhere=lambda value: value,
+        asarray=lambda value, **_kwargs: value,
+    )  # type: ignore[assignment]
+
+    with pytest.raises(RuntimeError, match="network availability is unavailable"):
+        driver.step("connect")
+
+
 def test_cleanup_is_idempotent_verified_and_preserves_bounded_failure() -> None:
     driver = FakeDriver()
     manifest = create_cyberbattlesim_manifest()
@@ -809,6 +902,7 @@ def test_selected_scenario_realizes_and_runs_across_applicable_surfaces() -> Non
             terminated=False,
             truncated=False,
             terminal_cause=None,
+            network_availability=(1.0,),
         )
     )
     target = create_cyberbattlesim_target(driver=driver, seed=20260729)
@@ -1070,7 +1164,7 @@ def test_autonomous_policy_proposal_waits_for_raes_admission(
             self, action: dict[str, object]
         ) -> tuple[dict[str, object], float, bool, bool, dict[str, object]]:
             self.native_steps.append(action)
-            return {"action_mask": {}}, 2.0, False, False, {}
+            return {"action_mask": {}}, 2.0, False, False, {"network_availability": 1.0}
 
     class SourcePolicy:
         exploit_calls = 0
@@ -1247,7 +1341,16 @@ def test_live_driver_is_lazy_seed_bounded_and_performs_exactly_one_native_step(
         ) -> tuple[dict[str, object], float, bool, bool, dict[str, object]]:
             self.native_steps.append(action)
             observation, _ = self.reset(seed=None)
-            return observation, -3.5, False, False, {"native-info": "must-not-cross"}
+            return (
+                observation,
+                -3.5,
+                False,
+                False,
+                {
+                    "network_availability": 0.95,
+                    "native-info": "must-not-cross",
+                },
+            )
 
         def close(self) -> None:
             self.close_calls += 1
@@ -1517,6 +1620,7 @@ def test_live_driver_is_lazy_seed_bounded_and_performs_exactly_one_native_step(
     assert step.terminal_cause == "evaluator-cutoff"
     assert evaluation.cumulative_reward == -3.5
     assert evaluation.terminal_cause == "evaluator-cutoff"
+    assert evaluation.network_availability == (0.95,)
     assert evaluation.execution_ref == reset.operation_ref
     assert evaluation.projection_ref == f"{reset.operation_ref}.evaluation.1"
     assert first_close.verified
