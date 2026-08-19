@@ -42,6 +42,7 @@ evidence are separate boundaries.
 - [CyberBattleSim conformance-composition guardrails](decisions/cyberbattlesim-conformance-guardrails.md)
 - [CyberBattleSim environment-pack and researcher-command guardrails](decisions/cyberbattlesim-researcher-command-guardrails.md)
 - [CyberBattleSim baseline-reproduction guardrails](decisions/cyberbattlesim-baseline-reproduction-guardrails.md)
+- [CyberBattleSim first-release guardrails](decisions/cyberbattlesim-release-guardrails.md)
 - [CyberBattleSim chain native-readiness record](decisions/cyberbattlesim-native-readiness-record.md)
 - [Project services](maintainers/project-services.md)
 
