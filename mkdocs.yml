@@ -30,12 +30,14 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Researcher guide: researcher-guide.md
   - Researcher command: researcher-command.md
   - Offline bundle verifier: bundle-verifier.md
   - NASim researcher command: nasim-researcher-command.md
   - CyberBattleSim researcher command: cyberbattlesim-researcher-command.md
   - CyberBattleSim baseline reproduction: cyberbattlesim-baseline-reproduction.md
   - Maintainers:
+      - Developer index: maintainers/index.md
       - Continuous integration: maintainers/ci.md
       - Project services: maintainers/project-services.md
   - Decisions:

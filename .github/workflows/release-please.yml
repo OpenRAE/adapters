@@ -211,8 +211,9 @@ jobs:
           gh release upload "${TAG}" dist/* SHA256SUMS
           env-pack-assets/* ENV_PACK_SHA256SUMS
 
-  # Prove the published artifact installs and imports from the public index in a
-  # clean environment (no checkout, no local links).
+  # Prove the published artifact installs, imports, and executes the README
+  # quickstart from the public index in a clean environment (no checkout or
+  # local distribution links).
   smoke:
     needs: [release-please, publish]
     if: >-
@@ -250,6 +251,40 @@ jobs:
           assert raes_adapters.__version__ == version("raes-adapters")
           PY
           test "$(/tmp/smoke/bin/python -c 'import raes_adapters; print(raes_adapters.__version__)')" = "${VERSION}"
+      - name: Run the published README quickstart
+        run: |
+          set -euo pipefail
+          quickstart_root="$(mktemp -d)"
+          cd "${quickstart_root}"
+          PYTHONPATH='' PYTHONSAFEPATH=1 /tmp/smoke/bin/raes-adapters run --mode conformance --suite pr --output cage2-quickstart > quickstart.json
+          /tmp/smoke/bin/python - <<'PY'
+          import json
+          from pathlib import Path
+
+          expected = {
+              "disposition": "succeeded",
+              "evidence_basis": "hermetic-live",
+              "inventory": "inventory.json",
+              "mode": "conformance",
+              "run_count": 1,
+          }
+          assert json.loads(Path("quickstart.json").read_text()) == expected
+          artifacts = sorted(
+              path.as_posix()
+              for path in Path("cage2-quickstart").rglob("*")
+              if path.is_file()
+          )
+          assert artifacts == [
+              "cage2-quickstart/index.json",
+              "cage2-quickstart/inventory.json",
+              "cage2-quickstart/runs/cyborg-pr-seed-3/conformance/backend-conformance.json",
+          ]
+          inventory = json.loads(Path("cage2-quickstart/inventory.json").read_text())
+          assert [item["path"] for item in inventory["artifacts"]] == [
+              "index.json",
+              "runs/cyborg-pr-seed-3/conformance/backend-conformance.json",
+          ]
+          PY
 
   # After a release, the version bump + CHANGELOG land on `main`, so `dev` falls
   # one release commit behind. Open a back-merge PR so `dev` is resynced. This job

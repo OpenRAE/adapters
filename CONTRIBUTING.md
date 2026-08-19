@@ -6,6 +6,9 @@ ADR-069 §8). CAGE-2 replication is one backend served by the CybORG adapter
 rather than the scope of the repository. Contributions land through the Ground
 Control `/implement` workflow.
 
+The [developer index](docs/maintainers/index.md) collects repository layout,
+verification, packaging/release, governance, and adapter workflow references.
+
 ## Branching
 
 - `main` — production. PRs only (from `dev`). No direct pushes, no force-push.
