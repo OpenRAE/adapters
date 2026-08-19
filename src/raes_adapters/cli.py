@@ -60,6 +60,7 @@ from raes_operations.run_artifacts import (  # type: ignore[import-untyped]
     atomic_write_json_artifact,
 )
 
+from raes_adapters._inventory import inventory_document, media_type
 from raes_adapters.cyberbattlesim import (
     load_qualification as load_cyberbattlesim_qualification,
 )
@@ -1332,26 +1333,16 @@ def _reserve_output(requested: Path) -> Path:
 def _media_type(path: Path) -> str:
     """Return the portable media type used in the artifact inventory."""
 
-    return "application/json" if path.suffix == ".json" else "application/octet-stream"
+    return media_type(path)
 
 
 def _seal_inventory(output: Path) -> dict[str, object]:
     """Hash every portable artifact and atomically seal the inventory."""
 
-    artifacts: list[dict[str, object]] = []
-    for path in sorted(item for item in output.rglob("*") if item.is_file()):
-        if path.name == _INVENTORY_NAME:
-            continue
-        payload = path.read_bytes()
-        artifacts.append(
-            {
-                "media_type": _media_type(path),
-                "path": path.relative_to(output).as_posix(),
-                "sha256": hashlib.sha256(payload).hexdigest(),
-                "size_bytes": len(payload),
-            }
-        )
-    inventory: dict[str, object] = {"artifacts": artifacts}
+    members = [
+        path for path in output.rglob("*") if path.is_file() and path.name != _INVENTORY_NAME
+    ]
+    inventory = inventory_document(output, members, type_for=_media_type)
     atomic_write_json_artifact(output / _INVENTORY_NAME, inventory)
     return inventory
 
