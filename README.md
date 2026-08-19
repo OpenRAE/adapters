@@ -1,509 +1,181 @@
-# raes-adapters
+# RAES adapters
 
 [![Documentation](https://readthedocs.org/projects/raes-adapters/badge/?version=latest)](https://raes-adapters.readthedocs.io/en/latest/)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/OpenRAE/adapters/badge)](https://scorecard.dev/viewer/?uri=github.com/OpenRAE/adapters)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects?as=badge&url=https%3A%2F%2Fgithub.com%2FOpenRAE%2Fadapters)](https://www.bestpractices.dev/projects?as=entry&url=https%3A%2F%2Fgithub.com%2FOpenRAE%2Fadapters)
 
-A single distribution, **`raes-adapters`**, that qualifies and realizes
-[RAES](https://github.com/RAESystem/rae) scenarios against concrete simulator
-backends. It ships shared adapter plumbing plus one importable module per
-simulator. Implemented simulator dependencies are exposed as optional extras;
-qualification evidence bounds the claims made for each selected backend.
-Maintainer selection determines admission: a qualification record documents
-source identity, attainable evidence, limitations, and claim strength, but it
-does not veto implementation of a selected simulator.
+`raes-adapters` connects simulator backends to the published contracts of
+[RAES](https://github.com/RAESystem/rae), the Reproducible Agentic
+Environments System. A researcher can use an adapter to validate a packaged
+scenario, inspect the selected simulator source and profile, exercise the
+adapter boundary, and retain portable evidence from an admitted run.
 
-RAES — Reproducible Agentic Environments System — is the semantic authority.
-Its scope is agentic environments generally: cyber, AI security, AI safety,
-testing, research, and evaluation are examples of what an environment can model,
-not the boundary of the model. Adapters here translate between a specific
-simulator backend and the published RAES contracts; the shared surfaces speak in
-participants, observations, actions, resources, controls, evaluation, provenance,
-evidence, replay boundaries, and conformance.
+Those operations do not by themselves prove deterministic replay, scientific
+validity, state or observation equivalence, outcome equivalence, or production
+security. Each claim is limited by the selected environment pack, source pins,
+participant artifacts, runtime controls, and retained evidence.
 
-This repository hosts the adapter *implementations* and their build/CI mechanics.
-It consumes published RAES contracts and never adds SDL, schemas, profiles,
-vocabularies, or policy gates of its own (RAES ADR-069 §1). Backend-specific
-concepts — including CybORG and CAGE-2 — stay inside the module that owns them
-and never define the shared semantic boundary (ADR-002).
+## Quickstart: verify the CAGE-2 adapter boundary
 
-## Install
+Start in a fresh Python 3.12 virtual environment on Linux or macOS. Install the
+published distribution and its CAGE-2 pack-validation dependency:
 
-```bash
-pip install raes-adapters  # shared base plumbing + qualification evidence
+<!-- readme-quickstart:install -->
+```shell
+python -m pip install 'raes-adapters[cyborg]'
 ```
 
-The selected CybORG backend is admitted and usable through its documented
-source installation. The `cyborg` extra key is dependency-light. Issue
-[#12](https://github.com/OpenRAE/adapters/issues/12) qualified the official
-CAGE Challenge 2 source and a packaging-only fix, but the upstream wheel omits
-the version and Scenario2 runtime data. The fixed wheel passed a clean Python
-3.12 smoke locally, but it is not a governed public artifact and the
-distribution's declared Python/platform range is not yet qualified. Those
-limitations bound installability and reproducibility claims; they do not veto
-the maintainer-selected backend. Until that fix is published, install the
-pinned CAGE-2 source at
-commit `26ce1c1253fa9e2e73f25e6a7f2da32860c11257`, apply
-`src/raes_adapters/cyborg/cage2-wheel-package-data.patch`, and install its
-`CybORG/` package into the environment. The adapter validates the installed
-version and selected source-file digests before constructing the backend.
-The empty dependency list avoids advertising an editable checkout,
-install-time clone, or unpublished wheel as an automatic installation route.
+Run the short, hermetic CAGE-2 conformance suite from an empty working
+directory:
 
-The `cyberbattlesim` extra is likewise dependency-light. The
-[qualification record](src/raes_adapters/cyberbattlesim/qualification.json)
-binds Microsoft's legally usable, runnable source and admits the selected
-profile. Because no official index/release artifact exists, users install the
-pinned simulator source separately. Unbound random streams and open benchmark
-findings remain explicit limits on deterministic-replay and outcome claims.
+<!-- readme-quickstart:run -->
+```shell
+raes-adapters run --mode conformance --suite pr --output cage2-quickstart
+```
 
-The `primaite` extra is dependency-light for the same reason. The
-[qualification record](src/raes_adapters/primaite/qualification.json) binds
-DSTL's MIT-licensed PrimAITE source (tag `v4.0.0`) and admits the selected
-`data_manipulation` profile through the source-native `PrimaiteGymEnv`. PrimAITE
-publishes no index/release wheel, so users install the pinned source separately
-(the qualified route pins `setuptools==75.6.0` to supply `pkg_resources`). A
-broken public seed seam, undeclared runtime dependencies, and an unpinned
-dependency graph remain explicit limits on deterministic-replay and
-reproducibility claims.
+The command prints one bounded JSON object:
 
-The `nasim` extra pins the published `nasim==0.12.0` distribution together with
-its qualified runtime (`gymnasium==0.26.3`, `numpy==1.26.4`), so installing
-`raes-adapters[nasim]` reproduces the admitted, runnable protocol. The
-[qualification record](src/raes_adapters/nasim/qualification.json) binds Jonathon
-Schwartz's MIT-licensed source and admits one `tiny`-benchmark bruteforce
-protocol. The runtime pins gymnasium 0.26.3 because NASim's supplied agents
-assert a Python-int action index that gymnasium >= 0.27 breaks; importing NASim
-also requires the Tk system libraries. Those limitations bound reproducibility
-claims; they do not veto the maintainer-selected backend.
+<!-- readme-quickstart:output -->
+```json
+{"disposition":"succeeded","evidence_basis":"hermetic-live","inventory":"inventory.json","mode":"conformance","run_count":1}
+```
 
-## One distribution, optional simulator extras
+It creates exactly these files:
 
-RAES owns the *contracts* an adapter must honor; how this repository packages,
-locks, and releases its code is a local decision (RAES ADR-069 §5 as amended —
-see [RAESystem/rae#949](https://github.com/RAESystem/rae/issues/949) — and
-[ADR-003](docs/decisions/adrs/adr-003-single-distribution-and-trusted-publishing.md)).
-`raes-adapters` is one distribution: `raes_adapters.base` is always installed,
-and each simulator is an optional module (`raes_adapters.cyborg`, ...) whose
-heavy, mutually-incompatible dependencies live behind an extra. A single
-`uv.lock` covers the tree; a future simulator with a conflicting stack is
-isolated with uv's `conflicts` extras declaration, not a separate lockfile.
-
-## Shared adapter plumbing
-
-`raes_adapters.base` is available from the base installation and composes the
-published RAES APIs directly:
-
-- `build_runtime_target` constructs `raes_runtime.RuntimeTarget` from a
-  published manifest and component set, leaving all shape checks to RAES.
-- `apply_logical_clock_transition` dispatches a caller-selected transition
-  through `ReferenceTimeRuntime`; adapters must explicitly map native events and
-  supply exact coordinates.
-- `apply_seed_controls` applies an ordered list of published stochastic-control
-  bindings through driver-local callables and returns RAES diagnostics for
-  applied, unbound, unsupported, and failed controls. Application alone is not
-  a replay claim.
-- `execute_cleanup` admits a published cleanup plan, runs driver-local
-  operations in dependency order, and returns a validated
-  `TrialCleanupReceiptModel`. Operations are synchronous and remain responsible
-  for native timeout and verification mechanics.
-- `project_action`, `project_observation`, and `project_evaluation` provide
-  typed direction-specific callable seams. Observation and evaluation outputs
-  must pass a caller-supplied RAES validator; native failures never become
-  portable fallback values.
-- `redact_native_value` is default-deny and never renders arbitrary objects.
-  `bounded_context_label` admits only short, grammar-checked, intentionally safe
-  labels.
-- `run_conformance_probe` returns the exact `BackendConformanceReport` from the
-  published RAES target runner without adding profiles, fixtures, cases, or
-  claims.
-
-These helpers do not define simulator concepts, portable DTOs, schemas,
-backend protocols, diagnostic envelopes, stores, policy gates, or conformance
-authority.
-
-## Layout
-
+<!-- readme-quickstart:artifacts -->
 ```text
-raes-adapters/
-  pyproject.toml               # the raes-adapters distribution (build + deps + extras)
-  noxfile.py                   # canonical verification graph
-  src/raes_adapters/
-    base/                      # shared adapter plumbing (ADR-069 §4)
-    cyberbattlesim/            # immutable qualification + selected public protocol
-      scenario/                # authored RAES SDL scenario (portable topology/objective truth)
-      experiment/              # published experiment contracts (reward/evaluator/stochastic intent)
-      mapping/                 # pinned CyberBattleSim → RAES source ledger + loss disclosures
-    cyborg/                    # CybORG qualification, patch evidence, and future backend
-      mapping/                 # pinned CAGE-2 → RAES source ledger (REP-003)
-      profiles/                # conformance profile overrides
-    primaite/                  # immutable qualification + selected public protocol
-    nasim/                     # immutable NASim qualification + selected public protocol
-  tests/                       # pytest suite for the distribution
-  release-please-config.json   # Release Please: versioning + CHANGELOG from main
-  .github/workflows/           # CI + PR-title lint + Release Please publish
-  docs/decisions/adrs/         # repo-local ADRs (pinned)
+cage2-quickstart/index.json
+cage2-quickstart/inventory.json
+cage2-quickstart/runs/cyborg-pr-seed-3/conformance/backend-conformance.json
 ```
 
-## Program status
+The portable Scenario 2 input remains inside the installed `cage2-research`
+environment pack at `sdl/cage2-research.sdl.yaml`; the
+[checked-in example pack](https://github.com/OpenRAE/adapters/tree/dev/src/raes_adapters/cyborg/examples/cage2-research)
+is its reviewable source. `index.json` records the conformance run and its
+declared gaps, `backend-conformance.json` is the portable RAES conformance
+report, and `inventory.json` seals both files by relative path, size, and
+SHA-256 digest.
 
-This repository was stood up under **REP-002** (RAES issue #636). Shared
-plumbing and the CyberBattleSim backend are implemented; remaining simulator
-backends land issue by issue:
+This is a successful adapter conformance run, not a native CybORG episode. Its
+evidence basis is `hermetic-live`, every report states
+`native_conformance=false`, and the fixed seed `3` belongs to the conformance
+suite rather than a study design. The built-wheel gate executes this README
+contract before merge; after publication, the release workflow repeats it
+from the exact version on the public package index.
 
-| Requirement | Scope |
-|-------------|-------|
-| REP-001 (#635) | Design: RAES ADR-069 + `cage-2-replication-design.md` |
-| **REP-002 (#636)** | **This standup: distribution, CI, GC onboarding, strict Sonar** |
-| REP-003 | CAGE-2 RAES SDL scenario + pinned mapping ledger |
-| REP-004 | CybORG backend + `raes_adapters.base` implementation |
-| REP-005 | Replicated runs + tiered equivalence evidence |
+## What a green result means
 
-## CyberBattleSim qualification
+| Question | Evidence needed | What the quickstart establishes |
+| --- | --- | --- |
+| Is the scenario valid? | The environment pack, SDL, task, experiment, participant joins, and their digests validate against published contracts. | The conformance probes validate the packaged CAGE-2 source ledger and adapter fixtures. They do not execute the packaged native study task. |
+| Does the adapter conform? | A finite backend-conformance report records the exercised cases, execution basis, diagnostics, and capability gaps. | Yes, for the checked hermetic cases. It is not native-live conformance. |
+| Did a simulator run complete? | The native runtime was admitted, the requested episodes completed, cleanup was verified, portable artifacts validated, and the inventory was sealed last. | No. The quickstart never imports or executes CybORG. |
+| What research claim is supported? | A declared method joins source, scenario, participants, controls, observations, analysis, limitations, and retained evidence. | No study claim. `run_count: 1` is a conformance count, not an experimental result. |
 
-Issue [#25](https://github.com/OpenRAE/adapters/issues/25) selects the
-official Microsoft source at commit
-`854d6966607fb68645651f55b0f97221bd293e0d` and one public
-`CyberBattleChain-v0` protocol with the credential-cache baseline and basic
-defender. The shipped
-[protocol](src/raes_adapters/cyberbattlesim/public-protocol.md) fixes the exact
-scenario, participant, evaluator, seed obligations, metrics, and termination
-semantics. The separate
-[architecture guardrails](docs/decisions/cyberbattlesim-qualification-guardrails.md)
-explain why this evidence is not an adapter manifest or RAES conformance claim.
+## Run or adapt a simulator study
 
-Issue [#26](https://github.com/OpenRAE/adapters/issues/26) authors the
-portable evidence set for that case: an authored RAES SDL scenario
-(`scenario/cyberbattle-chain.sdl.yaml`) that validates and compiles against
-`raes==2.0.0`, companion published experiment contracts
-(`experiment/`) for the reward, evaluator, metric, episode/termination, and
-descriptive stochastic intent that RAES excludes from SDL, and a pinned
-[source → RAES mapping ledger](src/raes_adapters/cyberbattlesim/mapping/) whose
-rows are each `mapped`, `excluded`, or `loss-disclosed`, with every disclosed
-loss bound to the ADR-069 equivalence tier it weakens. Deterministic tests fail
-CI on source drift, a missing category, a duplicate row, an unresolvable target,
-a broken cross-artifact reference, an undisclosed loss, or leakage of a known
-native identifier or object representation (raw native arrays, reward vectors,
-and action ids are excluded structurally by the closed RAES models). The
-evidence set does not turn source identity into a claim of dependency
-installability, deterministic replay, or outcome equivalence;
-the [scenario/ledger guardrails](docs/decisions/cyberbattlesim-scenario-ledger-guardrails.md)
-fix its boundaries.
+Native CAGE-2 `validate`, smoke, and study requests currently fail closed
+before runtime planning. The packaged task requires semantic reward-component
+evidence, while the pinned RAES contract cannot yet verify the required
+artifact fields and negative data-quality states. The task is not weakened to
+make a demo pass, and the `cyborg` extra does not install the unpublished
+patched CybORG wheel.
 
-## CyberBattleSim backend
+The [full installed-command and reproduction recipe](https://raes-adapters.readthedocs.io/en/latest/researcher-command/)
+records the native source prerequisite, the complete command shapes, exit
+codes, evidence layout, and the frozen 3 trial-length × 3 Red-policy × 1,000
+episode public CAGE-2 protocol. Use it to review or prepare a study; a native
+run becomes admissible only when all declared evidence requirements validate.
 
-Issue [#27](https://github.com/OpenRAE/adapters/issues/27) implements a RAES
-runtime target for the admitted size-10 `CyberBattleChain-v0` profile:
+Study controls are authored artifacts, not free-form convenience flags:
 
-```python
-from raes_adapters.cyberbattlesim.backend import (
-    cyberbattlesim_backend_conformance_payload,
-    cyberbattlesim_declared_weaknesses,
-    cyberbattlesim_source_protocol_diagnostics,
-    run_cyberbattlesim_conformance,
-)
+- **Agent:** select a declared Red variant. A different Blue implementation
+  needs its own manifest, selection, configuration, source provenance, and a
+  resealed pack.
+- **Seed:** smoke and study seeds must be declared by the experiment. A seed
+  controls only the random streams the source and adapter can bind; it is not a
+  deterministic-replay guarantee.
+- **Trial length:** it must match a declared experiment condition. Changing it
+  changes the study design and requires updated authored artifacts and digests.
+- **Environment pack:** select a published pack identity and content digest.
+  Changing scenario or participant content creates a new pack version; it is
+  not an ambient path override.
 
-report = run_cyberbattlesim_conformance(seed=20260729)
-payload = cyberbattlesim_backend_conformance_payload(report)
-diagnostics = cyberbattlesim_source_protocol_diagnostics()
-weaknesses = cyberbattlesim_declared_weaknesses()
-```
+See the [researcher guide](https://raes-adapters.readthedocs.io/en/latest/researcher-guide/)
+for a task-first explanation of those controls and the evidence needed before
+interpreting a result.
 
-Target creation is dependency-light and does not import the simulator.
-Provisioning verifies the qualified simulator import-root identity and selected
-dependency wheel identities, complete installed import-root trees (including
-native libraries and unexpected files),
-critical-file digests, dependency versions, and module origins for the directly
-imported source, Gymnasium, and NumPy packages before importing and constructing
-the separately installed source. The locally built simulator wheel is admitted
-by its complete root because upstream publishes no reproducible wheel artifact;
-direct Gymnasium/NumPy wheel installs must also match the recorded archive hash.
-Editable/directory installations, symlinks, unqualified direct dependency
-artifacts, absence, or an identity mismatch become a bounded
-RAES diagnostic (and a source-backed conformance probe therefore fails rather
-than pretending to run). The
-reference processor compiles the checked-in scenario against the manifest, and
-the shared target then realizes the applicable provisioning, orchestration,
-participant, evaluation, observation, and cleanup surfaces.
+## Current adapters and evidence
 
-One admitted attacker action maps to at most one serialized native `env.step`.
-The selected scan-and-reimage defender runs source-internally during that step;
-it is not exposed as a second participant-admitted transition.
-Native observations, masks, credentials, action coordinates, `info`, reward
-vectors, and exceptions remain driver-private. Participant observations and
-typed action results carry only RAES references admitted by their disclosure
-boundary. Because the representative authored topology cannot identify the
-selected native action coordinate, requested targets remain intent and are not
-echoed as realized effect targets. Cumulative reward is evaluator-owned. Seed
-bindings report the Gym environment and action-space streams as applied and the
-Python/NumPy global streams as unbound. These controls improve run attestation
-and bound repeatability without claiming byte-identical replay of a stochastic
-experiment.
+This table is a reader index, not a second support registry. The linked
+qualification, pack, and conformance records remain authoritative.
 
-The [backend architecture guardrails](docs/decisions/cyberbattlesim-backend-guardrails.md)
-record the component ownership, failure hygiene, capability claims, and
-acceptance-test mapping.
+| Adapter/profile | Install and execution maturity | Current evidence status |
+| --- | --- | --- |
+| CybORG / CAGE-2 Scenario 2 | Adapter, example pack, and hermetic conformance are available. Native CybORG requires the separately installed pinned source plus an unpublished packaging-only fix. | Source qualified; pack status `built`; hermetic conformance with `native_conformance=false`; native researcher task evidence-gate blocked. |
+| NASim / tiny | The `nasim` extra installs the pinned simulator stack and the source-backed conformance boundary is available. | Qualified source and conformance evidence; the current packaged researcher task is evidence-gate blocked before native study execution. |
+| CyberBattleSim / chain | Adapter and reproduction tooling are implemented; native source is installed separately because upstream publishes no governed wheel. | Source/profile admitted, conformance evidence retained, and a bounded baseline reproduction record exists; the packaged researcher task is evidence-gate blocked. |
+| PrimAITE / data manipulation | Qualified backend module; no researcher CLI selection is exposed. Native in-process execution remains fail-closed. | Conformance uses an injected non-native driver and makes no native-conformance claim. |
 
-Issue [#30](https://github.com/OpenRAE/adapters/issues/30) adds the frozen
-[source-native/RAES baseline reproduction](docs/cyberbattlesim-baseline-reproduction.md).
-Its content-addressed bundle preserves all 20 scheduled terminal attempts,
-offline-recomputable aggregates, six separately cited tiers, and the known
-stochastic, topology, evaluator, metric, and packaging limitations for the
-OpenRAE/research#14 and #20 consumers.
+## Limitations
 
-Issue [#28](https://github.com/OpenRAE/adapters/issues/28) composes that
-runtime target with the published RAES conformance report and adapter-local
-source-protocol probes. The backend conformance result remains the exact
-`BackendConformanceReport` from RAES and is serialized only through the
-published report projector. The CyberBattleSim probes add RAES diagnostics,
-manifest-derived capability evidence links, source-ledger validation, and
-declared weakness references; they do not create another profile, fixture
-corpus, report schema, or research-validity claim. The
-[conformance-composition guardrails](docs/decisions/cyberbattlesim-conformance-guardrails.md)
-fix those boundaries.
+- **Simulator abstraction:** portable RAES records deliberately omit native
+  state, gym/PettingZoo tuples, action IDs, reward vectors, object
+  representations, raw logs, hidden truth, and full tracebacks. That protects
+  the portable boundary but cannot demonstrate native state equivalence.
+- **Stochasticity:** declared seeds do not bind every simulator, policy,
+  Python, NumPy, or Gym random stream. Repeated outcomes can vary, and a seed
+  is not deterministic replay.
+- **Source pins:** evidence applies to the qualified repository, commit, files,
+  patches, and package graph. A different source tree needs requalification.
+- **Unsupported facts:** missing participant artifacts, unverifiable evidence
+  witnesses, capability gaps, and source inconsistencies remain explicit
+  losses. Successful validation never upgrades an unsupported claim.
+- **Compute cost:** the full CAGE-2 reproduction schedules 9,000 episodes and
+  retains per-slot evidence. Estimate runtime and storage before starting it;
+  the quickstart is intentionally not that workload.
+- **Non-production scope:** these adapters are research and evaluation
+  apparatus. Conformance is not a security certification, operational defense
+  guarantee, or authorization to deploy an agent in production.
 
-## PrimAITE qualification
+## Citation and provenance
 
-Issue [#39](https://github.com/OpenRAE/adapters/issues/39) selects the ARCD
-PrimAITE source at tag `v4.0.0` (commit
-`98617981d7f6ae2c3ffd9a8cc39944e05c9a09ea`) and one public `data_manipulation`
-protocol driven through the source-native Gymnasium entrypoint
-`primaite.session.environment.PrimaiteGymEnv`. The shipped
-[protocol](src/raes_adapters/primaite/public-protocol.md) fixes the exact
-scenario, participants (BLUE `proxy-agent`, scripted RED, probabilistic GREEN),
-`Discrete(78)` action space, flattened `Box(1652,)` observation, seed
-obligations, metrics, and the fixed-horizon truncation semantics (`terminated`
-is always false; the episode truncates at `max_episode_length=128`).
+For a paper or evidence bundle, record the `raes-adapters` version, environment
+pack name/version/content digest, adapter qualification profile and source
+commit, participant artifact digests, experiment controls, and the retained
+`inventory.json`. Cite the repository release and the upstream simulator; do
+not cite a mutable branch as the executed identity. The CAGE-2
+[qualification record](https://github.com/OpenRAE/adapters/blob/dev/src/raes_adapters/cyborg/qualification.json)
+and pack
+[provenance ledger](https://github.com/OpenRAE/adapters/blob/dev/src/raes_adapters/cyborg/examples/cage2-research/docs/provenance-ledger.yaml)
+show the current source and artifact bindings.
 
-The [qualification record](src/raes_adapters/primaite/qualification.json) binds
-the source identity, the canonical import-root digest (which matches the built
-wheel exactly), the MIT/Crown-copyright legal disposition, the clean-install and
-bounded do-nothing smoke, the resolved dependency graph and its permissive
-license summary, and the maintainer admission with graded claim strength. It
-also records the source's honest limitations: no index/release wheel, an
-undeclared `pkg_resources`/setuptools runtime dependency (the qualified route
-pins `setuptools==75.6.0`), a public seed seam that raises without the `rl`/torch
-stack, a `requires-python` vs classifier inconsistency, and an unpinned upstream
-dependency graph. The
-[qualification guardrails](docs/decisions/primaite-qualification-guardrails.md)
-explain why this evidence is not an adapter manifest or RAES conformance claim.
+## Troubleshooting
 
-## PrimAITE backend conformance
+- **Package version cannot be found:** use Python 3.12 and confirm that a
+  release exists on the configured public package index. Do not substitute an
+  editable checkout when claiming a published-distribution reproduction.
+- **Output unavailable:** choose a new relative output directory. Existing,
+  absolute, traversing, or symlink-escaping paths are rejected.
+- **Evidence unverifiable (exit 3):** this is the current fail-closed native
+  study boundary, not an installation failure. Review the researcher command
+  and task evidence requirements; do not remove them.
+- **Native source unavailable:** the `cyborg` extra validates the pack but does
+  not download CybORG. Follow the pinned source qualification before attempting
+  native execution.
+- **Unexpected internal failure (exit 70):** retain the bounded error code,
+  package version, command shape, and inventory if present. Do not publish
+  native logs or environment dumps in an issue.
 
-Issue [#42](https://github.com/OpenRAE/adapters/issues/42) composes the PrimAITE
-runtime target with the published RAES conformance report and adapter-local
-source-protocol and leakage probes. Three claims stay distinct: backend
-conformance is the exact `BackendConformanceReport` from RAES, serialized only
-through the published report projector; source-protocol reproduction is
-adapter-local executable evidence (source/ledger identity, reset and stochastic
-dispositions, action representability, withheld observation and reward, terminal
-semantics, and verified cleanup) emitted as RAES diagnostics; and the
-research/readiness claim is bounded by the declared weakness and loss references.
+More diagnosis and all stable exit codes are in the
+[researcher command reference](https://raes-adapters.readthedocs.io/en/latest/researcher-command/#exit-status).
 
-PrimAITE is deliberately **fail-closed**. The live `PrimaiteDriver` verifies
-source identity and then refuses in-process construction (the qualified runtime is
-CPython 3.11 and PrimAITE writes platform directories on import), so an injected
-driver proves portable mechanics but never certifies a live-native capability. The
-canonical report keeps its single published no-witness `realization-envelope-v1`
-case, `native_conformance` stays false, capability evidence is empty, and every
-affirmative manifest capability is disclosed as an open gap rather than certified.
+## Developing an adapter
 
-```python
-from raes_adapters.primaite.backend import run_primaite_pr_conformance
-
-# `driver` is a deterministic PrimaiteDriverProtocol implementation for the PR
-# lane. The live PrimaiteDriver is non-runnable in-process, so the bundle always
-# keeps native_conformance=false and discloses capability gaps as non-claims.
-bundle = run_primaite_pr_conformance(driver=deterministic_injected_driver)
-# bundle: backend_conformance (published payload), source_diagnostics,
-# capability_evidence ({}), capability_gaps (disclosed non-claims),
-# declared_weaknesses.
-```
-
-The deterministic PR lane uses a fully constructed `RuntimeTarget` with an
-explicit injected driver and never imports the simulator; the clean-install proof
-composes the same bundle from the built `primaite`-extra wheel. The
-hostile-failure and portable-output-leakage probes over the four surfaces
-(provisioner, orchestrator, participant runtime, evaluator) plus cleanup live in
-the deterministic PR test suite (`tests/test_primaite_conformance.py`). PrimAITE
-exposes no RAES time surface, so clock control reports a validated unsupported
-disposition rather than an affirmative time claim. Native readiness remains
-blocked pending a reviewed worker/process isolation boundary and CPython 3.12
-qualification evidence. The
-[conformance-composition guardrails](docs/decisions/primaite-conformance-guardrails.md)
-fix those boundaries.
-
-## CybORG/CAGE-2 runtime qualification
-
-Issue [#12](https://github.com/OpenRAE/adapters/issues/12) selects the
-official CAGE Challenge 2 repository at commit
-`26ce1c1253fa9e2e73f25e6a7f2da32860c11257`, including its bundled CybORG 2.1,
-Scenario2, evaluator, wrappers, and baseline agents as one source closure. The
-[qualification record](src/raes_adapters/cyborg/qualification.json) binds the
-source and file digests, dependency resolution, legal decisions, known defects,
-and sanitized red/blue/green smoke result. The accompanying
-[packaging patch](src/raes_adapters/cyborg/cage2-wheel-package-data.patch) is
-qualification evidence only; it is not silently applied or published.
-
-Issue [#15](https://github.com/OpenRAE/adapters/issues/15) supplies the
-provisioning path for that backend. `create_cyborg_target()` accepts
-admitted RAES provisioning plans and deterministically generates the native
-CybORG scenario: RAES switches become subnets, VM multiplicity becomes hosts,
-infrastructure links become subnet membership, and supported OS families select
-digest-verified CybORG images. The portable compiled plan entries and
-configuration-bound realization-envelope identity remain in the RAES snapshot;
-native CybORG objects stay private. Unsupported or lossy node facts fail before
-construction.
-
-Issue [#16](https://github.com/OpenRAE/adapters/issues/16) adds aggregate
-logical-turn execution. A validated blue action is translated by exact contract
-address and drives one source-native turn; the resulting blue, green, and red
-occurrences are recorded in declared source order with shared-state, joint-action,
-and logical-time joins. B-line, Meander, and Sleep red selections and 30/50/100
-step limits are admitted through published RAES control contracts. Invalid input
-has no native effect, unprojectable post-step output quarantines the session, and
-the portable surfaces exclude native action identifiers, reward data, raw logs,
-hidden state, and native object representations. Participant-relative
-observations and evaluator-owned reward projections use published RAES
-contracts and retain their source-ledger losses.
-
-The separate
-[architecture guardrails](docs/decisions/cyborg-cage2-runtime-qualification-guardrails.md)
-define the qualification boundary: source installation and known losses limit
-strong replay/equivalence claims, but do not veto adapter construction or
-permission to retain an honest partial reproducibility record.
-
-## CybORG conformance and disclosure
-
-Issue [#19](https://github.com/OpenRAE/adapters/issues/19) provides the
-machine-readable CybORG conformance surface. It loads the live manifest through
-the published registry, validates `backend-manifest-v2`, selects RAES's
-`full-remote-control-plane` profile and canonical fixtures, and preserves the
-exact `BackendConformanceReport` and projector. Adapter-local source-ledger,
-pin, seed/clock, lifecycle, action/observation, reward/evaluation, cleanup, and
-portable-output probes use RAES diagnostics and evidence references; they do
-not append cases or invent a second aggregate pass result.
-
-```bash
-# Offline PR/hermetic evidence, fixed seed 3
-uv run --frozen python -m raes_adapters.cyborg.conformance \
-  --suite pr --output-dir artifacts/cyborg-conformance
-
-# Broader scheduled evidence, fixed ordered seeds 3 and 153
-uv run --frozen python -m raes_adapters.cyborg.conformance \
-  --suite full --output-dir artifacts/cyborg-conformance
-```
-
-RAES 2.0.0's published realization-envelope witness algebra cannot construct
-the required VM-to-network list binding. The canonical runner therefore emits
-its own bounded `unsupported` no-witness case while all applicable fixtures and
-adapter-local probes pass; the adapter does not rewrite that case. Both suites
-remain `hermetic-live` with `native_conformance=false`. The existing qualified
-source reproducer supplies the separate native readiness evidence. Seed 153
-does not erase `loss-evaluation-seed-unbound`, and neither suite claims
-deterministic replay or scientific equivalence. See the
-[conformance guardrails](docs/decisions/cyborg-conformance-guardrails.md).
-
-## NASim qualification
-
-Issue [#32](https://github.com/OpenRAE/adapters/issues/32) selects Jonathon
-Schwartz's official
-[NASim](https://github.com/Jjschwartz/NetworkAttackSimulator) source at tag
-`v0.12.0` (commit `7c732bc4620d20a25b221a782adee29c2a89d800`, published as
-`nasim==0.12.0`) and one public protocol: the `tiny` static benchmark run under
-the supplied `bruteforce_agent` baseline. The shipped
-[protocol](src/raes_adapters/nasim/public-protocol.md) fixes the exact scenario,
-baseline, seed obligation, metrics, and Gymnasium `terminated`/`truncated`
-semantics; the [qualification record](src/raes_adapters/nasim/qualification.json)
-pins source, wheel, and import-root identities, the qualified dependency
-resolution, and the attainable claim strength. The
-[architecture guardrails](docs/decisions/nasim-qualification-guardrails.md)
-explain why this evidence is not an adapter manifest or RAES conformance claim.
-
-The record discloses four upstream findings that bound the claims: the supplied
-agents pass a NumPy integer action index that NASim's own `FlatActionSpace`
-rejects on gymnasium >= 0.27 (so the qualified runtime pins gymnasium 0.26.3);
-action success is drawn from the global NumPy RNG, so `make_benchmark`/`reset`
-seeds do not bind a run; the static-benchmark seed argument is ignored; and
-importing NASim requires the Tk system libraries. Source identity and protocol
-configuration are attested; execution controls are partial and outcome
-reproduction is stochastic-bounded, with no adapter, manifest, or
-outcome-equivalence claim delivered by qualification.
-
-## NASim backend conformance
-
-Issue [#35](https://github.com/OpenRAE/adapters/issues/35) composes the NASim
-runtime target with the published RAES conformance report and adapter-local
-source-protocol probes. Three claims stay distinct: backend conformance is the
-exact `BackendConformanceReport` from RAES, serialized only through the published
-report projector; source-protocol reproduction is adapter-local executable
-evidence (source/ledger identity, reset and stochastic dispositions, action and
-observation projection, evaluator facts, independent terminal facts, and verified
-cleanup) emitted as RAES diagnostics; and the research/readiness claim is bounded
-by the declared weakness and loss references. The NASim probes add
-manifest-derived capability-evidence links that fail closed when an affirmative
-surface has no passing evidence; they do not create another profile, fixture
-corpus, report schema, or research-validity claim.
-
-```python
-from raes_adapters.nasim.backend import run_nasim_pr_conformance
-
-# `driver` is any deterministic NasimDriverProtocol implementation for the PR
-# lane, or a real NasimDriver for the manual-live lane — the caller selects it.
-bundle = run_nasim_pr_conformance(driver=deterministic_injected_driver)
-# bundle: backend_conformance (published payload, which drives the four surfaces
-# on the published fixtures), source_diagnostics, capability_evidence,
-# declared_weaknesses.
-```
-
-The deterministic PR lane uses a fully constructed `RuntimeTarget` with an
-explicit injected driver and never imports the simulator; the clean-install
-proof composes the same evidence bundle from the built `nasim`-extra wheel, and
-the manual-live lane runs the identical composition against a real `NasimDriver`
-on the qualified runtime. The hostile-failure and portable-output-leakage probes
-over the four surfaces are injected-driver constructs — a real `NasimDriver`
-cannot be made to raise on a chosen surface — so they live in the deterministic
-PR test suite (`tests/test_nasim_conformance.py`), which leak-tests each
-surface's success and failure paths. NASim exposes no RAES time surface, so clock
-control reports a validated
-unsupported disposition rather than an affirmative time claim. The
-[conformance-composition guardrails](docs/decisions/nasim-conformance-guardrails.md)
-fix those boundaries.
-
-## Development
-
-Requires [`uv`](https://docs.astral.sh/uv/). Repo-wide gates run through nox:
-
-```bash
-# full verification graph (hygiene, policy, lint, typecheck, tests, build)
-uv tool run --from 'nox[uv]==2026.4.10' nox -s verify
-
-# just the tests (base plus all extras)
-uv tool run --from 'nox[uv]==2026.4.10' nox -s tests
-```
-
-Activate the git hooks on every fresh clone (hooks are not versioned):
-
-```bash
-uv run --project . pre-commit install --install-hooks
-```
-
-## Releases
-
-`raes-adapters` uses [Release Please](https://github.com/googleapis/release-please):
-each push to `main` maintains a release PR that bumps the version and updates
-`CHANGELOG.md` from Conventional Commit history. Merging it tags the release and
-publishes the wheel and sdist to PyPI over OIDC Trusted Publishing (no stored
-token), then opens a `main`→`dev` back-merge PR. Do not hand-edit `CHANGELOG.md`;
-carry the release note in the Conventional Commit PR title.
-
-## Cross-repo workflow
-
-Work here is issue-driven from RAES (ADR-069 §8). Adapter PRs reference the RAES
-issue, `REP-001`, ADR-069, the design record, the source-ledger id, conformance
-profile id, and seed suite. Cross-repo status is read from linked issues, PRs,
-conformance reports, and evidence artifacts — not from comments or docs.
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+Build, CI, repository layout, packaging, release, governance, and contributor
+mechanics are intentionally outside this researcher path. Start with the
+[developer index](https://raes-adapters.readthedocs.io/en/latest/maintainers/)
+and [CONTRIBUTING](https://github.com/OpenRAE/adapters/blob/dev/CONTRIBUTING.md).
+RAES owns the semantic contracts; backend concepts remain inside their adapter
+module, and `raes_adapters.base` remains plumbing rather than authority.
