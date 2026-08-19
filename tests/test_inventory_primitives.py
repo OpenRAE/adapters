@@ -6,6 +6,8 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
+
 from raes_adapters import cli
 from raes_adapters._inventory import inventory_document, inventory_entry
 from raes_adapters.cyborg import reproduction
@@ -95,3 +97,42 @@ def test_private_primitives_have_no_simulator_or_contract_authority(tmp_path: Pa
     assert "cyborg" not in source.casefold()
     assert "nasim" not in source.casefold()
     assert "cyberbattlesim" not in source.casefold()
+
+
+@pytest.mark.parametrize("member_kind", ["directory", "symlink"])
+def test_inventory_entry_rejects_non_regular_members(
+    tmp_path: Path,
+    member_kind: str,
+) -> None:
+    member = tmp_path / "member"
+    if member_kind == "directory":
+        member.mkdir()
+    else:
+        target = tmp_path / "target"
+        target.write_bytes(b"target")
+        member.symlink_to(target)
+
+    with pytest.raises(ValueError, match="inventory member is not a regular file"):
+        inventory_entry(tmp_path, member)
+
+
+def test_inventory_entry_rejects_member_outside_root(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "outside"
+    outside.write_bytes(b"outside")
+
+    with pytest.raises(ValueError, match="inventory member escapes its root"):
+        inventory_entry(root, outside)
+
+
+def test_inventory_entry_rejects_lexically_unrelated_member(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    member = target / "member"
+    member.write_bytes(b"member")
+    root_alias = tmp_path / "root-alias"
+    root_alias.symlink_to(target, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="inventory member escapes its root"):
+        inventory_entry(root_alias, member)
