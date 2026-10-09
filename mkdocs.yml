@@ -75,6 +75,7 @@ nav:
       - CyberBattleSim environment-pack and researcher-command guardrails: decisions/cyberbattlesim-researcher-command-guardrails.md
       - CyberBattleSim baseline-reproduction guardrails: decisions/cyberbattlesim-baseline-reproduction-guardrails.md
       - CyberBattleSim chain native-readiness record: decisions/cyberbattlesim-native-readiness-record.md
+      - CyberBattleSim evidence-capture inventory and fixture design: decisions/cyberbattlesim-evidence-capture-inventory.md
       - ADR 003 — Single distribution and Trusted Publishing: decisions/adrs/adr-003-single-distribution-and-trusted-publishing.md
       - ADR 002 — RAES authority and adapter boundaries: decisions/adrs/adr-002-raes-authority-and-adapter-boundaries.md
       - ADR 000 — Use ADRs (superseded): decisions/adrs/adr-000-use-adrs.md
