@@ -68,7 +68,7 @@ remain source-private" ([task YAML L5–10][a-task-description];
 
 | Datum (needed by) | Native source at `7c732bc` | Class | Ledger basis |
 | --- | --- | --- | --- |
-| D1 portable action kind and target host per step (R1, T1) | `Action` subclass and `target` ([`action.py` L79–138][n-action]); the flat index resolves through `FlatActionSpace.get_action` ([L685–701][n-get-action]) in `generative_step` ([`environment.py` L217–218][n-get-action-call]) | available | [row 8][a-ledger-8] `actions-portable`, mapped to `sdl:action_contracts` |
+| D1 portable action kind and target host per step (R1, T1) | `Action` subclass and `target` ([`action.py` L79–138][n-action]); the flat index resolves through `FlatActionSpace.get_action` ([L685–701][n-get-action]) in `generative_step` ([`environment.py` L217–218][n-get-action-call]) | available | [row 8][a-ledger-8] `actions-portable`, mapped to `sdl:action_contracts`, and [row 1][a-ledger-1] `topology-hosts`, mapped to `sdl:nodes`; the native coordinates stay private (`native_action_coordinates: driver-private`, [`manifest.py` L91][a-manifest-coordinates]), and a target is echoed as a realized effect target only with a verified source join (`native_target_attribution`, [L102–105][a-manifest-target-attribution]; [`nasim-backend-guardrails.md` L181–183][a-backend-target-join]) |
 | D2 flat action index and native action class | `env.step(action)` ([`environment.py` L143–189][n-step]); `tiny` has 18 flat actions | withheld | [row 9][a-ledger-9] `actions-native-flat-index`, excluded |
 | D3 success and failure kind per step (R1) | `ActionResult` `success`, `connection_error`, `permission_error`, `undefined_error` ([`action.py` L578–629][n-action-result]), set by `Network.perform_action` ([`network.py` L36–97][n-perform]) and `HostVector.perform_action` ([`host_vector.py` L211–295][n-host-perform]); `env.step` returns them in `info` ([`environment.py` L228][n-info-return]; [`action.py` L631–651][n-info]) and in the observation's auxiliary row ([`state.py` L141][n-obs-aux-call]; [`observation.py` L92–100][n-obs-aux]) | withheld | four authored statements withhold `info` and exempt none of its flags: the participant boundary's `native-info` ([`participant_runtime.py` L36][a-redacted-info]), the participant constraint `native_observation` ([`manifest.py` L97–101][a-manifest-native-observation]), and the evaluator's `loss_disclosure` ([`evaluator.py` L47–50][a-evaluator-loss]) and `capture_notes` ([L60][a-evaluator-notes]); [row 11][a-ledger-11] excludes the observation vector |
 | D4 discovery maps in `info` (`services`, `os`, `processes`, `access`, `discovered`, `newly_discovered`) | `ActionResult.info()` ([`action.py` L631–651][n-info]) | withheld | the participant boundary redacts `native-info` ([`participant_runtime.py` L28–38][a-redacted-fields]); [row 6][a-ledger-6] excludes host access state |
@@ -105,10 +105,13 @@ resolved:
   [L279–284][n-host-value-privesc]). D3 is withheld too, so that route meets
   the R1 tension.
 
-The remaining ledger rows and both loss disclosures,
+Of the ledger rows not cited above, [row 19][a-ledger-19] and
+[row 22][a-ledger-22] carry the two loss disclosures,
 [`loss-unbound-action-rng`][a-loss-rng] and
-[`loss-apparatus-reconstruction`][a-loss-apparatus], bound replay and
-reconstruction claims; none of them supplies per-step capture.
+[`loss-apparatus-reconstruction`][a-loss-apparatus], which bound replay and
+reconstruction claims. The others map static topology, vulnerability, identity,
+participant, observation-boundary, firewall, evaluator, stochastic-control, and
+provenance facts. None of them supplies per-step capture.
 
 ## 3. The capture chain today
 
@@ -125,7 +128,28 @@ live run recorded on [#36][a-issue-36-run] observed exactly that. No episode
 artifact is produced on `dev`; conformance mode, which runs no native attacker
 episode, is unaffected.
 
-**Code behind the gate.** The episode path ([`researcher.py` L356–399][a-episode])
+**Post-run task/run join.** A second fail-closed gate follows execution; it is
+reached only if the admission gate is bypassed. `_complete_native_run` writes
+the four episode files ([`cli.py` L1521–1539][a-cli-episode-files]) and then
+calls `validate_experiment_run_against_task` ([L1633][a-cli-run-join]) before
+it writes `run.json` ([L1634][a-cli-run-json]). Since [#90][a-pr-90]
+(`8db4fbd`), the evidence artifact ([L1541–1551][a-cli-artifact]) carries no
+`satisfies_refs` ([`tests/test_claim_integrity.py` L139][a-claim-satisfies]).
+RAES 3.3.0 matches an observation requirement only by artifact id or by
+`satisfies_refs` ([`experiment_run.py` L373–388][r-artifact-satisfies]), so the
+join rejects `attacker-action-log` and `host-compromise-series`
+([L419–427][r-observation-join]), and the command exits `6` with
+`researcher.artifact.failure` ([`cli.py` L1725–1730][a-cli-artifact-failure]).
+The claim guardrails design this layer: the seam "lets the canonical task/run
+validator reject the run"
+([`capability-and-evidence-claim-guardrails.md` L83–84][a-guardrails-seam]).
+In smoke and study mode, an admitted run therefore leaves only
+`evidence-records.json`, `derived-measures.json`, `diagnostics.json`, and
+`participant-provenance.json` under `runs/<run-id>-1/`, unsealed, with no
+`inventory.json` and no `failure.json`. It writes no `run.json`, no per-run
+`summary.json`, and no batch artifact.
+
+**Code behind the gates.** The episode path ([`researcher.py` L356–399][a-episode])
 would capture the following if a run were admitted:
 
 - The driver keeps running totals only: step count, cumulative reward, and the
@@ -141,24 +165,34 @@ would capture the following if a run were admitted:
   `evidence_refs` stay empty, because the researcher request sets no
   `observation_boundary_evidence_refs` ([L381–386][a-gym-evidence-refs];
   [`researcher.py` L238–261][a-request]). No CLI path writes these models.
-- The evaluator emits one capture spec with a single requirement,
+- The evaluator builds one capture spec with a single requirement,
   `nasim-evaluator-summary` ([`_experiment_evidence.py` L105–170][a-capture-spec];
-  [`nasim/backend/evaluator.py` L13–62][a-nasim-evaluator]). It also emits one
-  evidence record, whose `raw_content.payload_summary` is a sentence carrying
-  the step count, cumulative reward, both terminal flags, and the terminal cause
-  ([L226–233][a-payload-summary]), and one derived measure for
+  [`nasim/backend/evaluator.py` L13–62][a-nasim-evaluator]), but nothing writes
+  it: `capture_spec()` ([`_gym_backend/evaluator.py` L532–535][a-gym-capture-spec])
+  has no caller under `src/`. Only its projection-scoped ids reach each evidence
+  record, as `capture_spec_ref` `nasim-evaluator-capture.<sha256>` and
+  `capture_requirement_ref` `nasim-evaluator-summary.<sha256>`
+  ([`_experiment_evidence.py` L223–243][a-record-capture-refs]). The evaluator
+  also emits one evidence record, whose `raw_content.payload_summary` is a
+  sentence carrying the step count, cumulative reward, both terminal flags, and
+  the terminal cause ([L226–233][a-payload-summary]), and one derived measure for
   `cumulative_attacker_reward` ([L285–329][a-derived-measure]). The proposition
   truth result is always `unknown`, with `indeterminacy_reason`
   `lossy_evidence` ([`_gym_backend/evaluator.py` L402–439][a-truth]).
-- The CLI writes `evidence-records.json`, `derived-measures.json`,
-  `diagnostics.json`, `participant-provenance.json`, `run.json`, and
-  `summary.json` per run ([`cli.py` L1511–1551][a-cli-episode],
-  [L1607–1644][a-cli-run]). Per batch it writes `study.json` in study mode,
-  `provenance.json`, `machine-inventory.json`, `summary.json`, and finally
-  `inventory.json` ([L1647–1714][a-cli-batch]). `run.json` carries one result
-  summary, `cumulative_attacker_reward` ([`researcher.py` L174–211][a-archival];
-  [`_researcher_support.py` L453–462][a-run-summary]). The per-run writer also
-  has a path for supplemental JSON members: `_write_supplemental_artifacts`
+- The CLI writes the four episode files per run
+  ([`cli.py` L1511–1551][a-cli-episode]). Its writers for `run.json` and
+  `summary.json` per run ([L1607–1644][a-cli-run]) and, per batch, for
+  `study.json` in study mode, `provenance.json`, `machine-inventory.json`,
+  `summary.json`, and finally `inventory.json` ([L1647–1714][a-cli-batch]) exist
+  but are unreachable for this task, because the post-run join fails first. In
+  study mode, `study.json` also sits behind
+  `validate_experiment_study_against_tasks_and_runs` ([L1658][a-cli-study-join]),
+  which runs the same join again
+  ([`experiment_analysis.py` L414–423][r-study-join]). The run record built in
+  memory ([`researcher.py` L174–211][a-archival];
+  [`_researcher_support.py` L453–462][a-run-summary]) would carry one result
+  summary, `cumulative_attacker_reward`; it is never written. The per-run writer
+  also has a path for supplemental JSON members: `_write_supplemental_artifacts`
   writes each one, and `_verify_supplemental_binding` requires exactly one
   evidence record to bind it by SHA-256 ([`cli.py` L1540][a-cli-supplemental-call],
   [L1554–1567][a-cli-supplemental-write], [L1587–1604][a-cli-supplemental-verify]).
@@ -170,7 +204,7 @@ would capture the following if a run were admitted:
 | --- | --- | --- | --- | --- |
 | R1 | none | no `observation` capability: `compose_capability_set` never sets one ([`_manifest_support.py` L179–195][a-compose]); evaluator `supported_evidence_channels` is `{"api_response"}`, not `log` ([`manifest.py` L142][a-manifest-channels]) | none; per-step action results stay in memory | no per-step record of D1, D3, D5, or D7 |
 | R2 | `source-ledger:host-compromise-series` as the proposition's `evidence_requirement_refs` ([L75][a-plans-ref], passed through [`_researcher_support.py` L645–655][a-objective-plan]); `source-ledger.jsonl` has no row with that `source_id` | none for a `metric` channel | none; the proposition truth result is `unknown` | no per-step record of D8 or D9; the ref is a label, not a join |
-| T1 | none | none | step count inside `payload_summary`; `completed_steps` in `summary.json` | no derived measure and no per-step source |
+| T1 | none | none | step count inside `payload_summary` | no derived measure and no per-step source |
 | T2 | none | evaluator `supports_scoring` ([`manifest.py` L131–156][a-manifest-evaluator]) | `derived-measures.json` value; `payload_summary` | the measure cites the summary record, so it is not recomputable from per-step evidence |
 | T3 | none | none | `terminated` inside `payload_summary` | no derived measure |
 | T4 | none | evaluator constraint `objective_terminal_state` ([`manifest.py` L131–156][a-manifest-evaluator]) | terminal cause inside `payload_summary` | no derived measure |
@@ -188,8 +222,9 @@ and three support flags ([`capabilities.py` L144–157][r-observation]), and
 `ExperimentEvidenceSatisfactionReferenceModel` names a satisfied concept by
 reference only ([`experiment_manifest_references.py` L187–196][r-satisfies]).
 Neither can state which artifact field carries a requirement, or whether that
-field is missing, withheld, redacted, or lossy, so the gate fails closed as
-[the claim guardrails](capability-and-evidence-claim-guardrails.md) require.
+field is missing, withheld, redacted, or lossy, so the admission gate fails
+closed as [the claim guardrails](capability-and-evidence-claim-guardrails.md)
+require.
 [OpenRAE/rae#1239][r-pr-1239] ships in raes 4.1.0 and later; this repository
 still pins 3.3.0.
 
@@ -197,14 +232,14 @@ still pins 3.3.0.
 
 | Need | Today | Evidence |
 | --- | --- | --- |
-| Action | missing | No per-step action record is written. The packaged red configuration selects only `participant.action-contract.service-exploit` ([configuration L18–28][a-red-configuration]; [`researcher.py` L224–235][a-red-contract]) and sends no target, so the driver resolves the first flat `Exploit` on every step ([`driver.py` L393–416][a-driver-resolve]): index 4, on host (1, 0). The bruteforce baseline cycles all 18 indices ([`bruteforce_agent.py` L57–75][n-bruteforce]). A native probe of that resolution rule truncated at step 1000 with cumulative reward −1000 and the goal unreached (see "How this was checked"). A per-step log is what would expose that difference in a run. |
+| Action | missing | No per-step action record is written. The packaged red configuration selects only `participant.action-contract.service-exploit` ([configuration L18–28][a-red-configuration]; [`researcher.py` L224–235][a-red-contract]) and sends no target, so the driver resolves the first flat `Exploit` on every step ([`driver.py` L393–416][a-driver-resolve]): index 4, on host (1, 0). The bruteforce baseline cycles all 18 indices ([`bruteforce_agent.py` L57–75][n-bruteforce]), and the authored statements describe the attacker as that baseline: the SDL attacker is "cycling the flat action space" ([SDL L277][a-sdl-attacker]), ledger [row 16][a-ledger-16] maps the "exhaustive round-robin bruteforce baseline" and [row 17][a-ledger-17] the bruteforce run "that cycles the action space", and the task names the `run_bruteforce_agent` baseline ([task YAML L5–10][a-task-description], [L87–89][a-task-population]). This page records that contradiction for #87 and does not resolve it. A probe of that resolution rule with the pinned `nasim` 0.12.0 wheel truncated at step 1000 with cumulative reward −1000 and the goal unreached (see "How this was checked"). A per-step log is what would expose that difference in a run. |
 | Outcome | missing | D3 and D5 are withheld (section 2) and not captured; the action status records only that the source processed the step. |
 | Observation | missing | Envelopes withhold every native field and are not written ([`_gym_backend/participant_runtime.py` L388–465][a-gym-observation]). |
 | Availability | not required | Neither the SDL nor the task declares an availability series or measure for `tiny`. |
 | Termination or cutoff cause | partly present | Final flags and cause appear only in `payload_summary` text; there are no per-step flags and no derived measure. |
-| RNG and stochastic control | partly present | With a seed, the driver binds the global NumPy stream and the gym reset seed ([`driver.py` L254–265][a-driver-reset]) and the runtime emits one `nasim.seed.applied` diagnostic per stream into `diagnostics.json` ([`_gym_backend/participant_runtime.py` L199–228][a-gym-seed-diagnostics]). `run.json` records one control, `nasim-gym-reset-seed` ([`researcher.py` L205][a-seed-control-id]; [`_researcher_support.py` L183–186][a-seed-controls]), which is neither of the spec's two control ids. The action-success draws ([`network.py` L87][n-rng]) are not emitted by the source. |
+| RNG and stochastic control | partly present | With a seed, the driver binds the global NumPy stream and the gym reset seed ([`driver.py` L254–265][a-driver-reset]) and the runtime emits one `nasim.seed.applied` diagnostic per stream into `diagnostics.json` ([`_gym_backend/participant_runtime.py` L199–228][a-gym-seed-diagnostics]). The diagnostics do not name the stream, so neither spec control id that the driver's reset report carries ([`driver.py` L270–275][a-driver-streams]) is recorded in any artifact. The run record would carry one control, `nasim-gym-reset-seed` ([`researcher.py` L205][a-seed-control-id]; [`_researcher_support.py` L183–186][a-seed-controls]), which is neither of the spec's two control ids; it is built but never written for this task. The action-success draws ([`network.py` L87][n-rng]) are not emitted by the source. |
 | Evaluator | partly present | Method `nasim-cumulative-reward` covers T2 only; T1, T3, and T4 have no derived measure. |
-| Lineage | partly present | Run-level lineage is present: task ref, scenario digest, apparatus context, participant provenance, and the protocol ref at the source commit ([`_researcher_support.py` L413–463][a-run-lineage]; [`_experiment_evidence.py` L254–281][a-record-lineage]). Per-step lineage from an action instance to its driver operation exists only in memory ([`_gym_backend/participant_runtime.py` L467–470][a-gym-operation-ref]). |
+| Lineage | partly present | The evidence records that an admitted run writes carry the run ref, the task ref, the protocol ref at the source commit, and the qualification provenance ref ([`_experiment_evidence.py` L244–281][a-record-lineage]), and `participant-provenance.json` carries participant provenance. The run record's scenario digest, apparatus context, stochastic controls, and result summary ([`_researcher_support.py` L413–463][a-run-lineage]) are built but never written for this task. Per-step lineage from an action instance to its driver operation exists only in memory ([`_gym_backend/participant_runtime.py` L467–470][a-gym-operation-ref]). |
 
 ## 5. Regression-fixture design (spec only)
 
@@ -243,7 +278,7 @@ on missing or falsely claimed data. Each chain reads requirement → native sour
 
 ## How this was checked
 
-- Adapter files were read at `0272949`. The two cited RAES files were read at
+- Adapter files were read at `0272949`. The four cited RAES files were read at
   tag `v3.3.0` ([`fb8a23a`][r-commit]) and matched the same files in the
   `raes-3.3.0` wheel from PyPI.
 - `nasim-0.12.0-py3-none-any.whl` from PyPI matched the wheel SHA-256 in
@@ -251,11 +286,24 @@ on missing or falsely claimed data. Each chain reads requirement → native sour
   `nasim/` matched their recorded digests in the wheel, and the cited
   `state.py`, `observation.py`, `host_vector.py`, `environment.py`,
   `network.py`, and `action.py` matched the blobs at `7c732bc`.
-- The probe in section 4 ran on CPython 3.12 with `gymnasium==0.26.3` and
-  `numpy==1.26.4`: `nasim.make_benchmark("tiny", fully_obs=True,
-  flat_actions=True, flat_obs=True)`, `numpy.random.seed(20260802)`,
-  `env.reset(seed=20260802)`, then `env.step(4)` until `terminated` or
-  `truncated`.
+- The post-run join in section 3 was exercised against the adapter code at
+  `0272949` through the test suite's native-source seams and a
+  `FakeNasimDriver`, with `_task_capture_admission_gaps` bypassed:
+  `run --mode smoke` and `run --mode study` both exited `6` and left only the
+  four episode files. With
+  the run join made a no-op, smoke exited `0` and study still exited `6` at the
+  study join; with the pre-#90 `satisfies_refs` restored, both exited `0`. No
+  file written in any of these runs contains either spec control id.
+- The probe in section 4 ran on macOS arm64 with CPython 3.12.13,
+  `nasim==0.12.0`, `gymnasium==0.26.3`, and `numpy==1.26.4`:
+  `nasim.make_benchmark("tiny", fully_obs=True, flat_actions=True,
+  flat_obs=True)`, `numpy.random.seed(20260802)`, `env.reset(seed=20260802)`,
+  then `env.step(4)` until `terminated` or `truncated`. That host is not native
+  in the section 5 sense: its NumPy wheel does not match `qualification.json`,
+  so the adapter reports `native_available` false there. The outcome does not
+  depend on the platform: every step costs 1, and index 4 grants only user
+  access on a host that is not sensitive, so root is never taken and no value
+  is gained ([`tiny.yaml` L21–47][n-tiny-values]).
 
 [a-commit]: https://github.com/OpenRAE/adapters/tree/0272949fa964920a7e06fb56f6d7051054756b5b
 [a-pyproject-raes]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/pyproject.toml#L36
@@ -264,6 +312,7 @@ on missing or falsely claimed data. Each chain reads requirement → native sour
 [a-sdl-r1]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/scenario/nasim-tiny.sdl.yaml#L296-L306
 [a-sdl-r2]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/scenario/nasim-tiny.sdl.yaml#L307-L317
 [a-sdl-r1-outcomes]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/scenario/nasim-tiny.sdl.yaml#L297
+[a-sdl-attacker]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/scenario/nasim-tiny.sdl.yaml#L277
 [a-sdl-failures-exploit]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/scenario/nasim-tiny.sdl.yaml#L170-L172
 [a-sdl-failures-privesc]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/scenario/nasim-tiny.sdl.yaml#L189-L191
 [a-sdl-failures-service]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/scenario/nasim-tiny.sdl.yaml#L208-L209
@@ -272,6 +321,7 @@ on missing or falsely claimed data. Each chain reads requirement → native sour
 [a-pack-sdl-r1]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/examples/nasim-tiny/sdl/nasim-tiny.sdl.yaml#L296-L306
 [a-pack-sdl-r2]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/examples/nasim-tiny/sdl/nasim-tiny.sdl.yaml#L307-L317
 [a-task-description]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/experiment/nasim-tiny.task.exp.yaml#L5-L10
+[a-task-population]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/experiment/nasim-tiny.task.exp.yaml#L87-L89
 [a-task-t1]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/experiment/nasim-tiny.task.exp.yaml#L35-L37
 [a-task-t2]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/experiment/nasim-tiny.task.exp.yaml#L49-L51
 [a-task-t3]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/experiment/nasim-tiny.task.exp.yaml#L62-L64
@@ -293,6 +343,8 @@ on missing or falsely claimed data. Each chain reads requirement → native sour
 [a-manifest]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/backend/manifest.py#L210-L233
 [a-manifest-participant]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/backend/manifest.py#L97-L105
 [a-manifest-native-observation]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/backend/manifest.py#L97-L101
+[a-manifest-coordinates]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/backend/manifest.py#L91
+[a-manifest-target-attribution]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/backend/manifest.py#L102-L105
 [a-manifest-evaluator]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/backend/manifest.py#L131-L156
 [a-manifest-channels]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/backend/manifest.py#L142
 [a-gate]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/cli.py#L1225-L1253
@@ -300,10 +352,19 @@ on missing or falsely claimed data. Each chain reads requirement → native sour
 [a-cli-episode]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/cli.py#L1511-L1551
 [a-cli-run]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/cli.py#L1607-L1644
 [a-cli-batch]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/cli.py#L1647-L1714
+[a-cli-episode-files]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/cli.py#L1521-L1539
+[a-cli-artifact]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/cli.py#L1541-L1551
+[a-cli-run-join]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/cli.py#L1633
+[a-cli-run-json]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/cli.py#L1634
+[a-cli-study-join]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/cli.py#L1658
+[a-cli-artifact-failure]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/cli.py#L1725-L1730
 [a-cli-supplemental-call]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/cli.py#L1540
 [a-cli-supplemental-write]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/cli.py#L1554-L1567
 [a-cli-supplemental-verify]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/cli.py#L1587-L1604
 [a-doc-fail-closed]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/docs/nasim-researcher-command.md?plain=1#L46-L52
+[a-pr-90]: https://github.com/OpenRAE/adapters/pull/90
+[a-guardrails-seam]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/docs/decisions/capability-and-evidence-claim-guardrails.md?plain=1#L83-L84
+[a-backend-target-join]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/docs/decisions/nasim-backend-guardrails.md?plain=1#L181-L183
 [a-issue-36-run]: https://github.com/OpenRAE/adapters/issues/36#issuecomment-6075415717
 [a-episode]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/researcher.py#L356-L399
 [a-red-contract]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/researcher.py#L224-L235
@@ -314,6 +375,7 @@ on missing or falsely claimed data. Each chain reads requirement → native sour
 [a-red-configuration]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/examples/nasim-tiny/participant/nasim-red-bruteforce.configuration.json#L18-L28
 [a-driver-step-type]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/backend/driver.py#L124-L141
 [a-driver-reset]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/backend/driver.py#L254-L265
+[a-driver-streams]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/backend/driver.py#L270-L275
 [a-driver-step]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/backend/driver.py#L322-L338
 [a-driver-resolve]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/backend/driver.py#L393-L416
 [a-redacted-fields]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/backend/participant_runtime.py#L28-L38
@@ -325,9 +387,11 @@ on missing or falsely claimed data. Each chain reads requirement → native sour
 [a-gym-observation]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/_gym_backend/participant_runtime.py#L388-L465
 [a-gym-operation-ref]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/_gym_backend/participant_runtime.py#L467-L470
 [a-truth]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/_gym_backend/evaluator.py#L402-L439
+[a-gym-capture-spec]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/_gym_backend/evaluator.py#L532-L535
 [a-capture-spec]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/_experiment_evidence.py#L105-L170
+[a-record-capture-refs]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/_experiment_evidence.py#L223-L243
 [a-payload-summary]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/_experiment_evidence.py#L226-L233
-[a-record-lineage]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/_experiment_evidence.py#L254-L281
+[a-record-lineage]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/_experiment_evidence.py#L244-L281
 [a-derived-measure]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/_experiment_evidence.py#L285-L329
 [a-nasim-evaluator]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/backend/evaluator.py#L13-L62
 [a-evaluator-loss]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/backend/evaluator.py#L47-L50
@@ -338,8 +402,10 @@ on missing or falsely claimed data. Each chain reads requirement → native sour
 [a-run-summary]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/_researcher_support.py#L453-L462
 [a-fake-driver]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/tests/test_nasim_researcher_cli.py#L161-L232
 [a-claim-test]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/tests/test_claim_integrity.py#L143-L154
+[a-claim-satisfies]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/tests/test_claim_integrity.py#L139
 [a-mapping-readme]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/mapping/README.md
 [a-ledger]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/mapping/source-ledger.jsonl
+[a-ledger-1]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/mapping/source-ledger.jsonl#L1
 [a-ledger-6]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/mapping/source-ledger.jsonl#L6
 [a-ledger-8]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/mapping/source-ledger.jsonl#L8
 [a-ledger-9]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/mapping/source-ledger.jsonl#L9
@@ -347,7 +413,10 @@ on missing or falsely claimed data. Each chain reads requirement → native sour
 [a-ledger-13]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/mapping/source-ledger.jsonl#L13
 [a-ledger-14]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/mapping/source-ledger.jsonl#L14
 [a-ledger-15]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/mapping/source-ledger.jsonl#L15
+[a-ledger-16]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/mapping/source-ledger.jsonl#L16
 [a-ledger-17]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/mapping/source-ledger.jsonl#L17
+[a-ledger-19]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/mapping/source-ledger.jsonl#L19
+[a-ledger-22]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/mapping/source-ledger.jsonl#L22
 [a-losses]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/mapping/loss-disclosures.md
 [a-loss-rng]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/mapping/loss-disclosures.md?plain=1#L22-L34
 [a-loss-apparatus]: https://github.com/OpenRAE/adapters/blob/0272949fa964920a7e06fb56f6d7051054756b5b/src/raes_adapters/nasim/mapping/loss-disclosures.md?plain=1#L36-L51
@@ -384,3 +453,6 @@ on missing or falsely claimed data. Each chain reads requirement → native sour
 [r-observation]: https://github.com/OpenRAE/rae/blob/fb8a23aee827f5c45ea6e736bc06b45f90671472/implementations/python/packages/raes_backend_protocols/capabilities.py#L144-L157
 [r-capability-set]: https://github.com/OpenRAE/rae/blob/fb8a23aee827f5c45ea6e736bc06b45f90671472/implementations/python/packages/raes_backend_protocols/capabilities.py#L244-L254
 [r-satisfies]: https://github.com/OpenRAE/rae/blob/fb8a23aee827f5c45ea6e736bc06b45f90671472/implementations/python/packages/raes_contracts/contracts/experiment_manifest_references.py#L187-L196
+[r-artifact-satisfies]: https://github.com/OpenRAE/rae/blob/fb8a23aee827f5c45ea6e736bc06b45f90671472/implementations/python/packages/raes_contracts/contracts/experiment_run.py#L373-L388
+[r-observation-join]: https://github.com/OpenRAE/rae/blob/fb8a23aee827f5c45ea6e736bc06b45f90671472/implementations/python/packages/raes_contracts/contracts/experiment_run.py#L419-L427
+[r-study-join]: https://github.com/OpenRAE/rae/blob/fb8a23aee827f5c45ea6e736bc06b45f90671472/implementations/python/packages/raes_contracts/contracts/experiment_analysis.py#L414-L423
