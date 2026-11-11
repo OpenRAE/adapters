@@ -8,32 +8,67 @@ name: PR Title Lint
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
+  # The `dev` merge queue requires `Lint PR title` on the merge group commit.
+  # The check validates the current title of the queued pull request.
+  merge_group:
+    types: [checks_requested]
 
 permissions:
   contents: read
 
 concurrency:
-  group: pr-title-lint-${{ github.event.pull_request.number }}
+  group: pr-title-lint-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   title-guard:
     name: Lint PR title
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       # Check out the BASE ref, not the PR head, so the policy executable is the
       # trusted already-merged copy: a PR that edits tools/check_pr_title.py must
       # not be able to weaken its own required check.
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: "3.12"
+      - name: Resolve the queued pull request
+        # A merge group event carries no pull request. Read the queued pull
+        # request from the API and write it in the pull_request event shape, so
+        # the checker validates its current title.
+        if: github.event_name == 'merge_group'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QUEUE_REF: ${{ github.event.merge_group.head_ref }}
+        run: |
+          set -euo pipefail
+          pattern='^refs/heads/gh-readonly-queue/dev/pr-([0-9]+)-[0-9a-f]{40}$'
+          if [[ ! "${QUEUE_REF}" =~ ${pattern} ]]; then
+            echo "Unexpected merge group ref '${QUEUE_REF}'" >&2
+            exit 1
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${BASH_REMATCH[1]}" \
+            | jq --arg repository "${GITHUB_REPOSITORY}" \
+              'if .base.ref == "dev" and (.title | type) == "string" then {repository: {full_name: $repository}, pull_request: .} else error("not a dev pull request with a title") end' \
+            > "${RUNNER_TEMP}/pull-request-event.json"
       - name: Validate PR title
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PATH: ${{ github.event_name == 'merge_group' && format('{0}/pull-request-event.json', runner.temp) || github.event_path }}
         run: |
           if [ ! -f tools/check_pr_title.py ]; then
+            if [ "${EVENT_NAME}" = "merge_group" ]; then
+              echo "::error::tools/check_pr_title.py is missing on the merge group base"
+              exit 1
+            fi
             echo "::notice::tools/check_pr_title.py not on the base ref yet; skipping (bootstrap). Enforcement is active for every subsequent PR."
             exit 0
           fi
-          python tools/check_pr_title.py
+          # The checker reads the pull request from $GITHUB_EVENT_PATH. On a
+          # merge group, that is the queued pull request from the step above.
+          GITHUB_EVENT_PATH="${EVENT_PATH}" python tools/check_pr_title.py
