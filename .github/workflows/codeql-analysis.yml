@@ -5,6 +5,9 @@ on:
     branches: [main, dev]
   pull_request:
     branches: [main, dev]
+  # The `dev` merge queue requires `CodeQL` on the merge group commit.
+  merge_group:
+    types: [checks_requested]
   schedule:
     - cron: "0 6 * * 0"
 

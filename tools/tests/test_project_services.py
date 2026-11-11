@@ -127,6 +127,21 @@ class ProjectServicesPolicyTests(unittest.TestCase):
             errors,
         )
 
+    def test_ci_without_merge_group_trigger_is_detected(self) -> None:
+        errors: list[str] = []
+        _validate_ci("name: PR Gate\n", errors)
+        self.assertIn(
+            ".github/workflows/ci.yml: missing required configuration: "
+            "merge_group:\n    types: [checks_requested]",
+            errors,
+        )
+        self.assertIn(
+            ".github/workflows/ci.yml: missing required configuration: "
+            "if: ${{ always() && (github.event_name == 'pull_request' "
+            "|| github.event_name == 'merge_group') }}",
+            errors,
+        )
+
     def test_release_workflow_pypi_credential_is_detected(self) -> None:
         errors: list[str] = []
         _validate_release_workflow("PYPI_API_TOKEN: forbidden\n", errors)

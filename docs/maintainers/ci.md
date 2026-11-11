@@ -28,7 +28,8 @@ or docs stages, and each stage reports its own result even when another stage
 fails. Within **Fast checks**, lint still runs when hygiene fails (`if:
 !cancelled()`) so one fast-lane failure never hides the other.
 
-`SonarCloud` depends on `tests` **only** (`needs: [tests]`) because static
+`SonarCloud` depends on `tests` **only** (`needs: [tests, queued-pull-request]`;
+the second job runs only on a merge group) because static
 analysis needs source plus `coverage.xml` and nothing else — it no longer waits
 for the whole graph (typecheck, build, docs) to finish before it starts.
 
@@ -43,14 +44,37 @@ stands in for the entire verification graph.
 reads their results, and fails unless:
 
 - **every** verification job succeeded (all `needs` except `sonar`), and
-- `SonarCloud` **succeeded** on a same-repository PR, or was **skipped** on a
-  fork PR (forks never receive `SONAR_TOKEN`).
+- `SonarCloud` **succeeded** on a same-repository PR or a merge group, or was
+  **skipped** on a fork PR (forks never receive `SONAR_TOKEN`).
 
 The `needs:` list on `PR Gate` is the gate contract: a verification job that is
 not listed there is not enforced. **Adding a verification job means adding it to
 that list.** Keeping one required check (`PR Gate`) means the parallel jobs can
 be added, split, or renamed without reconfiguring branch protection, while the
 protected branches still block on the complete graph.
+
+## The `dev` merge queue
+
+The `dev` branch uses a GitHub merge queue. The queue merges a pull request
+only when each required check reports success on the merge group commit. Thus,
+each workflow that produces a required check also runs on the `merge_group`
+event:
+
+| Required check | Workflow | Merge group behavior |
+| --- | --- | --- |
+| `CodeQL` | `codeql-analysis.yml` | Analyzes the merge group commit. |
+| `Lint PR title` | `pr-title-lint.yml` | Reads the queued pull request from the API and validates its current title. |
+| `PR Gate` | `ci.yml` | Runs the full verification graph on the merge group commit. |
+
+A merge group ref names the queued pull request but not its head branch. The
+`Queued pull request` job in `ci.yml` reads the head branch from the API. The
+`Policy` job reads the requirement UID from that branch. The `SonarCloud` job
+runs a pull request analysis of the queued pull request against `dev`, with the
+quality gate. If the job cannot resolve the queued pull request, `Policy` and
+`SonarCloud` do not run, and `PR Gate` fails.
+
+`tools/check_project_services.py` makes sure that each of the three workflows
+keeps its `merge_group` trigger.
 
 ## Job ownership and sharding
 

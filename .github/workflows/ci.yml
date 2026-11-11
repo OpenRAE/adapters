@@ -6,6 +6,10 @@ on:
     tags: ["v*"]
   pull_request:
     branches: [main, dev]
+  # The `dev` merge queue runs the required `PR Gate` again on the merge group
+  # commit. Branch and path filters do not apply to this event.
+  merge_group:
+    types: [checks_requested]
   schedule:
     - cron: "23 4 * * 1"
   workflow_dispatch:
@@ -37,6 +41,47 @@ permissions:
 # command it runs; see docs/maintainers/ci.md for the fast lane, the full gate,
 # job ownership, and local reproduction.
 jobs:
+  # A merge group ref names the queued pull request but not its head branch.
+  # The Policy job reads the requirement UID from that branch, and the SonarCloud
+  # job analyzes that pull request. This job reads both from the API. When it
+  # fails, Policy and SonarCloud do not run, so `PR Gate` fails closed.
+  queued-pull-request:
+    name: Queued pull request
+    if: github.event_name == 'merge_group'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      number: ${{ steps.resolve.outputs.number }}
+      head-ref: ${{ steps.resolve.outputs.head-ref }}
+    steps:
+      - name: Resolve the queued pull request
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QUEUE_REF: ${{ github.event.merge_group.head_ref }}
+        run: |
+          set -euo pipefail
+          pattern='^refs/heads/gh-readonly-queue/dev/pr-([0-9]+)-[0-9a-f]{40}$'
+          if [[ ! "${QUEUE_REF}" =~ ${pattern} ]]; then
+            echo "Unexpected merge group ref '${QUEUE_REF}'" >&2
+            exit 1
+          fi
+          number="${BASH_REMATCH[1]}"
+          head_ref="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${number}" --jq 'select(.base.ref == "dev") | .head.ref')"
+          if [ -z "${head_ref}" ]; then
+            echo "Pull request ${number} does not target dev" >&2
+            exit 1
+          fi
+          if ! printf '%s\n' "${head_ref}" | grep -Eq '^[A-Za-z0-9._/-]+$'; then
+            echo "Queued pull request branch '${head_ref}' is not a plain ref name" >&2
+            exit 1
+          fi
+          echo "number=${number}" >> "${GITHUB_OUTPUT}"
+          echo "head-ref=${head_ref}" >> "${GITHUB_OUTPUT}"
+
   fast-checks:
     name: Fast checks (hygiene + lint)
     runs-on: ubuntu-latest
@@ -59,6 +104,8 @@ jobs:
 
   policy:
     name: Policy
+    needs: [queued-pull-request]
+    if: ${{ !cancelled() && (github.event_name != 'merge_group' || needs.queued-pull-request.result == 'success') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -72,7 +119,7 @@ jobs:
       - name: Resolve requirement UID from branch
         id: requirement
         env:
-          BRANCH: ${{ github.head_ref || github.ref_name }}
+          BRANCH: ${{ needs.queued-pull-request.outputs.head-ref || github.head_ref || github.ref_name }}
         run: |
           REQ_UID="$(printf '%s\n' "$BRANCH" | grep -oE '[A-Z]{3}-[0-9]{3}' | head -n1 || true)"
           echo "Resolved branch='$BRANCH' uid='$REQ_UID'"
@@ -186,9 +233,13 @@ jobs:
     name: SonarCloud
     runs-on: ubuntu-latest
     # Static analysis needs only source + coverage, so it waits on `tests`
-    # alone rather than the whole verification graph.
-    needs: [tests]
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # alone rather than the whole verification graph. On a merge group it also
+    # needs the queued pull request.
+    needs: [tests, queued-pull-request]
+    if: >-
+      ${{ !cancelled() && needs.tests.result == 'success'
+      && (github.event_name != 'merge_group' || needs.queued-pull-request.result == 'success')
+      && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -197,8 +248,35 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: coverage
+      # SonarCloud has no merge queue support. A merge group runs the pull
+      # request analysis and quality gate for the queued pull request against
+      # `dev`, on the merge group commit.
+      - name: Resolve the analysis target
+        id: target
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PULL_REQUEST: ${{ needs.queued-pull-request.outputs.number }}
+          PULL_REQUEST_BRANCH: ${{ needs.queued-pull-request.outputs.head-ref }}
+        run: |
+          set -euo pipefail
+          if [ "${EVENT_NAME}" != "merge_group" ]; then
+            echo "args=" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          if ! printf '%s\n' "${PULL_REQUEST}" | grep -Eq '^[0-9]+$' || [ -z "${PULL_REQUEST_BRANCH}" ]; then
+            echo "A merge group analysis requires the queued pull request number and branch" >&2
+            exit 1
+          fi
+          if ! printf '%s\n' "${PULL_REQUEST_BRANCH}" | grep -Eq '^[A-Za-z0-9._/-]+$'; then
+            echo "Queued pull request branch '${PULL_REQUEST_BRANCH}' is not a plain ref name" >&2
+            exit 1
+          fi
+          printf 'args=-Dsonar.pullrequest.key=%s -Dsonar.pullrequest.branch=%s -Dsonar.pullrequest.base=dev\n' \
+            "${PULL_REQUEST}" "${PULL_REQUEST_BRANCH}" >> "${GITHUB_OUTPUT}"
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@299e4b793aaa83bf2aba7c9c14bedbb485688ec4 # v7
+        with:
+          args: ${{ steps.target.outputs.args }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
@@ -209,13 +287,14 @@ jobs:
     # `needs` below — the assertion enforces exactly this list, so an unlisted
     # job is an unenforced job. Add a job here whenever you add a job above.
     needs: [fast-checks, policy, tool-tests, typecheck, tests, distributions, docs, sonar]
-    if: ${{ always() && github.event_name == 'pull_request' }}
+    if: ${{ always() && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
     runs-on: ubuntu-latest
     steps:
       - name: Assert required jobs passed
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-          SAME_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+          # A merge group always comes from this repository.
+          SAME_REPOSITORY: ${{ github.event_name == 'merge_group' || github.event.pull_request.head.repo.full_name == github.repository }}
         run: |
           set -euo pipefail
           echo "needs: $NEEDS_JSON"
@@ -228,8 +307,8 @@ jobs:
             echo "::error::A required verification job did not succeed"
             exit 1
           fi
-          # SonarCloud must pass on same-repository PRs and must be skipped on
-          # fork PRs (no SONAR_TOKEN is exposed to forks).
+          # SonarCloud must pass on same-repository PRs and merge groups, and
+          # must be skipped on fork PRs (no SONAR_TOKEN is exposed to forks).
           sonar_result="$(jq -r '.sonar.result' <<<"$NEEDS_JSON")"
           if [ "$SAME_REPOSITORY" = "true" ]; then
             if [ "$sonar_result" != "success" ]; then

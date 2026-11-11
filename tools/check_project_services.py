@@ -9,6 +9,9 @@ from pathlib import Path
 
 ACTION_REF_RE = re.compile(r"uses:\s*([^@\s]+)@([^\s#]+)")
 FULL_SHA_RE = re.compile(r"[0-9a-f]{40}")
+# The `dev` merge queue merges a pull request only when each required check
+# reports on the merge group commit, so each producer must run on this event.
+MERGE_GROUP_TRIGGER = "merge_group:\n    types: [checks_requested]"
 EXACT_REQUIREMENT_RE = re.compile(r"[A-Za-z0-9_.-]+==[^=\s]+")
 
 
@@ -92,13 +95,16 @@ def _validate_ci(text: str, errors: list[str]) -> None:
     # The verification graph runs as independent parallel jobs; `PR Gate` is the
     # single aggregating required check that keeps every stage mandatory before a
     # protected-branch merge. Pin its contract so no job can silently leave the
-    # gate: it must depend on every verification job plus Sonar, run on every PR,
-    # and fail closed unless each verification job succeeded (and Sonar passed on
-    # same-repository PRs). Adding a verification job means extending this list.
+    # gate: it must depend on every verification job plus Sonar, run on every PR
+    # and merge group, and fail closed unless each verification job succeeded
+    # (and Sonar passed on same-repository PRs and merge groups). Adding a
+    # verification job means extending this list.
     for expected in (
         "name: PR Gate",
+        MERGE_GROUP_TRIGGER,
         "needs: [fast-checks, policy, tool-tests, typecheck, tests, distributions, docs, sonar]",
-        "if: ${{ always() && github.event_name == 'pull_request' }}",
+        "if: ${{ always() && (github.event_name == 'pull_request'"
+        " || github.event_name == 'merge_group') }}",
         '.value.result == "success"',
         "A required verification job did not succeed",
         "SonarCloud did not succeed for a same-repository PR",
@@ -205,12 +211,14 @@ def validate_repository(repo_root: Path) -> list[str]:
         "security-events: write",
         "languages: python",
         "queries: security-extended",
+        MERGE_GROUP_TRIGGER,
     ):
         _require(codeql, expected, ".github/workflows/codeql-analysis.yml", errors)
     _validate_codeql(codeql, errors)
 
     title_lint = _read_required(repo_root, ".github/workflows/pr-title-lint.yml", errors)
-    _require(title_lint, "name: Lint PR title", ".github/workflows/pr-title-lint.yml", errors)
+    for expected in ("name: Lint PR title", MERGE_GROUP_TRIGGER):
+        _require(title_lint, expected, ".github/workflows/pr-title-lint.yml", errors)
 
     ci = _read_required(repo_root, ".github/workflows/ci.yml", errors)
     _validate_ci(ci, errors)

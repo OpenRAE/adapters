@@ -29,3 +29,5 @@ an admin merge and should not be the steady-state release process.
 The protected `main` and `dev` branches require `CodeQL`, `Lint PR title`, and
 `PR Gate`. Both branches require an up-to-date pull request, dismiss stale
 reviews, and prohibit force-pushes and deletion.
+The `dev` branch also uses a merge queue. Each required check also runs on the
+merge group commit; see [Continuous integration](ci.md#the-dev-merge-queue).
